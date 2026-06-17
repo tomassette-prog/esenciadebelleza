@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { Breadcrumb } from "@/components/layout/Breadcrumb";
 import { buildBreadcrumbJsonLdItems, buildBreadcrumbJsonLd, slugifyCategoria, formatPrice } from "@/lib/seo";
 
@@ -12,7 +13,7 @@ interface PageProps {
 }
 
 export async function generateStaticParams() {
-  const supabase = await createClient();
+  const supabase = createAdminClient();
   const { data } = await supabase.from("marcas").select("slug");
   return (data ?? []).map((m) => ({ marca: m.slug }));
 }

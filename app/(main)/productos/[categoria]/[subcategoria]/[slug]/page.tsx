@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import {
   buildProductoMetadata,
   buildProductJsonLd,
@@ -26,7 +27,7 @@ export const revalidate = 3600;
 
 // ─── generateStaticParams: pre-renderizar los más populares (ISR) ────────────
 export async function generateStaticParams() {
-  const supabase = await createClient();
+  const supabase = createAdminClient();
   const { data } = await supabase
     .from("productos_padre")
     .select("slug, categoria, subcategoria")

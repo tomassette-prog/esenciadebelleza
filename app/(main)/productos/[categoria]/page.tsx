@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { ProductoCard } from "@/components/producto/ProductoCard";
 import { Breadcrumb } from "@/components/layout/Breadcrumb";
 import {
@@ -21,7 +22,7 @@ interface PageProps {
 
 // ─── generateStaticParams: pre-renderizar todas las categorías ────────────────
 export async function generateStaticParams() {
-  const supabase = await createClient();
+  const supabase = createAdminClient();
   const { data } = await supabase
     .from("productos_padre")
     .select("categoria")

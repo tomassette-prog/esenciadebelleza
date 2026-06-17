@@ -116,7 +116,7 @@ export default async function CuentaPage({
               Mis datos
             </h2>
 
-            <form action={actualizarPerfil} className="space-y-4">
+            <form action={actualizarPerfil as (formData: FormData) => void} className="space-y-4">
               <div>
                 <label className="block text-xs tracking-wider uppercase text-neutral-600 mb-1.5">
                   Nombre completo

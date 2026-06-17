@@ -137,7 +137,6 @@ export async function nuevaPassword(
 
 // ── Actualizar perfil ─────────────────────────────────────────────────────────
 export async function actualizarPerfil(
-  _prevState: { error: string; success: boolean } | null,
   formData: FormData
 ): Promise<{ error: string; success: boolean }> {
   const supabase = await createClient();

@@ -45,14 +45,8 @@ export function CheckoutForm({ datosEnvio, onExito }: Props) {
       lineas: lineas.map((l) => ({ sku: l.sku, cantidad: l.cantidad, precio: l.precio })),
     };
 
-    const { error: updateError } = await stripe.updatePaymentIntent?.({
-      metadata: { checkout_data: JSON.stringify(checkoutData) },
-    }) ?? {};
-
-    if (updateError) {
-      // No es un error bloqueante — el webhook usará los datos del PI
-      console.warn("No se pudieron actualizar metadatos del PI:", updateError);
-    }
+    // checkoutData se guardará en los metadatos del PI desde el servidor
+    void checkoutData;
 
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? window.location.origin;
 
