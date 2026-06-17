@@ -1,0 +1,13 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "isolatedModules": false,
+    "noEmit": false
+  },
+  "include": [
+    "scraper.ts",
+    "scripts/**/*.ts"
+  ]
+}

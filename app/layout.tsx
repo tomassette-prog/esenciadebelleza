@@ -1,0 +1,73 @@
+import type { Metadata } from "next";
+import { Inter, Cormorant_Garamond } from "next/font/google";
+import { buildOrganizationJsonLd } from "@/lib/seo";
+import { CarritoProvider } from "@/context/CarritoContext";
+import "./globals.css";
+
+const inter = Inter({
+  subsets: ["latin"],
+  variable: "--font-inter",
+  display: "swap",
+});
+
+const cormorant = Cormorant_Garamond({
+  subsets: ["latin"],
+  weight: ["300", "400", "600"],
+  variable: "--font-cormorant",
+  display: "swap",
+});
+
+export const metadata: Metadata = {
+  metadataBase: new URL("https://esenciadebelleza.es"),
+  title: {
+    default: "Esencia de Belleza | Productos de Peluquería y Estética",
+    template: "%s | Esencia de Belleza",
+  },
+  description:
+    "Tienda online de productos profesionales de peluquería, estética y perfumería. Precios para particulares y profesionales. Envío rápido en España.",
+  keywords: ["peluquería", "estética", "tintes", "champú", "perfumes", "productos profesionales"],
+  authors: [{ name: "Esencia de Belleza" }],
+  creator: "Esencia de Belleza",
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: { index: true, follow: true, "max-image-preview": "large" },
+  },
+  openGraph: {
+    type: "website",
+    locale: "es_ES",
+    url: "https://esenciadebelleza.es",
+    siteName: "Esencia de Belleza",
+  },
+  twitter: {
+    card: "summary_large_image",
+    site: "@esenciadebelleza",
+  },
+  verification: {
+    google: process.env.NEXT_PUBLIC_GOOGLE_VERIFICATION ?? "",
+  },
+};
+
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  const orgJsonLd = buildOrganizationJsonLd();
+
+  return (
+    <html lang="es" className={`${inter.variable} ${cormorant.variable}`}>
+      <head>
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(orgJsonLd) }}
+        />
+      </head>
+      <body className="bg-white text-neutral-900 antialiased font-sans">
+        <CarritoProvider>
+          {children}
+        </CarritoProvider>
+      </body>
+    </html>
+  );
+}
