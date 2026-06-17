@@ -1,29 +1,13 @@
 "use client";
 
-import { useFormState, useFormStatus } from "react-dom";
 import { useState } from "react";
 import Link from "next/link";
-import { login } from "@/actions/auth";
-
-function SubmitButton() {
-  const { pending } = useFormStatus();
-  return (
-    <button
-      type="submit"
-      disabled={pending}
-      className="w-full py-3 px-6 bg-neutral-900 text-white text-xs tracking-widest uppercase font-medium hover:bg-neutral-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-    >
-      {pending ? "Entrando..." : "Iniciar sesión"}
-    </button>
-  );
-}
 
 export default function LoginPage({
   searchParams,
 }: {
   searchParams: { redirectTo?: string; redirect?: string; error?: string };
 }) {
-  const [state, action] = useFormState(login, null);
   const [verPassword, setVerPassword] = useState(false);
 
   return (
@@ -49,11 +33,11 @@ export default function LoginPage({
       )}
 
       {/* Formulario */}
-      <form action={action} className="space-y-4 bg-white border border-neutral-100 p-8">
+      <form action="/api/auth/login" method="POST" className="space-y-4 bg-white border border-neutral-100 p-8">
         {/* Error del servidor */}
-        {state?.error && (
+        {searchParams?.error === "credenciales" && (
           <div className="p-3 bg-red-50 border border-red-200 text-red-700 text-sm">
-            {state.error}
+            Credenciales incorrectas. Verifica tu email y contraseña.
           </div>
         )}
 
@@ -120,7 +104,12 @@ export default function LoginPage({
           </div>
         </div>
 
-        <SubmitButton />
+        <button
+          type="submit"
+          className="w-full py-3 px-6 bg-neutral-900 text-white text-xs tracking-widest uppercase font-medium hover:bg-neutral-700 transition-colors"
+        >
+          Iniciar sesión
+        </button>
       </form>
 
       {/* Registro */}
