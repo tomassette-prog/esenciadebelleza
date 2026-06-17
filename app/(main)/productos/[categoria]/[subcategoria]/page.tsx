@@ -33,9 +33,11 @@ export default async function SubcategoriaPage({ params, searchParams }: PagePro
       id, nombre, slug, categoria, subcategoria,
       imagen_principal_url, destacado, nuevo,
       marca:marcas(nombre),
-      variaciones:productos_variaciones(precio_b2c, activa)
+      variaciones:productos_variaciones!inner(precio_b2c, activa, stock)
     `, { count: "exact" })
     .eq("activo", true)
+    .eq("variaciones.activa", true)
+    .gt("variaciones.stock", 0)
     .ilike("categoria", categoria.replace(/-/g, " "))
     .ilike("subcategoria", subcategoria.replace(/-/g, " "))
     .range(from, from + PAGE_SIZE - 1);

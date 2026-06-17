@@ -63,17 +63,19 @@ export default async function CategoriaPage({ params, searchParams }: PageProps)
 
   if (subcatData === null || subcatData.length === 0) notFound();
 
-  // Obtener productos de la categoría
+  // Obtener productos de la categoría (solo con stock > 0)
   let query = supabase
     .from("productos_padre")
     .select(
       `id, nombre, slug, categoria, subcategoria,
        imagen_principal_url, destacado, nuevo,
        marca:marcas(nombre),
-       variaciones:productos_variaciones(precio_b2c, activa)`,
+       variaciones:productos_variaciones!inner(precio_b2c, activa, stock)`,
       { count: "exact" }
     )
     .eq("activo", true)
+    .eq("variaciones.activa", true)
+    .gt("variaciones.stock", 0)
     .ilike("categoria", categoria.replace(/-/g, " "))
     .range(from, from + PAGE_SIZE - 1);
 

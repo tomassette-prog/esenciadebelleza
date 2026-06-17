@@ -17,17 +17,19 @@ export const metadata: Metadata = {
 export default async function HomePage() {
   const supabase = await createClient();
 
-  // Novedades / destacados para la home
+  // Novedades / destacados para la home (solo con stock)
   const { data: destacadosRaw } = await supabase
     .from("productos_padre")
     .select(
       `id, nombre, slug, categoria, subcategoria,
        imagen_principal_url, destacado, nuevo,
        marca:marcas(nombre),
-       variaciones:productos_variaciones(precio_b2c, activa)`
+       variaciones:productos_variaciones!inner(precio_b2c, activa, stock)`
     )
     .eq("activo", true)
     .eq("destacado", true)
+    .eq("variaciones.activa", true)
+    .gt("variaciones.stock", 0)
     .limit(8);
 
   const { data: nuevosRaw } = await supabase
@@ -36,17 +38,21 @@ export default async function HomePage() {
       `id, nombre, slug, categoria, subcategoria,
        imagen_principal_url, destacado, nuevo,
        marca:marcas(nombre),
-       variaciones:productos_variaciones(precio_b2c, activa)`
+       variaciones:productos_variaciones!inner(precio_b2c, activa, stock)`
     )
     .eq("activo", true)
     .eq("nuevo", true)
+    .eq("variaciones.activa", true)
+    .gt("variaciones.stock", 0)
     .limit(8);
 
-  // Categorías con conteo
+  // Categorías con conteo (solo productos con stock)
   const { data: todosRaw } = await supabase
     .from("productos_padre")
-    .select("categoria, imagen_principal_url")
-    .eq("activo", true);
+    .select("categoria, imagen_principal_url, variaciones:productos_variaciones!inner(stock, activa)")
+    .eq("activo", true)
+    .eq("variaciones.activa", true)
+    .gt("variaciones.stock", 0);
 
   const catMap = new Map<string, { total: number; imagen: string | null }>();
   for (const p of todosRaw ?? []) {

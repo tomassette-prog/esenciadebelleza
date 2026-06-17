@@ -33,11 +33,13 @@ export default async function ProductosPage() {
   const BASE_URL = "https://esenciadebelleza.es";
   const supabase = await createClient();
 
-  // Categorías con conteo y una imagen representativa
+  // Categorías con conteo y una imagen representativa (solo con stock)
   const { data: productosRaw } = await supabase
     .from("productos_padre")
-    .select("categoria, imagen_principal_url")
+    .select("categoria, imagen_principal_url, variaciones:productos_variaciones!inner(stock, activa)")
     .eq("activo", true)
+    .eq("variaciones.activa", true)
+    .gt("variaciones.stock", 0)
     .order("nombre");
 
   // Agrupar por categoría
@@ -62,17 +64,19 @@ export default async function ProductosPage() {
     }))
     .sort((a, b) => b.total - a.total);
 
-  // Destacados globales (12 productos)
+  // Destacados globales (12 productos con stock)
   const { data: destacadosRaw } = await supabase
     .from("productos_padre")
     .select(
       `id, nombre, slug, categoria, subcategoria,
        imagen_principal_url, destacado, nuevo,
        marca:marcas(nombre),
-       variaciones:productos_variaciones(precio_b2c, activa)`
+       variaciones:productos_variaciones!inner(precio_b2c, activa, stock)`
     )
     .eq("activo", true)
     .eq("destacado", true)
+    .eq("variaciones.activa", true)
+    .gt("variaciones.stock", 0)
     .limit(12);
 
   const destacados: ProductoCatalogo[] = (destacadosRaw ?? []).map((p) => {
