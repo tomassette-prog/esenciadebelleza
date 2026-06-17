@@ -23,7 +23,7 @@ export async function GET() {
 
   return NextResponse.json({
     totalCookies: allCookies.length,
-    authCookieNames: authCookies.map(c => c.name),
+    authCookies: authCookies.map(c => ({ name: c.name, valueLen: c.value.length, valueStart: c.value.slice(0, 50) })),
     user: user ? { id: user.id, email: user.email } : null,
     session: session ? { expires_at: session.expires_at } : null,
     error: error?.message,
