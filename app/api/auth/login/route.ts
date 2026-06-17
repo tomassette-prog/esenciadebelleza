@@ -6,13 +6,25 @@ export async function POST(request: NextRequest) {
   let email = "", password = "", redirectTo = "/cuenta";
   
   try {
-    const formData = await request.formData();
-    email = (formData.get("email") as string ?? "").trim().toLowerCase();
-    password = formData.get("password") as string ?? "";
-    redirectTo = (formData.get("redirectTo") as string) || "/cuenta";
-    console.log("[login] email:", email, "redirectTo:", redirectTo);
+    // Los formularios HTML envían application/x-www-form-urlencoded
+    const contentType = request.headers.get("content-type") ?? "";
+    let params: URLSearchParams;
+    
+    if (contentType.includes("multipart/form-data")) {
+      const formData = await request.formData();
+      params = new URLSearchParams();
+      formData.forEach((value, key) => params.set(key, value.toString()));
+    } else {
+      const body = await request.text();
+      params = new URLSearchParams(body);
+    }
+    
+    email = (params.get("email") ?? "").trim().toLowerCase();
+    password = params.get("password") ?? "";
+    redirectTo = params.get("redirectTo") || "/cuenta";
+    console.log("[login] email:", email, "redirectTo:", redirectTo, "contentType:", contentType.slice(0, 50));
   } catch (e) {
-    console.error("[login] formData parse error:", e);
+    console.error("[login] parse error:", e);
     return NextResponse.redirect(new URL("/login?error=form", request.url), { status: 302 });
   }
 
