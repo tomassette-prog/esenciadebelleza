@@ -1,6 +1,20 @@
 "use client";
 
-import { useActionState } from "react";
+import { useFormState } from "react-dom";
+import { useFormStatus } from "react-dom";
+
+function SubmitBtn() {
+  const { pending } = useFormStatus();
+  return (
+    <button
+      type="submit"
+      disabled={pending}
+      className="btn-primary px-8 py-3 text-sm tracking-widest uppercase disabled:opacity-50"
+    >
+      {pending ? "Guardando..." : "Guardar cambios"}
+    </button>
+  );
+}
 
 interface Props {
   config: Record<string, string>;
@@ -11,7 +25,7 @@ interface Props {
 }
 
 export function AdminConfigForm({ config, action }: Props) {
-  const [state, formAction, isPending] = useActionState(action, null);
+  const [state, formAction] = useFormState(action, null);
 
   return (
     <form action={formAction} className="space-y-8">
@@ -104,13 +118,7 @@ export function AdminConfigForm({ config, action }: Props) {
 
       {/* Botón guardar */}
       <div className="flex items-center gap-4">
-        <button
-          type="submit"
-          disabled={isPending}
-          className="btn-primary px-8 py-3 text-sm tracking-widest uppercase disabled:opacity-50"
-        >
-          {isPending ? "Guardando..." : "Guardar cambios"}
-        </button>
+        <SubmitBtn />
 
         {state?.ok && (
           <p className="text-sm text-green-600">✓ Cambios guardados correctamente</p>

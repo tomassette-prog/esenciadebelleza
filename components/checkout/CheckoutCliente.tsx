@@ -388,7 +388,7 @@ export function CheckoutCliente({
             </div>
             {gastoEnvio > 0 && (
               <p className="text-xs text-neutral-400">
-                Envío gratis a partir de {ENVIO_GRATIS_DESDE} €
+                Envío gratis a partir de {envioGratisDesde} €
               </p>
             )}
             <div className="flex justify-between font-medium text-neutral-900 pt-2 border-t border-neutral-200 text-base">
