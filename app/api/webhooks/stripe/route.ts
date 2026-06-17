@@ -34,6 +34,7 @@ export async function POST(req: NextRequest) {
         const { wc_order_id, error } = await crearPedidoWooCommerce({
           ...datos,
           stripe_pi_id: pi.id,
+          gasto_envio: parseFloat(meta.gasto_envio ?? "0"),
         });
 
         if (error) {

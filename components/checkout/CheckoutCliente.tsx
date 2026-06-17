@@ -48,6 +48,7 @@ export function CheckoutCliente({
   const { lineas, totalPrecio } = useCarrito();
   const [paso, setPaso]             = useState<Paso>("direccion");
   const [clientSecret, setClientSecret] = useState<string | null>(null);
+  const [gastoEnvioConfirmado, setGastoEnvioConfirmado] = useState(0);
   const [cargando, setCargando]     = useState(false);
   const [errorCI, setErrorCI]       = useState<string | null>(null);
 
@@ -76,7 +77,7 @@ export function CheckoutCliente({
     setCargando(true);
     setErrorCI(null);
 
-    const { clientSecret: cs, error } = await crearPaymentIntent(lineas);
+    const { clientSecret: cs, error, gastoEnvio: ge } = await crearPaymentIntent(lineas);
     if (error || !cs) {
       setErrorCI(error ?? "Error al iniciar el pago");
       setCargando(false);
@@ -84,6 +85,7 @@ export function CheckoutCliente({
     }
 
     setClientSecret(cs);
+    setGastoEnvioConfirmado(ge);
     setPaso("pago");
     setCargando(false);
   }
@@ -325,6 +327,8 @@ export function CheckoutCliente({
             >
               <CheckoutForm
                 datosEnvio={datos}
+                gastoEnvio={gastoEnvioConfirmado}
+                clientSecret={clientSecret}
                 onExito={() => {}}
               />
             </Elements>

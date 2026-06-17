@@ -7,6 +7,7 @@ import {
   useElements,
 } from "@stripe/react-stripe-js";
 import { useCarrito } from "@/context/CarritoContext";
+import { actualizarMetadataPI } from "@/actions/checkout";
 
 interface Props {
   datosEnvio: {
@@ -20,10 +21,12 @@ interface Props {
     codigo_postal: string;
     notas?:        string;
   };
+  gastoEnvio: number;
+  clientSecret: string | null;
   onExito: () => void;
 }
 
-export function CheckoutForm({ datosEnvio, onExito }: Props) {
+export function CheckoutForm({ datosEnvio, gastoEnvio, clientSecret, onExito }: Props) {
   const stripe   = useStripe();
   const elements = useElements();
   const { lineas, vaciar } = useCarrito();
@@ -33,20 +36,21 @@ export function CheckoutForm({ datosEnvio, onExito }: Props) {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!stripe || !elements) return;
+    if (!stripe || !elements || !clientSecret) return;
 
     setProcesando(true);
     setError(null);
 
-    // Actualizar metadatos del Payment Intent con los datos del pedido
-    // para que el webhook de Stripe pueda crear el pedido en WooCommerce
+    // Extraer el Payment Intent ID del client_secret (formato: pi_xxx_secret_yyy)
+    const paymentIntentId = clientSecret.split("_secret_")[0];
+
+    // Guardar datos del pedido en metadata del PI para que el webhook los use
     const checkoutData = {
       ...datosEnvio,
+      gasto_envio: gastoEnvio,
       lineas: lineas.map((l) => ({ sku: l.sku, cantidad: l.cantidad, precio: l.precio })),
     };
-
-    // checkoutData se guardará en los metadatos del PI desde el servidor
-    void checkoutData;
+    await actualizarMetadataPI(paymentIntentId, checkoutData);
 
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? window.location.origin;
 
