@@ -14,14 +14,20 @@ interface SearchParams {
   q?: string;
   cat?: string;
   estado?: string;
+  page?: string;
 }
+
+const PAGE_SIZE = 200;
 
 export default async function AdminProductosPage({
   searchParams,
 }: {
   searchParams: Promise<SearchParams>;
 }) {
-  const { q, cat, estado } = await searchParams;
+  const { q, cat, estado, page: pageParam } = await searchParams;
+  const page = Math.max(1, parseInt(pageParam ?? "1", 10));
+  const from = (page - 1) * PAGE_SIZE;
+  const to = from + PAGE_SIZE - 1;
   const supabase = createAdminClient();
 
   let query = supabase
@@ -30,15 +36,17 @@ export default async function AdminProductosPage({
       id, nombre, slug, categoria, subcategoria, activo, destacado, nuevo, imagen_principal_url,
       marca:marcas(nombre),
       variaciones:productos_variaciones(id, activa, stock)
-    `)
-    .order("nombre");
+    `, { count: "exact" })
+    .order("nombre")
+    .range(from, to);
 
   if (q) query = query.ilike("nombre", `%${q}%`);
   if (cat) query = query.ilike("categoria", cat.replace(/-/g, " "));
   if (estado === "activo") query = query.eq("activo", true);
   else if (estado === "inactivo") query = query.eq("activo", false);
 
-  const { data: productos } = await query;
+  const { data: productos, count: totalCount } = await query;
+  const totalPages = Math.ceil((totalCount ?? 0) / PAGE_SIZE);
 
   // Categorías para el filtro
   const { data: catData } = await supabase
@@ -56,7 +64,7 @@ export default async function AdminProductosPage({
             Productos
           </h1>
           <p className="text-sm text-neutral-400 mt-1">
-            {productos?.length ?? 0} productos encontrados
+            {totalCount ?? 0} productos · página {page} de {totalPages}
           </p>
         </div>
         <Link
@@ -196,6 +204,36 @@ export default async function AdminProductosPage({
           </table>
         </div>
       </div>
+
+      {/* Paginación */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between bg-white border border-neutral-200 px-4 py-3">
+          <p className="text-sm text-neutral-500">
+            Mostrando {from + 1}–{Math.min(to + 1, totalCount ?? 0)} de {totalCount} productos
+          </p>
+          <div className="flex items-center gap-2">
+            {page > 1 && (
+              <Link
+                href={`/admin/productos?${new URLSearchParams({ ...(q ? { q } : {}), ...(cat ? { cat } : {}), ...(estado ? { estado } : {}), page: String(page - 1) })}`}
+                className="px-3 py-1.5 text-sm border border-neutral-300 hover:border-neutral-600 transition-colors"
+              >
+                ← Anterior
+              </Link>
+            )}
+            <span className="text-sm text-neutral-600">
+              {page} / {totalPages}
+            </span>
+            {page < totalPages && (
+              <Link
+                href={`/admin/productos?${new URLSearchParams({ ...(q ? { q } : {}), ...(cat ? { cat } : {}), ...(estado ? { estado } : {}), page: String(page + 1) })}`}
+                className="px-3 py-1.5 text-sm border border-neutral-300 hover:border-neutral-600 transition-colors"
+              >
+                Siguiente →
+              </Link>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
