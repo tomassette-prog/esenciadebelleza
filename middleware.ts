@@ -78,8 +78,9 @@ export async function middleware(request: NextRequest) {
 
   // Refrescar sesión (no bloquea la ejecución)
   const {
-    data: { user },
-  } = await supabase.auth.getUser();
+    data: { session },
+  } = await supabase.auth.getSession();
+  const user = session?.user ?? null;
 
   // 4. Proteger rutas de cuenta y checkout
   const isProtected = PROTECTED_ROUTES.some((r) => pathname.startsWith(r));
