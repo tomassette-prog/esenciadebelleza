@@ -7,12 +7,20 @@ import { slugifyCategoria } from "@/lib/seo";
 import { redirect } from "next/navigation";
 
 // ─── Helper: verificar que el usuario es admin ────────────────────────────────
+const ADMIN_EMAIL = "ziarresamot@gmail.com";
+
 async function verificarAdmin() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user || user.app_metadata?.role !== "admin") {
-    throw new Error("No autorizado");
-  }
+  if (!user) throw new Error("No autorizado");
+
+  // Usar createAdminClient para leer app_metadata de forma fiable
+  const adminClient = createAdminClient();
+  const { data: userData } = await adminClient.auth.admin.getUserById(user.id);
+  const role = userData?.user?.app_metadata?.role;
+  const esAdmin = role === "admin" || user.email === ADMIN_EMAIL;
+
+  if (!esAdmin) throw new Error("No autorizado");
   return user;
 }
 

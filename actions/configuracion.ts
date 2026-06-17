@@ -5,10 +5,18 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 
+const ADMIN_EMAIL = "ziarresamot@gmail.com";
+
 async function verificarAdmin() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user || user.app_metadata?.role !== "admin") redirect("/login");
+  if (!user) redirect("/login");
+
+  const adminClient = createAdminClient();
+  const { data: userData } = await adminClient.auth.admin.getUserById(user.id);
+  const role = userData?.user?.app_metadata?.role;
+  const esAdmin = role === "admin" || user.email === ADMIN_EMAIL;
+  if (!esAdmin) redirect("/login");
   return user;
 }
 

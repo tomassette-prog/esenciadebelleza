@@ -89,17 +89,13 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
-  // 5. Proteger rutas de administración — solo rol 'admin'
+  // 5. Proteger rutas de administración — verificar solo que hay sesión activa
+  // El rol 'admin' se verifica en el layout con createAdminClient (más fiable)
   const isAdminRoute = ADMIN_ROUTES.some((r) => pathname.startsWith(r));
-  if (isAdminRoute) {
-    if (!user) {
-      return NextResponse.redirect(new URL("/login", request.url));
-    }
-    // Verificar rol en metadata del usuario
-    const role = user.user_metadata?.role ?? user.app_metadata?.role;
-    if (role !== "admin") {
-      return NextResponse.redirect(new URL("/", request.url));
-    }
+  if (isAdminRoute && !user) {
+    const loginUrl = new URL("/login", request.url);
+    loginUrl.searchParams.set("redirectTo", pathname);
+    return NextResponse.redirect(loginUrl);
   }
 
   return response;
