@@ -1,7 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { createClient } from "@/lib/supabase/client";
 
 export default function LoginPage({
   searchParams,
@@ -9,6 +11,33 @@ export default function LoginPage({
   searchParams: { redirectTo?: string; redirect?: string; error?: string };
 }) {
   const [verPassword, setVerPassword] = useState(false);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+  const router = useRouter();
+  const redirectTo = searchParams.redirectTo ?? searchParams.redirect ?? "/cuenta";
+
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setError("");
+    setLoading(true);
+
+    const form = e.currentTarget;
+    const email = (form.elements.namedItem("email") as HTMLInputElement).value.trim().toLowerCase();
+    const password = (form.elements.namedItem("password") as HTMLInputElement).value;
+
+    const supabase = createClient();
+    const { error: authError } = await supabase.auth.signInWithPassword({ email, password });
+
+    if (authError) {
+      setError("Credenciales incorrectas. Verifica tu email y contraseña.");
+      setLoading(false);
+      return;
+    }
+
+    // Redirigir tras login exitoso
+    router.push(redirectTo);
+    router.refresh();
+  }
 
   return (
     <div className="w-full max-w-md">
@@ -33,16 +62,13 @@ export default function LoginPage({
       )}
 
       {/* Formulario */}
-      <form action="/api/auth/login" method="POST" className="space-y-4 bg-white border border-neutral-100 p-8">
-        {/* Error del servidor */}
-        {searchParams?.error === "credenciales" && (
+      <form onSubmit={handleSubmit} className="space-y-4 bg-white border border-neutral-100 p-8">
+        {/* Error */}
+        {(error || searchParams?.error === "credenciales") && (
           <div className="p-3 bg-red-50 border border-red-200 text-red-700 text-sm">
-            Credenciales incorrectas. Verifica tu email y contraseña.
+            {error || "Credenciales incorrectas. Verifica tu email y contraseña."}
           </div>
         )}
-
-        {/* Redirect oculto */}
-        <input type="hidden" name="redirectTo" value={searchParams.redirectTo ?? searchParams.redirect ?? ""} />
 
         {/* Email */}
         <div>
@@ -106,9 +132,10 @@ export default function LoginPage({
 
         <button
           type="submit"
-          className="w-full py-3 px-6 bg-neutral-900 text-white text-xs tracking-widest uppercase font-medium hover:bg-neutral-700 transition-colors"
+          disabled={loading}
+          className="w-full py-3 px-6 bg-neutral-900 text-white text-xs tracking-widest uppercase font-medium hover:bg-neutral-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
-          Iniciar sesión
+          {loading ? "Entrando..." : "Iniciar sesión"}
         </button>
       </form>
 
