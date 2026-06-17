@@ -1,6 +1,18 @@
 /**
- * scripts/import-woo.ts
- * Importa productos desde WooCommerce REST API v3 directamente a Supabase.
+ * scripts/import-woo.ts  (v2)
+ *
+ * Importa productos desde WooCommerce REST API v3 a Supabase.
+ * Usa la taxonomía canónica definida en lib/categorias.ts.
+ *
+ * Mejoras v2:
+ *   - Mapeo de categorías con resolución jerárquica (WOO_CAT_MAP)
+ *   - SEO title + description autogenerados por plantilla de subcategoría
+ *   - nombre_variacion usa el VALOR del atributo (ej: "7/0 Rubio Medio"),
+ *     no el nombre (antes devolvía "Color" por error)
+ *   - precio_comparar = regular_price cuando hay sale_price activo
+ *   - imagen_url en variaciones: imagen propia o herencia del padre
+ *   - Lista de marcas ampliada + detección case-insensitive
+ *
  * Uso: npm run import:woo
  */
 
@@ -9,6 +21,7 @@ dotenv.config({ path: ".env.local" });
 
 import { createClient } from "@supabase/supabase-js";
 import * as https from "https";
+import { WOO_CAT_MAP, SEO_TEMPLATES } from "../lib/categorias";
 
 // ── Config ────────────────────────────────────────────────────────────────────
 const WOO_URL    = process.env.WOO_URL!;
@@ -29,8 +42,13 @@ const supabase = createClient(SUPA_URL, SUPA_KEY);
 // ── Tipos WooCommerce ─────────────────────────────────────────────────────────
 interface WooImage  { id: number; src: string; alt: string; }
 interface WooCat    { id: number; name: string; slug: string; parent: number; }
-interface WooAttrVal{ id: number; name: string; slug: string; }
+
+// En variaciones, "option" es el VALOR seleccionado (ej: "7/0 Rubio Medio")
+interface WooAttrVal{ id: number; name: string; option: string; }
+
+// En productos padre, "options" es la lista de valores posibles
 interface WooAttr   { id: number; name: string; options: string[]; variation: boolean; }
+
 interface WooMeta   { id: number; key: string; value: string; }
 
 interface WooProduct {
@@ -63,7 +81,7 @@ interface WooVariation {
   sale_price: string;
   stock_quantity: number | null;
   stock_status: string;
-  attributes: WooAttrVal[];
+  attributes: WooAttrVal[];   // ← cada atributo tiene "option" con el valor real
   image: WooImage | null;
   meta_data: WooMeta[];
 }
@@ -75,6 +93,11 @@ function slugify(text: string): string {
     .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
+}
+
+function truncar(texto: string, max: number): string {
+  if (texto.length <= max) return texto;
+  return texto.slice(0, max - 1).trim() + "…";
 }
 
 function fetchJson<T>(url: string, intento = 1): Promise<T> {
@@ -146,14 +169,14 @@ async function fetchAllProducts(): Promise<WooProduct[]> {
   let page = 1;
   while (true) {
     const url = `${WOO_URL}/wp-json/wc/v3/products?per_page=${PER_PAGE}&page=${page}&status=publish`;
-    console.log(`  Pagina ${page} — ${url}`);
+    console.log(`  Página ${page} → ${url}`);
     const batch = await fetchJson<WooProduct[]>(url);
     if (!Array.isArray(batch) || batch.length === 0) break;
     all.push(...batch);
-    console.log(`  -> ${batch.length} productos (total: ${all.length})`);
+    console.log(`  └─ ${batch.length} productos (total: ${all.length})`);
     if (batch.length < PER_PAGE) break;
     page++;
-    await new Promise(r => setTimeout(r, 2000)); // respetar rate-limit del servidor
+    await new Promise(r => setTimeout(r, 2000));
   }
   return all;
 }
@@ -166,6 +189,45 @@ async function fetchVariations(productId: number): Promise<WooVariation[]> {
   } catch {
     return [];
   }
+}
+
+// ── Árbol de categorías WooCommerce (para resolución jerárquica) ───────────────
+interface WooCatFull { id: number; parent: number; }
+const catTree = new Map<number, WooCatFull>();
+
+async function cargarCategorias(): Promise<void> {
+  let page = 1;
+  while (true) {
+    const url = `${WOO_URL}/wp-json/wc/v3/products/categories?per_page=100&page=${page}`;
+    const cats = await fetchJson<WooCatFull[]>(url);
+    if (!Array.isArray(cats) || cats.length === 0) break;
+    for (const c of cats) catTree.set(c.id, c);
+    if (cats.length < 100) break;
+    page++;
+    await new Promise(r => setTimeout(r, 1000));
+  }
+  console.log(`  └─ ${catTree.size} categorías cargadas`);
+}
+
+/**
+ * Resuelve la categoría canónica para un producto.
+ * Busca primero en las categorías del producto; si no encuentra,
+ * sube por la jerarquía padre → abuelo hasta profundidad 5.
+ */
+function resolverCategoria(wooCategories: WooCat[]): { categoria: string; subcategoria: string } {
+  for (const cat of wooCategories) {
+    if (WOO_CAT_MAP[cat.id]) return WOO_CAT_MAP[cat.id];
+  }
+  for (const cat of wooCategories) {
+    let parentId = catTree.get(cat.id)?.parent ?? 0;
+    let depth = 0;
+    while (parentId > 0 && depth < 5) {
+      if (WOO_CAT_MAP[parentId]) return WOO_CAT_MAP[parentId];
+      parentId = catTree.get(parentId)?.parent ?? 0;
+      depth++;
+    }
+  }
+  return { categoria: "sin-clasificar", subcategoria: "sin-clasificar" };
 }
 
 // ── Mapa de marcas (cache) ────────────────────────────────────────────────────
@@ -189,59 +251,80 @@ async function upsertMarca(nombre: string): Promise<string> {
 
 // ── Detección de marca por nombre de producto ─────────────────────────────────
 const MARCAS_CONOCIDAS = [
-  "L'Oréal","Loreal","Wella","Fanola","Schwarzkopf","Goldwell","Revlon","Kerastase",
-  "Kerastase","Matrix","Redken","Joico","Kérastase","Olaplex","Alfaparf","Balmain",
-  "Montibello","Risfort","Salerm","Celine","Periche","Keyra","Exitenn","Tahe",
+  "L'Oréal","Loreal","Wella","Fanola","Schwarzkopf","Goldwell","Revlon",
+  "Kérastase","Kerastase","Matrix","Redken","Joico","Olaplex","Alfaparf",
+  "Balmain","Montibello","Risfort","Salerm","Celine","Periche","Keyra",
+  "Exitenn","Tahe","Hipertin","Liheto","Glossco","Yunsey","Valquer",
+  "Keen Strok","Hairtalk","Keler","Lendan","Arual","Vis Plantis","Dr. Sante",
+  "Novon","Hey Joe","Kuul","Karseell","Cantu","Candelahn","Coiffer","Don Algodon",
 ];
 
 function detectarMarca(nombre: string): string | null {
-  for (const m of MARCAS_CONOCIDAS) {
-    if (nombre.toLowerCase().includes(m.toLowerCase())) return m;
+  const nombreLower = nombre.toLowerCase();
+  // Ordenar de más largo a más corto para evitar coincidencias parciales
+  const ordenadas = [...MARCAS_CONOCIDAS].sort((a, b) => b.length - a.length);
+  for (const m of ordenadas) {
+    if (nombreLower.includes(m.toLowerCase())) return m;
   }
   return null;
 }
 
-// ── Mapeo categoría WooCommerce → categoria/subcategoria ──────────────────────
-function mapCategoria(cats: WooCat[]): { categoria: string; subcategoria: string } {
-  // La categoria de mayor nivel (parent=0) es la principal
-  const raiz = cats.find(c => c.parent === 0) ?? cats[0];
-  const hija = cats.find(c => c.parent !== 0 && c.id !== raiz?.id) ?? null;
+// ── Generación de SEO ─────────────────────────────────────────────────────────
+function generarSeo(nombre: string, subcategoria: string) {
+  const tpl = SEO_TEMPLATES[subcategoria] ?? SEO_TEMPLATES["default"];
   return {
-    categoria: raiz?.name ?? "General",
-    subcategoria: hija?.name ?? raiz?.name ?? "General",
+    seo_title:       truncar(tpl.title.replace("{nombre}", nombre), 60),
+    seo_description: truncar(tpl.desc.replace("{nombre}", nombre),  155),
   };
 }
 
 // ── Main ──────────────────────────────────────────────────────────────────────
 async function main() {
-  console.log("Conectando con WooCommerce API...");
-  console.log(`Tienda: ${WOO_URL}`);
+  console.log("═══════════════════════════════════════════════════");
+  console.log("  Esencia de Belleza — Importación WooCommerce v2");
+  console.log(`  Tienda: ${WOO_URL}`);
+  console.log("═══════════════════════════════════════════════════\n");
 
-  // 1. Obtener todos los productos publicados
-  console.log("\nDescargando productos...");
+  // 1. Cargar categorías para resolución jerárquica
+  console.log("① Cargando categorías de WooCommerce…");
+  await cargarCategorias();
+
+  // 2. Descargar todos los productos publicados
+  console.log("\n② Descargando productos publicados…");
   const productos = await fetchAllProducts();
-  console.log(`\nTotal productos: ${productos.length}`);
+  console.log(`\n   Total productos: ${productos.length}`);
 
   let importadosPadre = 0;
   let importadasVariaciones = 0;
+  let sinClasificar = 0;
   let errores = 0;
 
-  // 2. Procesar en lotes
+  // 3. Procesar en lotes de BATCH
   for (let i = 0; i < productos.length; i += BATCH) {
     const lote = productos.slice(i, i + BATCH);
     const padresRows: object[] = [];
-    const variacionesRows: object[] = [];
+    const variacionesPorSlug = new Map<string, object[]>();
 
     for (const p of lote) {
-      // ── Marca ──
+      // ── Marca ──────────────────────────────────────────────────────────────
       const marcaNombre = detectarMarca(p.name);
       const marcaId = marcaNombre ? await upsertMarca(marcaNombre) : null;
 
-      const { categoria, subcategoria } = mapCategoria(p.categories);
+      // ── Taxonomía canónica ─────────────────────────────────────────────────
+      const { categoria, subcategoria } = resolverCategoria(p.categories);
+      if (categoria === "sin-clasificar") {
+        sinClasificar++;
+        console.warn(
+          `  [SIN_CLASE] "${p.name}" → cats: ${p.categories.map(c => `${c.id}(${c.name})`).join(", ")}`
+        );
+      }
+
+      // ── SEO ────────────────────────────────────────────────────────────────
+      const { seo_title, seo_description } = generarSeo(p.name, subcategoria);
+
       const slug = p.slug || slugify(p.name);
 
-      // ── Producto padre ──
-      const padre = {
+      padresRows.push({
         nombre:               p.name,
         slug,
         categoria,
@@ -249,96 +332,114 @@ async function main() {
         descripcion_general:  p.description || p.short_description || null,
         imagen_principal_url: p.images[0]?.src ?? null,
         marca_id:             marcaId || null,
-        activo:               p.status === "publish",
+        seo_title,
+        seo_description,
+        activo:               true,
         destacado:            false,
         nuevo:                false,
-      };
-      padresRows.push(padre);
+      });
+
+      if (p.type !== "variable") {
+        // Producto simple → variación única "Unidad"
+        const precioRegular = parseFloat(p.regular_price || p.price) || 0;
+        const precioVenta   = parseFloat(p.sale_price) || 0;
+        variacionesPorSlug.set(slug, [{
+          nombre_variacion: "Unidad",
+          sku:              p.sku || `${slug}-u`,
+          precio_b2c:       precioRegular,
+          precio_b2b:       parseFloat((precioRegular * 0.75).toFixed(2)),
+          precio_comparar:  precioVenta > 0 && precioVenta < precioRegular ? precioRegular : null,
+          stock:            p.stock_quantity ?? 0,
+          activa:           p.stock_status !== "outofstock",
+          imagen_url:       p.images[0]?.src ?? null,
+        }]);
+      }
+      // Los variables se rellenan después con fetchVariations
     }
 
-    // Upsert padres
+    // ── Upsert padres ──────────────────────────────────────────────────────────
     const { data: padresInsertados, error: errPadre } = await supabase
       .from("productos_padre")
       .upsert(padresRows, { onConflict: "slug" })
       .select("id, slug");
 
     if (errPadre) {
-      console.error(`  [ERROR] Lote padres ${i}-${i + BATCH}: ${errPadre.message}`);
+      console.error(`  [ERROR] Lote padres ${i}–${i + BATCH}: ${errPadre.message}`);
       errores++;
       continue;
     }
 
     importadosPadre += (padresInsertados ?? []).length;
-
-    // Crear mapa slug → id
     const slugToId = new Map<string, string>(
       (padresInsertados ?? []).map(p => [p.slug, p.id])
     );
 
-    // ── Variaciones ──
+    // ── Variaciones ────────────────────────────────────────────────────────────
     for (const p of lote) {
-      const padreId = slugToId.get(p.slug || slugify(p.name));
+      const slug    = p.slug || slugify(p.name);
+      const padreId = slugToId.get(slug);
       if (!padreId) continue;
 
+      let filas: object[] = [];
+
       if (p.type === "variable" && p.variations.length > 0) {
-        // Descargar variaciones de WooCommerce
         const vars = await fetchVariations(p.id);
-        await new Promise(r => setTimeout(r, 1000)); // pausa entre variaciones
+        await new Promise(r => setTimeout(r, 800));
 
         for (const v of vars) {
-          const nombreVar = v.attributes.map(a => a.name).join(" / ") || "Unidad";
-          const sku = v.sku || `${slugify(p.name)}-${v.id}`;
-          const precio = parseFloat(v.regular_price || v.price) || 0;
+          // CORRECCIÓN: usar v.attributes[x].option (valor), no .name (nombre del atributo)
+          const nombreVar = v.attributes.length > 0
+            ? v.attributes.map(a => a.option).filter(Boolean).join(" / ")
+            : "Unidad";
 
-          variacionesRows.push({
+          const precioRegular = parseFloat(v.regular_price || v.price) || 0;
+          const precioVenta   = parseFloat(v.sale_price) || 0;
+
+          filas.push({
             producto_padre_id: padreId,
             nombre_variacion:  nombreVar,
-            sku,
-            precio_b2c:        precio,
-            precio_b2b:        parseFloat((precio * 0.75).toFixed(2)),
+            sku:               v.sku || `${slug}-${v.id}`,
+            precio_b2c:        precioRegular,
+            precio_b2b:        parseFloat((precioRegular * 0.75).toFixed(2)),
+            precio_comparar:   precioVenta > 0 && precioVenta < precioRegular ? precioRegular : null,
             stock:             v.stock_quantity ?? 0,
             activa:            v.stock_status !== "outofstock",
-            imagen_url:        v.image?.src ?? null,
+            // Imagen propia de la variación; si no tiene, hereda la del padre
+            imagen_url:        v.image?.src ?? p.images[0]?.src ?? null,
           });
         }
       } else {
-        // Producto simple → 1 variación "Unidad"
-        const sku = p.sku || `${slugify(p.name)}-simple`;
-        const precio = parseFloat(p.regular_price || p.price) || 0;
-
-        variacionesRows.push({
+        filas = ((variacionesPorSlug.get(slug) ?? []) as Record<string, unknown>[]).map(f => ({
+          ...f,
           producto_padre_id: padreId,
-          nombre_variacion:  "Unidad",
-          sku,
-          precio_b2c:        precio,
-          precio_b2b:        parseFloat((precio * 0.75).toFixed(2)),
-          stock:             p.stock_quantity ?? 0,
-          activa:            p.stock_status !== "outofstock",
-          imagen_url:        p.images[0]?.src ?? null,
-        });
+        }));
+      }
+
+      if (filas.length > 0) {
+        const { error: errVar } = await supabase
+          .from("productos_variaciones")
+          .upsert(filas, { onConflict: "sku" });
+
+        if (errVar) {
+          console.error(`  [ERROR] Variaciones "${slug}": ${errVar.message}`);
+          errores++;
+        } else {
+          importadasVariaciones += filas.length;
+        }
       }
     }
 
-    if (variacionesRows.length > 0) {
-      const { error: errVar } = await supabase
-        .from("productos_variaciones")
-        .upsert(variacionesRows, { onConflict: "sku" });
-
-      if (errVar) {
-        console.error(`  [ERROR] Variaciones lote ${i}: ${errVar.message}`);
-        errores++;
-      } else {
-        importadasVariaciones += variacionesRows.length;
-      }
-    }
-
-    console.log(`Lote ${i + 1}-${Math.min(i + BATCH, productos.length)}: ${padresRows.length} padres, ${variacionesRows.length} variaciones`);
+    const hasta = Math.min(i + BATCH, productos.length);
+    console.log(`  ✓ Lote ${i + 1}–${hasta}: ${padresRows.length} padres procesados`);
   }
 
-  console.log("\n--- Importacion completada ---");
-  console.log(`Productos padre : ${importadosPadre}`);
-  console.log(`Variaciones     : ${importadasVariaciones}`);
-  console.log(`Errores         : ${errores}`);
+  console.log("\n═══════════════════════════════════════════════════");
+  console.log("  Importación completada");
+  console.log(`  Productos padre : ${importadosPadre}`);
+  console.log(`  Variaciones     : ${importadasVariaciones}`);
+  console.log(`  Sin clasificar  : ${sinClasificar}`);
+  console.log(`  Errores         : ${errores}`);
+  console.log("═══════════════════════════════════════════════════");
 }
 
 main().catch(err => {

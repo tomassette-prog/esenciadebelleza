@@ -1,13 +1,7 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { BotonesCarritoHeader } from "@/components/carrito/BotonesCarritoHeader";
-
-const MENU = [
-  { label: "Peluquería", href: "/productos/peluqueria" },
-  { label: "Estética",   href: "/productos/estetica"   },
-  { label: "Perfumería", href: "/productos/perfumeria" },
-  { label: "Marcas",     href: "/marcas"               },
-];
+import { NavMegaMenu } from "@/components/layout/NavMegaMenu";
 
 export async function Header() {
   const supabase = await createClient();
@@ -29,7 +23,7 @@ export async function Header() {
 
   return (
     <header className="border-b border-neutral-100 bg-white sticky top-0 z-40">
-      <div className="container-main">
+      <div className="container-main relative">
         {/* Top bar */}
         <div className="flex items-center justify-between py-4">
           {/* Logo */}
@@ -95,26 +89,8 @@ export async function Header() {
           </div>
         </div>
 
-        {/* Navegación */}
-        <nav className="hidden md:flex items-center gap-8 pb-3">
-          {MENU.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              className="text-xs tracking-widest uppercase text-neutral-500 hover:text-neutral-900 transition-colors pb-1 border-b border-transparent hover:border-neutral-900"
-            >
-              {item.label}
-            </Link>
-          ))}
-          <span className="ml-auto">
-            <Link
-              href="/profesionales"
-              className="text-xs tracking-widest uppercase px-4 py-2 border border-neutral-900 text-neutral-900 hover:bg-neutral-900 hover:text-white transition-colors"
-            >
-              Área Profesional
-            </Link>
-          </span>
-        </nav>
+        {/* Navegación — mega menu (desktop) + drawer (mobile) */}
+        <NavMegaMenu />
       </div>
     </header>
   );
