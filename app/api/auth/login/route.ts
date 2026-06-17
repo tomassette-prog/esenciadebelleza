@@ -3,10 +3,18 @@ import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function POST(request: NextRequest) {
-  const formData = await request.formData();
-  const email = (formData.get("email") as string).trim().toLowerCase();
-  const password = formData.get("password") as string;
-  const redirectTo = (formData.get("redirectTo") as string) || "/cuenta";
+  let email = "", password = "", redirectTo = "/cuenta";
+  
+  try {
+    const formData = await request.formData();
+    email = (formData.get("email") as string ?? "").trim().toLowerCase();
+    password = formData.get("password") as string ?? "";
+    redirectTo = (formData.get("redirectTo") as string) || "/cuenta";
+    console.log("[login] email:", email, "redirectTo:", redirectTo);
+  } catch (e) {
+    console.error("[login] formData parse error:", e);
+    return NextResponse.redirect(new URL("/login?error=form", request.url), { status: 302 });
+  }
 
   const cookieStore = await cookies();
   const response = NextResponse.redirect(new URL(redirectTo, request.url), {
@@ -30,7 +38,8 @@ export async function POST(request: NextRequest) {
     }
   );
 
-  const { error } = await supabase.auth.signInWithPassword({ email, password });
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+  console.log("[login] result:", error ? `error: ${error.message}` : `user: ${data?.user?.email}`);
 
   if (error) {
     console.error("[login] signInWithPassword error:", error.message, error.status);
@@ -40,5 +49,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.redirect(loginUrl, { status: 302 });
   }
 
+  console.log("[login] redirecting to:", redirectTo);
   return response;
 }
