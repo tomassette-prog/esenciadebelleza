@@ -33,6 +33,7 @@ export async function POST(request: NextRequest) {
   const { error } = await supabase.auth.signInWithPassword({ email, password });
 
   if (error) {
+    console.error("[login] signInWithPassword error:", error.message, error.status);
     const loginUrl = new URL("/login", request.url);
     loginUrl.searchParams.set("error", "credenciales");
     if (redirectTo !== "/cuenta") loginUrl.searchParams.set("redirectTo", redirectTo);
