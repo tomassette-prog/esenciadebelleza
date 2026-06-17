@@ -36,7 +36,15 @@ const PROVINCIAS = [
   "Vizcaya","Zamora","Zaragoza","Ceuta","Melilla",
 ];
 
-export function CheckoutCliente({ emailInicial }: { emailInicial?: string }) {
+export function CheckoutCliente({
+  emailInicial,
+  envioGratisDesde = 49,
+  costoEnvio = 4.95,
+}: {
+  emailInicial?: string;
+  envioGratisDesde?: number;
+  costoEnvio?: number;
+}) {
   const { lineas, totalPrecio } = useCarrito();
   const [paso, setPaso]             = useState<Paso>("direccion");
   const [clientSecret, setClientSecret] = useState<string | null>(null);
@@ -55,11 +63,9 @@ export function CheckoutCliente({ emailInicial }: { emailInicial?: string }) {
     notas:         "",
   });
 
-  // Configuración de envío (en producción vendrá de config_tienda)
-  const ENVIO_GRATIS_DESDE = 49;
-  const COSTE_ENVIO        = 4.95;
-  const gastoEnvio         = totalPrecio >= ENVIO_GRATIS_DESDE ? 0 : COSTE_ENVIO;
-  const totalFinal         = totalPrecio + gastoEnvio;
+  // Configuración de envío (viene del servidor, leída de config_tienda)
+  const gastoEnvio = totalPrecio >= envioGratisDesde ? 0 : costoEnvio;
+  const totalFinal = totalPrecio + gastoEnvio;
 
   function cambiar(campo: keyof DatosEnvio, valor: string) {
     setDatos((d) => ({ ...d, [campo]: valor }));

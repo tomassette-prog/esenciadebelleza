@@ -39,6 +39,12 @@ export default async function AdminLayout({ children }: { children: ReactNode })
             >
               Stock
             </Link>
+            <Link
+              href="/admin/envios"
+              className="text-xs tracking-widest uppercase text-neutral-300 hover:text-white transition-colors"
+            >
+              Envíos
+            </Link>
           </div>
         </div>
       </nav>
