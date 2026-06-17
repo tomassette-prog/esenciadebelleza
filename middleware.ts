@@ -80,7 +80,38 @@ export async function middleware(request: NextRequest) {
   const {
     data: { session },
   } = await supabase.auth.getSession();
-  const user = session?.user ?? null;
+
+  // Intentar también leer el JWT directamente si getSession falla
+  let user = session?.user ?? null;
+  if (!user) {
+    try {
+      const projectRef = "yjanobsfzcwpusynvlun";
+      const cookieName = `sb-${projectRef}-auth-token`;
+      let tokenValue = request.cookies.get(cookieName)?.value;
+      if (!tokenValue) {
+        let combined = "";
+        for (let i = 0; i < 5; i++) {
+          const chunk = request.cookies.get(`${cookieName}.${i}`)?.value;
+          if (!chunk) break;
+          combined += chunk;
+        }
+        if (combined) tokenValue = combined;
+      }
+      if (tokenValue) {
+        const parsed = JSON.parse(tokenValue);
+        const accessToken: string = parsed.access_token;
+        if (accessToken) {
+          const payloadB64 = accessToken.split(".")[1];
+          const payload = JSON.parse(Buffer.from(payloadB64, "base64url").toString());
+          if (payload.sub && payload.exp * 1000 > Date.now()) {
+            user = { id: payload.sub, email: payload.email } as unknown as typeof user;
+          }
+        }
+      }
+    } catch {
+      // ignorar
+    }
+  }
 
   // 4. Proteger rutas de cuenta y checkout
   const isProtected = PROTECTED_ROUTES.some((r) => pathname.startsWith(r));
