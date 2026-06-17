@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 
@@ -13,7 +12,6 @@ export default function LoginPage({
   const [verPassword, setVerPassword] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const router = useRouter();
   const redirectTo = searchParams.redirectTo ?? searchParams.redirect ?? "/cuenta";
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -34,9 +32,8 @@ export default function LoginPage({
       return;
     }
 
-    // Redirigir tras login exitoso
-    router.push(redirectTo);
-    router.refresh();
+    // Redirigir tras login exitoso con full reload para que el servidor lea las cookies
+    window.location.href = redirectTo;
   }
 
   return (
