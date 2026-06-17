@@ -1,29 +1,19 @@
-import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { type ReactNode } from "react";
 
-// Email del admin como fallback por si app_metadata aún no propaga
-const ADMIN_EMAIL = "ziarresamot@gmail.com";
+// Emails con acceso admin
+const ADMIN_EMAILS = ["ziarresamot@gmail.com"];
 
 export default async function AdminLayout({ children }: { children: ReactNode }) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
 
-  if (!user) {
+  if (!user || !ADMIN_EMAILS.includes(user.email ?? "")) {
     redirect("/login?redirectTo=/admin/productos");
   }
 
-  // Verificar rol con el cliente admin (service_role) — más fiable que el anon client
-  const admin = createAdminClient();
-  const { data: userData } = await admin.auth.admin.getUserById(user.id);
-  const role = userData?.user?.app_metadata?.role;
-  const esAdmin = role === "admin" || user.email === ADMIN_EMAIL;
-
-  if (!esAdmin) {
-    redirect("/login?redirectTo=/admin/productos");
-  }
 
   return (
     <div className="min-h-screen bg-neutral-50">
