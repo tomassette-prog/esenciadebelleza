@@ -134,6 +134,7 @@ export async function lanzarPedidoWoo(
     customer_note: notaCliente,
     payment_method:       "esencia_belleza",
     payment_method_title: `Esencia de Belleza · Ref: ${refPago}`,
+    total: pedido.total.toFixed(2),    // total con IVA ya incluido
     billing: {
       first_name: dir.nombre      ?? "",
       last_name:  dir.apellidos   ?? "",
