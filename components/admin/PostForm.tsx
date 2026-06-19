@@ -127,34 +127,92 @@ export default function PostForm({ post }: Props) {
   // ── Cargar JSON ────────────────────────────────────────────────────────────
   const cargarJson = useCallback(() => {
     setJsonError("");
-    try {
-      const data = JSON.parse(jsonInput);
-      if (data.titulo)          setTitulo(data.titulo);
-      if (data.resumen)         setResumen(data.resumen);
-      if (data.contenido_html)  setContenidoHtml(data.contenido_html);
-      if (data.seo_title)       setSeoTitle(data.seo_title.slice(0, 60));
-      if (data.seo_description) setSeoDesc(data.seo_description.slice(0, 160));
-      if (data.keywords)        setKeywords(data.keywords);
 
-      // Slug: limpiar el que viene de Gemini (suele tener tildes)
-      const slugBase = data.slug || data.titulo || "";
-      setSlug(slugify(slugBase));
-
-      // Detectar enlaces
-      const html = data.contenido_html ?? "";
-      const detectados = detectarEnlaces(html);
-      setEnlaces(
-        detectados.map((e, i) => ({
-          ...e,
-          id: `link-${i}`,
-          urlCorrecta: e.urlActual,
-        }))
-      );
-      setEnlacesAplicados(false);
-      setImportOpen(false);
-    } catch {
-      setJsonError("JSON inválido. Asegúrate de pegar el bloque completo entre { } sin texto adicional.");
+    // Extraer solo el bloque JSON (por si hay texto antes/después)
+    const raw = jsonInput.trim();
+    const start = raw.indexOf("{");
+    const end   = raw.lastIndexOf("}");
+    if (start === -1 || end === -1) {
+      setJsonError("No se encontró un bloque JSON { ... }. Asegúrate de pegar el JSON completo.");
+      return;
     }
+    const jsonBlock = raw.slice(start, end + 1);
+
+    let data: Record<string, string>;
+    try {
+      data = JSON.parse(jsonBlock);
+    } catch (firstError) {
+      // Intento de reparación: Gemini a veces deja saltos de línea sin escapar
+      // dentro de valores de string. Los reemplazamos por \n escapado.
+      try {
+        const fixed = jsonBlock
+          // Reemplazar saltos de línea literales dentro de valores de string por \n
+          .replace(/("(?:[^"\\]|\\.)*")|(\n)/g, (match, strMatch) => {
+            if (strMatch) return strMatch; // dentro de string → mantener
+            return "\\n"; // fuera de string → escapar
+          });
+        data = JSON.parse(fixed);
+      } catch {
+        // Último recurso: extraer campos campo por campo con regex
+        try {
+          data = {};
+          const camposSimples = ["titulo", "slug", "resumen", "seo_title", "seo_description", "keywords"];
+          for (const campo of camposSimples) {
+            const m = jsonBlock.match(new RegExp(`"${campo}"\\s*:\\s*"((?:[^"\\\\]|\\\\.)*)"`));
+            if (m) data[campo] = m[1].replace(/\\n/g, "\n").replace(/\\"/g, '"');
+          }
+          // contenido_html puede ser muy largo — extraer entre primera " tras : y el último "
+          const htmlStart = jsonBlock.indexOf('"contenido_html"');
+          if (htmlStart !== -1) {
+            const colonPos = jsonBlock.indexOf(":", htmlStart);
+            const quoteStart = jsonBlock.indexOf('"', colonPos + 1);
+            // Buscar el cierre: último " antes del siguiente campo o del }
+            const nextField = jsonBlock.search(/"(?:titulo|slug|resumen|seo_title|seo_description|keywords|autor|publicado)"\s*:/);
+            const searchEnd = nextField > quoteStart ? nextField : jsonBlock.length;
+            const quoteEnd = jsonBlock.lastIndexOf('"', searchEnd - 2);
+            if (quoteStart !== -1 && quoteEnd > quoteStart) {
+              data.contenido_html = jsonBlock
+                .slice(quoteStart + 1, quoteEnd)
+                .replace(/\\n/g, "\n")
+                .replace(/\\"/g, '"')
+                .replace(/\\t/g, "\t");
+            }
+          }
+          if (!data.titulo && !data.contenido_html) {
+            throw new Error("No se pudo extraer ningún campo");
+          }
+        } catch {
+          setJsonError(
+            `JSON inválido: ${(firstError as Error).message}. ` +
+            "Comprueba que el contenido_html no tiene comillas sin escapar. " +
+            "Puedes pegar cada campo manualmente en los campos de abajo."
+          );
+          return;
+        }
+      }
+    }
+
+    if (data.titulo)          setTitulo(data.titulo);
+    if (data.resumen)         setResumen(data.resumen);
+    if (data.contenido_html)  setContenidoHtml(data.contenido_html);
+    if (data.seo_title)       setSeoTitle(data.seo_title.slice(0, 60));
+    if (data.seo_description) setSeoDesc(data.seo_description.slice(0, 160));
+    if (data.keywords)        setKeywords(data.keywords);
+
+    const slugBase = data.slug || data.titulo || "";
+    setSlug(slugify(slugBase));
+
+    const html = data.contenido_html ?? "";
+    const detectados = detectarEnlaces(html);
+    setEnlaces(
+      detectados.map((e, i) => ({
+        ...e,
+        id: `link-${i}`,
+        urlCorrecta: e.urlActual,
+      }))
+    );
+    setEnlacesAplicados(false);
+    setImportOpen(false);
   }, [jsonInput]);
 
   // ── Aplicar URLs ───────────────────────────────────────────────────────────
