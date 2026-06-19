@@ -1,10 +1,10 @@
-import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { StockTable } from "@/components/admin/StockTable";
 
 export const dynamic = "force-dynamic"; // siempre datos frescos en admin
 
 export default async function AdminStockPage() {
-  const supabase = await createClient();
+  const supabase = createAdminClient();
 
   const { data, error } = await supabase
     .from("productos_variaciones")
@@ -12,7 +12,8 @@ export default async function AdminStockPage() {
       *,
       producto_padre:productos_padre (
         nombre,
-        categoria
+        categoria,
+        subcategoria
       )
     `)
     .eq("activa", true)
@@ -31,6 +32,7 @@ export default async function AdminStockPage() {
     ...v,
     producto_nombre: v.producto_padre?.nombre ?? "—",
     categoria: v.producto_padre?.categoria ?? "—",
+    subcategoria: v.producto_padre?.subcategoria ?? "",
   }));
 
   return (

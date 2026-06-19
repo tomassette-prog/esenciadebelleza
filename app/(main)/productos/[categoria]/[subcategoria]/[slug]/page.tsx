@@ -9,6 +9,7 @@ import {
   slugifyCategoria,
   formatPrice,
 } from "@/lib/seo";
+import { AnadirAlCarritoBtn } from "@/components/producto/AnadirAlCarritoBtn";
 import { Breadcrumb } from "@/components/layout/Breadcrumb";
 import type { ProductoCompleto } from "@/types/producto";
 
@@ -72,14 +73,28 @@ export default async function ProductoPage({ params, searchParams }: PageProps) 
   const { tono } = await searchParams;
 
   const supabase = await createClient();
-  const { data: producto, error } = await supabase
-    .from("productos_padre")
-    .select("*, marca:marcas(*), variaciones:productos_variaciones(*)")
-    .eq("slug", slug)
-    .eq("activo", true)
-    .single();
+  const [{ data: producto, error }, { data: { user } }] = await Promise.all([
+    supabase
+      .from("productos_padre")
+      .select("*, marca:marcas(*), variaciones:productos_variaciones(*)")
+      .eq("slug", slug)
+      .eq("activo", true)
+      .single(),
+    supabase.auth.getUser(),
+  ]);
 
   if (error || !producto) notFound();
+
+  // Comprobar si el usuario es profesional aprobado
+  let b2bAprobado = false;
+  if (user) {
+    const { data: perfil } = await supabase
+      .from("perfiles_usuario")
+      .select("b2b_aprobado, tipo_cliente")
+      .eq("id", user.id)
+      .single();
+    b2bAprobado = perfil?.tipo_cliente === "b2b" && perfil?.b2b_aprobado === true;
+  }
 
   const p = producto as ProductoCompleto;
 
@@ -174,22 +189,46 @@ export default async function ProductoPage({ params, searchParams }: PageProps) 
 
             {/* Precio */}
             {variacionActiva && (
-              <div className="flex items-baseline gap-3">
-                <span className="text-2xl font-medium text-neutral-900">
-                  {new Intl.NumberFormat("es-ES", {
-                    style: "currency",
-                    currency: "EUR",
-                  }).format(variacionActiva.precio_b2c)}
-                </span>
-                {variacionActiva.precio_comparar &&
-                  variacionActiva.precio_comparar > variacionActiva.precio_b2c && (
-                    <span className="text-lg text-neutral-400 line-through">
+              <div className="flex flex-col gap-1">
+                {b2bAprobado && variacionActiva.precio_b2b && variacionActiva.precio_b2b > 0 ? (
+                  <>
+                    <div className="flex items-baseline gap-3">
+                      <span className="text-2xl font-medium text-neutral-900">
+                        {new Intl.NumberFormat("es-ES", {
+                          style: "currency",
+                          currency: "EUR",
+                        }).format(variacionActiva.precio_b2b)}
+                      </span>
+                      <span className="text-sm text-neutral-400 line-through">
+                        {new Intl.NumberFormat("es-ES", {
+                          style: "currency",
+                          currency: "EUR",
+                        }).format(variacionActiva.precio_b2c)}
+                      </span>
+                    </div>
+                    <span className="text-xs tracking-wider uppercase text-[#8B6914]">
+                      Precio profesional B2B
+                    </span>
+                  </>
+                ) : (
+                  <div className="flex items-baseline gap-3">
+                    <span className="text-2xl font-medium text-neutral-900">
                       {new Intl.NumberFormat("es-ES", {
                         style: "currency",
                         currency: "EUR",
-                      }).format(variacionActiva.precio_comparar)}
+                      }).format(variacionActiva.precio_b2c)}
                     </span>
-                  )}
+                    {variacionActiva.precio_comparar &&
+                      variacionActiva.precio_comparar > variacionActiva.precio_b2c && (
+                        <span className="text-lg text-neutral-400 line-through">
+                          {new Intl.NumberFormat("es-ES", {
+                            style: "currency",
+                            currency: "EUR",
+                          }).format(variacionActiva.precio_comparar)}
+                        </span>
+                      )}
+                  </div>
+                )}
               </div>
             )}
 
@@ -204,28 +243,21 @@ export default async function ProductoPage({ params, searchParams }: PageProps) 
               />
             )}
 
-            {/* Stock */}
-            {variacionActiva && (
-              <p
-                className={`text-sm font-medium ${
-                  variacionActiva.stock > 0 ? "text-green-600" : "text-red-500"
-                }`}
-              >
-                {variacionActiva.stock > 0
-                  ? `${variacionActiva.stock} unidades disponibles`
-                  : "Sin stock — Avísame cuando llegue"}
-              </p>
-            )}
-
             {/* CTA */}
-            <button
-              className="btn-primary w-full py-4 text-base"
-              disabled={!variacionActiva || variacionActiva.stock === 0}
-            >
-              {variacionActiva && variacionActiva.stock > 0
-                ? "Añadir al carrito"
-                : "Sin stock"}
-            </button>
+            {variacionActiva && (
+              <AnadirAlCarritoBtn
+                variacionId={variacionActiva.id}
+                productoId={p.id}
+                slug={p.slug}
+                categoria={slugifyCategoria(p.categoria)}
+                subcategoria={slugifyCategoria(p.subcategoria ?? "general")}
+                nombre={`${p.nombre}${variacionActiva.nombre_variacion !== "Único" ? ` — ${variacionActiva.nombre_variacion}` : ""}`}
+                nombreVariacion={variacionActiva.nombre_variacion}
+                imagenUrl={variacionActiva.imagen_url ?? p.imagen_principal_url ?? null}
+                precio={b2bAprobado && variacionActiva.precio_b2b && variacionActiva.precio_b2b > 0 ? variacionActiva.precio_b2b : variacionActiva.precio_b2c}
+                sku={variacionActiva.sku}
+              />
+            )}
 
             {/* Descripción */}
             {p.descripcion_general && (
@@ -276,9 +308,7 @@ function VariacionSelectorServer({
             className={`px-3 py-2 text-xs border transition-colors ${
               v.id === variacionActivaId
                 ? "border-neutral-900 bg-neutral-900 text-white"
-                : v.stock > 0
-                ? "border-neutral-200 hover:border-neutral-900"
-                : "border-neutral-100 text-neutral-300 line-through cursor-not-allowed"
+                : "border-neutral-200 hover:border-neutral-900"
             }`}
           >
             {v.nombre_variacion}

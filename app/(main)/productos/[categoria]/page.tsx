@@ -50,12 +50,22 @@ export default async function CategoriaPage({ params, searchParams }: PageProps)
 
   const supabase = await createClient();
 
+  // Resolver el slug de la URL al nombre real de categoría en BD (ilike no es accent-insensitive)
+  const { data: todasCats } = await supabase
+    .from("productos_padre")
+    .select("categoria")
+    .eq("activo", true);
+  const categoriaNombre = [...new Set((todasCats ?? []).map((p) => p.categoria))]
+    .find((c) => slugifyCategoria(c) === categoria);
+
+  if (!categoriaNombre) notFound();
+
   // Obtener subcategorías únicas dentro de esta categoría
   const { data: subcatData } = await supabase
     .from("productos_padre")
     .select("subcategoria")
     .eq("activo", true)
-    .ilike("categoria", categoria.replace(/-/g, " "));
+    .eq("categoria", categoriaNombre);
 
   const subcategorias = [
     ...new Set((subcatData ?? []).map((p) => p.subcategoria).filter(Boolean)),
@@ -75,8 +85,7 @@ export default async function CategoriaPage({ params, searchParams }: PageProps)
     )
     .eq("activo", true)
     .eq("variaciones.activa", true)
-    .gt("variaciones.stock", 0)
-    .ilike("categoria", categoria.replace(/-/g, " "))
+    .eq("categoria", categoriaNombre)
     .range(from, from + PAGE_SIZE - 1);
 
   if (orden === "precio-asc") query = query.order("nombre");
@@ -108,7 +117,7 @@ export default async function CategoriaPage({ params, searchParams }: PageProps)
   });
 
   const totalPages = Math.ceil((count ?? 0) / PAGE_SIZE);
-  const categoriaNombre = formatCategoryName(categoria);
+  const categoriaLabel = formatCategoryName(categoria);
   const canonicalUrl = `${BASE_URL}/productos/${categoria}`;
 
   const breadcrumbJsonLd = {
@@ -116,7 +125,7 @@ export default async function CategoriaPage({ params, searchParams }: PageProps)
     "@type": "BreadcrumbList",
     itemListElement: [
       { "@type": "ListItem", position: 1, name: "Inicio", item: BASE_URL },
-      { "@type": "ListItem", position: 2, name: categoriaNombre, item: canonicalUrl },
+      { "@type": "ListItem", position: 2, name: categoriaLabel, item: canonicalUrl },
     ],
   };
 

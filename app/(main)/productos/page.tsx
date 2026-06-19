@@ -39,7 +39,6 @@ export default async function ProductosPage() {
     .select("categoria, imagen_principal_url, variaciones:productos_variaciones!inner(stock, activa)")
     .eq("activo", true)
     .eq("variaciones.activa", true)
-    .gt("variaciones.stock", 0)
     .order("nombre");
 
   // Agrupar por categoría
@@ -76,7 +75,6 @@ export default async function ProductosPage() {
     .eq("activo", true)
     .eq("destacado", true)
     .eq("variaciones.activa", true)
-    .gt("variaciones.stock", 0)
     .limit(12);
 
   const destacados: ProductoCatalogo[] = (destacadosRaw ?? []).map((p) => {

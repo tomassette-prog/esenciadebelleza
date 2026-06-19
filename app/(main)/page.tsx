@@ -29,7 +29,6 @@ export default async function HomePage() {
     .eq("activo", true)
     .eq("destacado", true)
     .eq("variaciones.activa", true)
-    .gt("variaciones.stock", 0)
     .limit(8);
 
   const { data: nuevosRaw } = await supabase
@@ -43,16 +42,23 @@ export default async function HomePage() {
     .eq("activo", true)
     .eq("nuevo", true)
     .eq("variaciones.activa", true)
-    .gt("variaciones.stock", 0)
     .limit(8);
 
-  // Categorías con conteo (solo productos con stock)
+  // Marcas con logo para el carrusel
+  const { data: marcasRaw } = await supabase
+    .from("marcas")
+    .select("id, nombre, slug, logo_url")
+    .eq("activa", true)
+    .not("logo_url", "is", null)
+    .order("nombre");
+  const marcasConLogo = marcasRaw ?? [];
+
+  // Categorías con conteo
   const { data: todosRaw } = await supabase
     .from("productos_padre")
     .select("categoria, imagen_principal_url, variaciones:productos_variaciones!inner(stock, activa)")
     .eq("activo", true)
-    .eq("variaciones.activa", true)
-    .gt("variaciones.stock", 0);
+    .eq("variaciones.activa", true);
 
   const catMap = new Map<string, { total: number; imagen: string | null }>();
   for (const p of todosRaw ?? []) {
@@ -163,42 +169,84 @@ export default async function HomePage() {
         </div>
       </section>
 
-      {/* ── Categorías (solo si hay productos) ── */}
-      {tieneProductos && (
-        <section className="py-20 px-6 bg-white">
-          <div className="container-main">
-            <p
-              className="text-center text-xs tracking-[0.3em] uppercase text-neutral-400 mb-12"
-              style={{ fontFamily: "var(--font-inter)" }}
-            >
-              Explora por categoría
-            </p>
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-              {categorias.map((cat) => (
+      {/* ── Carrusel de marcas ── */}
+      {marcasConLogo.length > 0 && (
+        <section className="py-12 bg-white border-y border-neutral-100 overflow-hidden">
+          <p className="text-center text-xs tracking-[0.3em] uppercase text-neutral-400 mb-8"
+            style={{ fontFamily: "var(--font-inter)" }}>
+            Nuestras marcas
+          </p>
+          <div className="relative">
+            {/* Gradientes laterales */}
+            <div className="absolute left-0 top-0 bottom-0 w-16 z-10 bg-gradient-to-r from-white to-transparent pointer-events-none" />
+            <div className="absolute right-0 top-0 bottom-0 w-16 z-10 bg-gradient-to-l from-white to-transparent pointer-events-none" />
+            {/* Track doble (duplicado para loop continuo) */}
+            <div className="flex animate-marquee whitespace-nowrap">
+              {[...marcasConLogo, ...marcasConLogo].map((marca, i) => (
                 <Link
-                  key={cat.slug}
-                  href={`/productos/${cat.slug}`}
-                  className="group relative aspect-square bg-neutral-50 overflow-hidden block"
+                  key={`${marca.id}-${i}`}
+                  href={`/marcas/${marca.slug}`}
+                  className="inline-flex items-center justify-center mx-8 shrink-0 opacity-60 hover:opacity-100 transition-opacity"
                 >
-                  {cat.imagen && (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={cat.imagen}
-                      alt={formatCategoryName(cat.nombre)}
-                      className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105 opacity-50 group-hover:opacity-60"
-                    />
-                  )}
-                  <div className="absolute inset-0 flex flex-col items-center justify-center p-4 text-center">
-                    <span
-                      className="text-xl font-light text-neutral-900"
-                      style={{ fontFamily: "var(--font-cormorant)" }}
-                    >
-                      {formatCategoryName(cat.nombre)}
-                    </span>
-                    <span className="text-xs text-neutral-500 mt-1">{cat.total} productos</span>
-                  </div>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={marca.logo_url!}
+                    alt={marca.nombre}
+                    className="h-10 w-auto object-contain"
+                    loading="lazy"
+                  />
                 </Link>
               ))}
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* ── Nuestras marcas ── */}
+      {tieneProductos && marcasConLogo.length > 0 && (
+        <section className="py-20 px-6 bg-neutral-50">
+          <div className="container-main">
+            <div className="flex items-baseline justify-between mb-10">
+              <div>
+                <p className="text-xs tracking-[0.3em] uppercase text-neutral-400 mb-2"
+                  style={{ fontFamily: "var(--font-inter)" }}>
+                  Trabaja con las mejores
+                </p>
+                <h2 className="text-3xl font-light text-neutral-900"
+                  style={{ fontFamily: "var(--font-cormorant)" }}>
+                  Nuestras marcas
+                </h2>
+              </div>
+              <Link href="/marcas"
+                className="text-xs tracking-widest uppercase text-neutral-400 hover:text-neutral-700 transition-colors hidden sm:block">
+                Ver todas →
+              </Link>
+            </div>
+            <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 gap-4">
+              {marcasConLogo.slice(0, 12).map((marca) => (
+                <Link
+                  key={marca.id}
+                  href={`/marcas/${marca.slug}`}
+                  className="group bg-white border border-neutral-100 p-5 flex flex-col items-center gap-3 hover:border-neutral-300 hover:shadow-sm transition-all"
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={marca.logo_url!}
+                    alt={marca.nombre}
+                    className="h-10 w-full object-contain grayscale group-hover:grayscale-0 transition-all duration-300"
+                    loading="lazy"
+                  />
+                  <span className="text-[10px] tracking-widest uppercase text-neutral-400 group-hover:text-neutral-700 transition-colors text-center leading-tight">
+                    {marca.nombre}
+                  </span>
+                </Link>
+              ))}
+            </div>
+            <div className="text-center mt-8 sm:hidden">
+              <Link href="/marcas"
+                className="text-xs tracking-widest uppercase text-neutral-400 hover:text-neutral-700 transition-colors">
+                Ver todas las marcas →
+              </Link>
             </div>
           </div>
         </section>

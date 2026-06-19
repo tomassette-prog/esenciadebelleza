@@ -1,47 +1,39 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useCarrito } from "@/context/CarritoContext";
-import { loadStripe } from "@stripe/stripe-js";
+import { confirmarPedidoCeca } from "@/actions/checkout";
 
-const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!);
+type Estado = "cargando" | "exito" | "error";
 
-type Estado = "cargando" | "exito" | "procesando" | "error";
-
-export default function ConfirmacionPage() {
+function ConfirmacionInner() {
   const searchParams = useSearchParams();
   const { vaciar }   = useCarrito();
-  const [estado, setEstado]   = useState<Estado>("cargando");
-  const [mensaje, setMensaje] = useState("");
+  const [estado, setEstado] = useState<Estado>("cargando");
 
   useEffect(() => {
-    const clientSecret      = searchParams.get("payment_intent_client_secret");
-    const paymentIntentId   = searchParams.get("payment_intent");
+    const numOper   = searchParams.get("num_oper")   ?? "";
+    const resultado = searchParams.get("resultado")  ?? "";
 
-    if (!clientSecret || !paymentIntentId) {
+    if (!numOper) {
       setEstado("error");
-      setMensaje("No se encontró información del pago.");
       return;
     }
 
-    stripePromise.then(async (stripe) => {
-      if (!stripe) return;
+    if (resultado === "ko") {
+      setEstado("error");
+      return;
+    }
 
-      const { paymentIntent } = await stripe.retrievePaymentIntent(clientSecret);
-
-      switch (paymentIntent?.status) {
-        case "succeeded":
-          vaciar(); // Limpiar carrito
-          setEstado("exito");
-          break;
-        case "processing":
-          setEstado("procesando");
-          break;
-        default:
-          setEstado("error");
-          setMensaje("El pago no se completó. Inténtalo de nuevo.");
+    // Confirmar pedido (idempotente — si ya fue confirmado por notificación, no hace nada malo)
+    confirmarPedidoCeca(numOper).then(({ ok }) => {
+      if (ok) {
+        vaciar();
+        setEstado("exito");
+      } else {
+        setEstado("error");
       }
     });
   }, [searchParams, vaciar]);
@@ -92,29 +84,6 @@ export default function ConfirmacionPage() {
           </>
         )}
 
-        {estado === "procesando" && (
-          <>
-            <div className="w-16 h-16 bg-blue-50 border border-blue-200 rounded-full flex items-center justify-center mx-auto mb-6">
-              <svg className="w-8 h-8 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
-                  d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-            </div>
-            <h1
-              className="text-3xl font-light text-neutral-900 mb-3"
-              style={{ fontFamily: "var(--font-cormorant)" }}
-            >
-              Pago en proceso
-            </h1>
-            <p className="text-neutral-500 mb-8">
-              Tu pago está siendo procesado. Te enviaremos un email cuando se confirme.
-            </p>
-            <Link href="/cuenta" className="text-sm text-neutral-900 underline">
-              Ver mi cuenta
-            </Link>
-          </>
-        )}
-
         {estado === "error" && (
           <>
             <div className="w-16 h-16 bg-red-50 border border-red-200 rounded-full flex items-center justify-center mx-auto mb-6">
@@ -130,7 +99,7 @@ export default function ConfirmacionPage() {
               Algo fue mal
             </h1>
             <p className="text-neutral-500 mb-8">
-              {mensaje || "No se pudo procesar el pago. Por favor, inténtalo de nuevo."}
+              No se pudo procesar el pago. Por favor, inténtalo de nuevo.
             </p>
             <Link
               href="/checkout"
@@ -142,5 +111,13 @@ export default function ConfirmacionPage() {
         )}
       </div>
     </main>
+  );
+}
+
+export default function ConfirmacionPage() {
+  return (
+    <Suspense fallback={<main className="container-main py-24 text-center text-neutral-400 text-sm">Cargando...</main>}>
+      <ConfirmacionInner />
+    </Suspense>
   );
 }

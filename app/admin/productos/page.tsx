@@ -13,6 +13,7 @@ export const metadata: Metadata = {
 interface SearchParams {
   q?: string;
   cat?: string;
+  subcat?: string;
   estado?: string;
   page?: string;
 }
@@ -24,7 +25,7 @@ export default async function AdminProductosPage({
 }: {
   searchParams: Promise<SearchParams>;
 }) {
-  const { q, cat, estado, page: pageParam } = await searchParams;
+  const { q, cat, subcat, estado, page: pageParam } = await searchParams;
   const page = Math.max(1, parseInt(pageParam ?? "1", 10));
   const from = (page - 1) * PAGE_SIZE;
   const to = from + PAGE_SIZE - 1;
@@ -40,20 +41,30 @@ export default async function AdminProductosPage({
     .order("nombre")
     .range(from, to);
 
+  // Categorías y subcategorías para los filtros (necesario antes de aplicar filtros)
+  const { data: catData } = await supabase
+    .from("productos_padre")
+    .select("categoria, subcategoria");
+  const categorias = [...new Set((catData ?? []).map((p) => p.categoria))].sort();
+
+  // Subcategorías filtradas por la categoría seleccionada
+  const catNombre = categorias.find(c => slugifyCategoria(c) === cat);
+  const subcategorias = cat
+    ? [...new Set((catData ?? [])
+        .filter(p => p.categoria === (catNombre ?? cat.replace(/-/g, " ")))
+        .map(p => p.subcategoria)
+        .filter(Boolean))]
+        .sort() as string[]
+    : [];
+
   if (q) query = query.ilike("nombre", `%${q}%`);
-  if (cat) query = query.ilike("categoria", cat.replace(/-/g, " "));
+  if (cat) query = query.eq("categoria", catNombre ?? cat.replace(/-/g, " "));
+  if (subcat) query = query.eq("subcategoria", subcat);
   if (estado === "activo") query = query.eq("activo", true);
   else if (estado === "inactivo") query = query.eq("activo", false);
 
   const { data: productos, count: totalCount } = await query;
   const totalPages = Math.ceil((totalCount ?? 0) / PAGE_SIZE);
-
-  // Categorías para el filtro
-  const { data: catData } = await supabase
-    .from("productos_padre")
-    .select("categoria")
-    .eq("activo", true);
-  const categorias = [...new Set((catData ?? []).map((p) => p.categoria))].sort();
 
   return (
     <div className="space-y-6">
@@ -92,6 +103,14 @@ export default async function AdminProductosPage({
             </option>
           ))}
         </select>
+        {subcategorias.length > 0 && (
+          <select name="subcat" defaultValue={subcat} className="input-clean text-sm min-w-40">
+            <option value="">Todas las subcategorías</option>
+            {subcategorias.map((s) => (
+              <option key={s} value={s}>{s}</option>
+            ))}
+          </select>
+        )}
         <select name="estado" defaultValue={estado} className="input-clean text-sm min-w-32">
           <option value="">Todos</option>
           <option value="activo">Activos</option>

@@ -99,6 +99,24 @@ export default async function AdminLayout({ children }: { children: ReactNode })
             >
               Envíos
             </Link>
+            <Link
+              href="/admin/blog"
+              className="text-xs tracking-widest uppercase text-neutral-300 hover:text-white transition-colors"
+            >
+              Blog
+            </Link>
+            <Link
+              href="/admin/profesionales"
+              className="text-xs tracking-widest uppercase text-neutral-300 hover:text-white transition-colors"
+            >
+              Profesionales
+            </Link>
+            <Link
+              href="/admin/importar"
+              className="text-xs tracking-widest uppercase text-neutral-300 hover:text-white transition-colors"
+            >
+              Importar
+            </Link>
           </div>
         </div>
       </nav>

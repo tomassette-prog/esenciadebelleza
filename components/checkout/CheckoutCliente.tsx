@@ -1,16 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { loadStripe } from "@stripe/stripe-js";
-import { Elements } from "@stripe/react-stripe-js";
+import { useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useCarrito } from "@/context/CarritoContext";
-import { crearPaymentIntent } from "@/actions/checkout";
-import { CheckoutForm } from "@/components/checkout/CheckoutForm";
-
-// Carga Stripe solo una vez fuera del render
-const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!);
+import { iniciarPagoCeca } from "@/actions/checkout";
+import { calcularGastoEnvio, getZonaEnvio } from "@/lib/envio";
 
 type Paso = "direccion" | "pago";
 
@@ -26,31 +21,31 @@ interface DatosEnvio {
   notas:         string;
 }
 
+// Provincias donde SÍ enviamos (sin Canarias, Ceuta ni Melilla)
 const PROVINCIAS = [
   "Álava","Albacete","Alicante","Almería","Asturias","Ávila","Badajoz","Baleares",
   "Barcelona","Burgos","Cáceres","Cádiz","Cantabria","Castellón","Ciudad Real",
   "Córdoba","Cuenca","Girona","Granada","Guadalajara","Guipúzcoa","Huelva","Huesca",
-  "Jaén","La Coruña","La Rioja","Las Palmas","León","Lleida","Lugo","Madrid","Málaga",
-  "Murcia","Navarra","Ourense","Palencia","Pontevedra","Salamanca","Santa Cruz de Tenerife",
+  "Jaén","La Coruña","La Rioja","León","Lleida","Lugo","Madrid","Málaga",
+  "Murcia","Navarra","Ourense","Palencia","Pontevedra","Salamanca",
   "Segovia","Sevilla","Soria","Tarragona","Teruel","Toledo","Valencia","Valladolid",
-  "Vizcaya","Zamora","Zaragoza","Ceuta","Melilla",
+  "Vizcaya","Zamora","Zaragoza",
 ];
 
 export function CheckoutCliente({
   emailInicial,
-  envioGratisDesde = 49,
-  costoEnvio = 4.95,
 }: {
   emailInicial?: string;
-  envioGratisDesde?: number;
-  costoEnvio?: number;
 }) {
   const { lineas, totalPrecio } = useCarrito();
-  const [paso, setPaso]             = useState<Paso>("direccion");
-  const [clientSecret, setClientSecret] = useState<string | null>(null);
-  const [gastoEnvioConfirmado, setGastoEnvioConfirmado] = useState(0);
-  const [cargando, setCargando]     = useState(false);
-  const [errorCI, setErrorCI]       = useState<string | null>(null);
+  const [paso, setPaso]               = useState<Paso>("direccion");
+  const [cecaCampos, setCecaCampos]   = useState<Record<string, string> | null>(null);
+  const [cecaUrl, setCecaUrl]         = useState<string>("");
+  const [gastoEnvioConf, setGastoEnvioConf] = useState(0);
+  const [cargando, setCargando]       = useState(false);
+  const [error, setError]             = useState<string | null>(null);
+
+  const formCecaRef = useRef<HTMLFormElement>(null);
 
   const [datos, setDatos] = useState<DatosEnvio>({
     email:         emailInicial ?? "",
@@ -64,30 +59,43 @@ export function CheckoutCliente({
     notas:         "",
   });
 
-  // Configuración de envío (viene del servidor, leída de config_tienda)
-  const gastoEnvio = totalPrecio >= envioGratisDesde ? 0 : costoEnvio;
-  const totalFinal = totalPrecio + gastoEnvio;
+  const zona        = getZonaEnvio(datos.provincia);
+  const gastoEnvio   = zona === "no_disponible" ? 0 : calcularGastoEnvio(totalPrecio, datos.provincia);
+  const totalFinal   = totalPrecio + gastoEnvio;
+
+  const infoEnvio = (() => {
+    if (zona === "baleares") return "Envío a Baleares: 12,00 €";
+    if (zona === "valencia") return totalPrecio >= 35 ? "Envío gratis (pedido ≥ 35 €)" : "Envío: 5,00 € (gratis desde 35 €)";
+    return totalPrecio >= 40 ? "Envío gratis (pedido ≥ 40 €)" : "Envío: 5,00 € (gratis desde 40 €)";
+  })();
 
   function cambiar(campo: keyof DatosEnvio, valor: string) {
     setDatos((d) => ({ ...d, [campo]: valor }));
   }
 
-  async function irAPago(e: React.FormEvent) {
+  async function irAPaso2(e: React.FormEvent) {
     e.preventDefault();
     setCargando(true);
-    setErrorCI(null);
+    setError(null);
 
-    const { clientSecret: cs, error, gastoEnvio: ge } = await crearPaymentIntent(lineas);
-    if (error || !cs) {
-      setErrorCI(error ?? "Error al iniciar el pago");
+    const { gatewayUrl, campos, gastoEnvio: ge, error: err } =
+      await iniciarPagoCeca(lineas, datos);
+
+    if (err || !campos || !gatewayUrl) {
+      setError(err ?? "Error al preparar el pago");
       setCargando(false);
       return;
     }
 
-    setClientSecret(cs);
-    setGastoEnvioConfirmado(ge);
+    setCecaCampos(campos);
+    setCecaUrl(gatewayUrl);
+    setGastoEnvioConf(ge);
     setPaso("pago");
     setCargando(false);
+  }
+
+  function pagarConTarjeta() {
+    if (formCecaRef.current) formCecaRef.current.submit();
   }
 
   if (!lineas.length) {
@@ -121,7 +129,7 @@ export function CheckoutCliente({
 
         {/* PASO 1 — Dirección de envío */}
         {paso === "direccion" && (
-          <form onSubmit={irAPago} className="space-y-4">
+          <form onSubmit={irAPaso2} className="space-y-4">
             <h2
               className="text-xl font-light text-neutral-900 mb-6"
               style={{ fontFamily: "var(--font-cormorant)" }}
@@ -232,6 +240,8 @@ export function CheckoutCliente({
                   <option key={p} value={p}>{p}</option>
                 ))}
               </select>
+              {/* Info dinámica de gastos de envío según provincia */}
+              <p className="mt-1.5 text-xs text-neutral-500">{infoEnvio}</p>
             </div>
 
             {/* Teléfono */}
@@ -263,10 +273,8 @@ export function CheckoutCliente({
               />
             </div>
 
-            {errorCI && (
-              <div className="p-3 bg-red-50 border border-red-200 text-red-700 text-sm">
-                {errorCI}
-              </div>
+            {error && (
+              <div className="p-3 bg-red-50 border border-red-200 text-red-700 text-sm">{error}</div>
             )}
 
             <button
@@ -279,17 +287,14 @@ export function CheckoutCliente({
           </form>
         )}
 
-        {/* PASO 2 — Pago con Stripe */}
-        {paso === "pago" && clientSecret && (
+        {/* PASO 2 — Confirmar y pagar con Cecabank */}
+        {paso === "pago" && cecaCampos && (
           <div>
-            <div className="flex items-center gap-4 mb-6">
-              <button
-                onClick={() => setPaso("direccion")}
-                className="text-xs text-neutral-400 hover:text-neutral-700 transition-colors"
-              >
-                ← Modificar dirección
-              </button>
-            </div>
+            <button onClick={() => setPaso("direccion")}
+              className="text-xs text-neutral-400 hover:text-neutral-700 transition-colors mb-6 block"
+            >
+              ← Modificar dirección
+            </button>
 
             {/* Resumen dirección */}
             <div className="bg-neutral-50 border border-neutral-100 p-4 mb-6 text-sm text-neutral-600">
@@ -300,38 +305,41 @@ export function CheckoutCliente({
             </div>
 
             <h2
-              className="text-xl font-light text-neutral-900 mb-6"
+              className="text-xl font-light text-neutral-900 mb-4"
               style={{ fontFamily: "var(--font-cormorant)" }}
             >
-              Método de pago
+              Pago seguro con tarjeta
             </h2>
 
-            <Elements
-              stripe={stripePromise}
-              options={{
-                clientSecret,
-                locale: "es",
-                appearance: {
-                  theme: "stripe",
-                  variables: {
-                    colorPrimary:      "#0F0F0F",
-                    colorBackground:   "#ffffff",
-                    colorText:         "#0F0F0F",
-                    colorDanger:       "#ef4444",
-                    fontFamily:        "Inter, system-ui, sans-serif",
-                    borderRadius:      "0px",
-                    spacingUnit:       "4px",
-                  },
-                },
-              }}
+            <p className="text-sm text-neutral-600 mb-6">
+              Al pulsar el botón serás redirigido al TPV seguro de Cecabank donde podrás
+              introducir los datos de tu tarjeta (Visa, Mastercard, etc.).
+            </p>
+
+            <button onClick={pagarConTarjeta}
+              className="w-full py-4 bg-neutral-900 text-white text-xs tracking-widest uppercase hover:bg-neutral-700 transition-colors flex items-center justify-center gap-3"
             >
-              <CheckoutForm
-                datosEnvio={datos}
-                gastoEnvio={gastoEnvioConfirmado}
-                clientSecret={clientSecret}
-                onExito={() => {}}
-              />
-            </Elements>
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+                  d="M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h3m-3.75 3h15a2.25 2.25 0 002.25-2.25V6.75A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25v10.5A2.25 2.25 0 004.5 19.5z" />
+              </svg>
+              Pagar {(totalPrecio + gastoEnvioConf).toLocaleString("es-ES", { style: "currency", currency: "EUR" })} con tarjeta
+            </button>
+
+            <p className="text-xs text-neutral-400 text-center mt-4 flex items-center justify-center gap-2">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+                  d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
+              </svg>
+              Pago 100% seguro · Cifrado SSL · TPV Cecabank
+            </p>
+
+            {/* Formulario oculto que se envía a Cecabank */}
+            <form ref={formCecaRef} action={cecaUrl} method="POST" className="hidden">
+              {Object.entries(cecaCampos).map(([name, value]) => (
+                <input key={name} type="hidden" name={name} value={value} />
+              ))}
+            </form>
           </div>
         )}
       </div>
@@ -392,7 +400,7 @@ export function CheckoutCliente({
             </div>
             {gastoEnvio > 0 && (
               <p className="text-xs text-neutral-400">
-                Envío gratis a partir de {envioGratisDesde} €
+                {infoEnvio}
               </p>
             )}
             <div className="flex justify-between font-medium text-neutral-900 pt-2 border-t border-neutral-200 text-base">

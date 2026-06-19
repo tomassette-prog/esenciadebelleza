@@ -7,6 +7,7 @@ import type { ProductoVariacion, ProductoPadre } from "@/types/producto";
 type FilaTabla = ProductoVariacion & {
   producto_nombre: string;
   categoria: string;
+  subcategoria: string;
 };
 
 interface Props {
@@ -17,16 +18,27 @@ interface Props {
 export function StockTable({ filas: filasIniciales }: Props) {
   const [filas, setFilas] = useState<FilaTabla[]>(filasIniciales);
   const [filtro, setFiltro] = useState("");
+  const [filtroCat, setFiltroCat] = useState("");
+  const [filtroSubcat, setFiltroSubcat] = useState("");
   const [isPending, startTransition] = useTransition();
   const [errores, setErrores] = useState<Record<string, string>>({});
   const cellRefs = useRef<Map<string, HTMLInputElement>>(new Map());
 
-  const filasFiltradas = filas.filter(
-    (f) =>
+  // Listas únicas para los selects
+  const categorias = [...new Set(filas.map(f => f.categoria).filter(Boolean))].sort();
+  const subcategorias = filtroCat
+    ? [...new Set(filas.filter(f => f.categoria === filtroCat).map(f => f.subcategoria).filter(Boolean))].sort()
+    : [];
+
+  const filasFiltradas = filas.filter((f) => {
+    const textOk = !filtro ||
       f.sku.toLowerCase().includes(filtro.toLowerCase()) ||
       f.producto_nombre.toLowerCase().includes(filtro.toLowerCase()) ||
-      f.nombre_variacion.toLowerCase().includes(filtro.toLowerCase())
-  );
+      f.nombre_variacion.toLowerCase().includes(filtro.toLowerCase());
+    const catOk = !filtroCat || f.categoria === filtroCat;
+    const subcatOk = !filtroSubcat || f.subcategoria === filtroSubcat;
+    return textOk && catOk && subcatOk;
+  });
 
   // Navegar entre celdas con teclas de flecha
   const handleKeyDown = useCallback(
@@ -97,15 +109,44 @@ export function StockTable({ filas: filasIniciales }: Props) {
 
   return (
     <div className="space-y-4">
-      {/* Barra de búsqueda + CSV importer */}
-      <div className="flex items-center gap-4">
+      {/* Barra de filtros */}
+      <div className="flex flex-wrap items-center gap-3">
         <input
           type="search"
           placeholder="Buscar por SKU, producto o variación..."
-          className="input-clean flex-1 max-w-md"
+          className="input-clean flex-1 min-w-48"
           value={filtro}
           onChange={(e) => setFiltro(e.target.value)}
         />
+        <select
+          className="input-clean text-sm min-w-40"
+          value={filtroCat}
+          onChange={(e) => { setFiltroCat(e.target.value); setFiltroSubcat(""); }}
+        >
+          <option value="">Todas las categorías</option>
+          {categorias.map(c => <option key={c} value={c}>{c}</option>)}
+        </select>
+        {subcategorias.length > 0 && (
+          <select
+            className="input-clean text-sm min-w-40"
+            value={filtroSubcat}
+            onChange={(e) => setFiltroSubcat(e.target.value)}
+          >
+            <option value="">Todas las subcategorías</option>
+            {subcategorias.map(s => <option key={s} value={s}>{s}</option>)}
+          </select>
+        )}
+        {(filtro || filtroCat || filtroSubcat) && (
+          <button
+            onClick={() => { setFiltro(""); setFiltroCat(""); setFiltroSubcat(""); }}
+            className="text-xs text-neutral-400 hover:text-neutral-700 transition-colors px-2"
+          >
+            Limpiar
+          </button>
+        )}
+        <span className="text-xs text-neutral-400 ml-auto">
+          {filasFiltradas.length} / {filas.length} referencias
+        </span>
         <CsvImporter onImportado={(updates) => {
           setFilas((prev) =>
             prev.map((f) => {

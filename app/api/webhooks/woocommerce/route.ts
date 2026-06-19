@@ -1,6 +1,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { NextRequest, NextResponse } from "next/server";
 import * as crypto from "crypto";
+import { WOO_CAT_MAP } from "@/lib/categorias";
 
 // ── Verificación de firma HMAC-SHA256 de WooCommerce ─────────────────────────
 function verificarFirmaWC(body: string, signature: string, secret: string): boolean {
@@ -15,24 +16,45 @@ function verificarFirmaWC(body: string, signature: string, secret: string): bool
 }
 
 // ── Mapeo categorías WooCommerce → estructura Supabase ────────────────────────
-function mapearCategoria(cats: { slug: string }[]): { categoria: string; subcategoria: string } {
-  const MAPA: Record<string, { categoria: string; subcategoria: string }> = {
-    peluqueria:         { categoria: "peluqueria",  subcategoria: "general"     },
-    tintes:             { categoria: "peluqueria",  subcategoria: "tintes"      },
-    decolorantes:       { categoria: "peluqueria",  subcategoria: "decolorantes"},
-    champu:             { categoria: "peluqueria",  subcategoria: "champu"      },
-    acondicionadores:   { categoria: "peluqueria",  subcategoria: "acondicionadores" },
-    mascarillas:        { categoria: "peluqueria",  subcategoria: "mascarillas" },
-    "styling-cabello":  { categoria: "peluqueria",  subcategoria: "styling"     },
-    estetica:           { categoria: "estetica",    subcategoria: "general"     },
-    ceras:              { categoria: "estetica",    subcategoria: "ceras"       },
-    perfumeria:         { categoria: "perfumeria",  subcategoria: "general"     },
-    perfumes:           { categoria: "perfumeria",  subcategoria: "perfumes"    },
+function mapearCategoria(cats: { id: number; slug: string }[]): { categoria: string; subcategoria: string } {
+  // Primero intentar por ID numérico (más preciso)
+  for (const cat of cats) {
+    if (WOO_CAT_MAP[cat.id]) return WOO_CAT_MAP[cat.id];
+  }
+  // Fallback por slug
+  const SLUG_MAP: Record<string, { categoria: string; subcategoria: string }> = {
+    peluqueria:        { categoria: "peluqueria",  subcategoria: "peluqueria-general" },
+    tintes:            { categoria: "peluqueria",  subcategoria: "tintes"      },
+    decolorantes:      { categoria: "peluqueria",  subcategoria: "decoloracion"},
+    champu:            { categoria: "peluqueria",  subcategoria: "champus"     },
+    acondicionadores:  { categoria: "peluqueria",  subcategoria: "acondicionadores" },
+    mascarillas:       { categoria: "peluqueria",  subcategoria: "mascarillas" },
+    estetica:          { categoria: "estetica",    subcategoria: "estetica-general"  },
+    perfumeria:        { categoria: "perfumeria",  subcategoria: "perfumeria-general"},
+    barberia:          { categoria: "barberia",    subcategoria: "barberia-general"  },
+    maquillaje:        { categoria: "maquillaje",  subcategoria: "maquillaje-general"},
   };
   for (const cat of cats) {
-    if (MAPA[cat.slug]) return MAPA[cat.slug];
+    if (SLUG_MAP[cat.slug]) return SLUG_MAP[cat.slug];
   }
   return { categoria: "otros", subcategoria: "general" };
+}
+
+// ── Llamada autenticada a la API REST de WooCommerce ─────────────────────────
+async function wooFetch<T>(path: string): Promise<T> {
+  const base = process.env.WOO_URL!;
+  const ck   = process.env.WOO_CONSUMER_KEY!;
+  const cs   = process.env.WOO_CONSUMER_SECRET!;
+  const url  = `${base}/wp-json/wc/v3${path}`;
+  const res  = await fetch(url, {
+    headers: {
+      Authorization: "Basic " + Buffer.from(`${ck}:${cs}`).toString("base64"),
+      "Content-Type": "application/json",
+    },
+    next: { revalidate: 0 },
+  });
+  if (!res.ok) throw new Error(`WooCommerce API error ${res.status}: ${path}`);
+  return res.json() as Promise<T>;
 }
 
 // ── Handler principal ─────────────────────────────────────────────────────────
@@ -114,7 +136,7 @@ async function sincronizarProducto(
   const wc_id   = String(p.id);
   const slug    = String(p.slug);
   const { categoria, subcategoria } = mapearCategoria(
-    (p.categories as { slug: string }[]) ?? []
+    (p.categories as { id: number; slug: string }[]) ?? []
   );
 
   // Buscar o crear marca
@@ -132,11 +154,12 @@ async function sincronizarProducto(
     marcaId = marca?.id ?? null;
   }
 
-  // UPSERT producto padre por slug
+  // UPSERT producto padre por wc_product_id (más estable que slug)
   const { data: padre, error: errPadre } = await supabase
     .from("productos_padre")
     .upsert(
       {
+        wc_product_id:       wc_id,
         slug,
         nombre:              String(p.name),
         categoria,
@@ -145,10 +168,8 @@ async function sincronizarProducto(
         imagen_principal_url:(p.images as { src: string }[])?.[0]?.src ?? null,
         marca_id:            marcaId,
         activo:              p.status === "publish",
-        // Guardamos wc_product_id para sincronización futura
-        // (columna añadida en esta migración si no existe aún)
       },
-      { onConflict: "slug" }
+      { onConflict: "wc_product_id" }
     )
     .select("id")
     .single();
@@ -158,9 +179,10 @@ async function sincronizarProducto(
     return;
   }
 
-  // Variaciones: simple → una línea, variable → iterar
   const tipo = String(p.type);
+
   if (tipo === "simple") {
+    // Producto simple → una única variación
     await supabase.from("productos_variaciones").upsert(
       {
         producto_padre_id: padre.id,
@@ -168,16 +190,60 @@ async function sincronizarProducto(
         nombre_variacion:  "Unidad",
         precio_b2c:        parseFloat(String(p.price || p.regular_price || "0")),
         precio_b2b:        parseFloat(String(p.price || p.regular_price || "0")),
+        precio_comparar:   p.sale_price ? parseFloat(String(p.regular_price || "0")) : null,
+        imagen_url:        (p.images as { src: string }[])?.[0]?.src ?? null,
         stock:             Number(p.stock_quantity ?? 0),
         activo:            p.status === "publish",
       },
       { onConflict: "sku" }
     );
+
+  } else if (tipo === "variable") {
+    // Producto variable → obtener variaciones via API WooCommerce
+    try {
+      const variaciones = await wooFetch<WooVariacion[]>(
+        `/products/${wc_id}/variations?per_page=100&status=publish`
+      );
+
+      for (const v of variaciones) {
+        // Nombre de la variación = valores de atributos concatenados
+        const nombreVariacion = v.attributes.map((a) => a.option).join(" · ") || "Unidad";
+        const sku = v.sku || `${slug}-${v.id}`;
+        const precioB2C = parseFloat(v.price || v.regular_price || "0");
+
+        await supabase.from("productos_variaciones").upsert(
+          {
+            producto_padre_id: padre.id,
+            sku,
+            nombre_variacion:  nombreVariacion,
+            precio_b2c:        precioB2C,
+            precio_b2b:        precioB2C,
+            precio_comparar:   v.sale_price ? parseFloat(v.regular_price || "0") : null,
+            imagen_url:        v.image?.src ?? (p.images as { src: string }[])?.[0]?.src ?? null,
+            stock:             Number(v.stock_quantity ?? 0),
+            activo:            v.status === "publish",
+          },
+          { onConflict: "sku" }
+        );
+      }
+      console.log(`[WC Webhook] Producto ${wc_id} (variable): ${variaciones.length} variaciones sincronizadas`);
+    } catch (err) {
+      console.error(`[WC Webhook] Error obteniendo variaciones del producto ${wc_id}:`, err);
+    }
   }
-  // Las variaciones de productos "variable" llegan con topic product.updated
-  // y sus variaciones en el campo `variations` como IDs — se gestionan
-  // a través de llamadas individuales al API si es necesario.
-  // Para sincronización de stock en tiempo real, el webhook order.* es suficiente.
+}
+
+// ── Tipos WooCommerce (internos al webhook) ───────────────────────────────────
+interface WooVariacion {
+  id: number;
+  sku: string;
+  price: string;
+  regular_price: string;
+  sale_price: string;
+  stock_quantity: number | null;
+  status: string;
+  attributes: { name: string; option: string }[];
+  image: { src: string } | null;
 }
 
 // ── Descontar stock cuando se crea un pedido en WooCommerce ──────────────────

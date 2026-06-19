@@ -108,7 +108,6 @@ export const NAV_ITEMS: NavItem[] = [
         links: [
           { label: "Ceras depiladoras", href: "/productos/estetica/ceras-depiladoras" },
           { label: "Depilatorios", href: "/productos/estetica/depilatorios" },
-          { label: "Fundidores de cera", href: "/productos/estetica/fundidores" },
         ],
       },
       {
@@ -127,34 +126,16 @@ export const NAV_ITEMS: NavItem[] = [
     href: "/productos/barberia",
     columnas: [
       {
-        titulo: "Afeitado",
+        titulo: "Afeitado y Barba",
         links: [
           { label: "Ceras de barbero", href: "/productos/barberia/ceras-barbero" },
-          { label: "Espumas de afeitar", href: "/productos/barberia/espumas-afeitar" },
-          { label: "Navajas y utensilios", href: "/productos/barberia/navajas" },
-        ],
-      },
-      {
-        titulo: "Cuidado de barba",
-        links: [
-          { label: "Aceites de barba", href: "/productos/barberia/aceites-barba" },
           { label: "Champús de barba", href: "/productos/barberia/champus-barba" },
-          { label: "Bálsamos y cremas", href: "/productos/barberia/balsamos" },
         ],
       },
       {
-        titulo: "Styling caballero",
+        titulo: "Styling y cuidado caballero",
         links: [
-          { label: "Pomadas y Ceras", href: "/productos/barberia/pomadas-y-ceras" },
-          { label: "Geles", href: "/productos/barberia/geles" },
-          { label: "Lacas y Sprays", href: "/productos/barberia/lacas-sprays" },
-        ],
-      },
-      {
-        titulo: "Equipos",
-        links: [
-          { label: "Máquinas cortapelo", href: "/productos/barberia/maquinas-corte" },
-          { label: "Accesorios cortapelo", href: "/productos/barberia/accesorios" },
+          { label: "Cuidado caballero", href: "/productos/barberia/cuidado-caballero" },
         ],
       },
     ],
@@ -280,7 +261,63 @@ export const WOO_CAT_MAP: Record<number, { categoria: string; subcategoria: stri
   70:  { categoria: "estetica", subcategoria: "aparatos-estetica" },
   63:  { categoria: "estetica", subcategoria: "desechables-estetica" },
 
-  // ── BARBERÍA ─────────────────────────────────────────────────────────────
+  // ── PELUQUERÍA · Champús por marca (subcategorías de id 96) ─────────────
+  385:  { categoria: "peluqueria", subcategoria: "champus" },  // VALQUER
+  991:  { categoria: "peluqueria", subcategoria: "champus" },  // TAHE
+  282:  { categoria: "peluqueria", subcategoria: "champus" },  // YUNSEY
+  298:  { categoria: "peluqueria", subcategoria: "champus" },  // FANOLA
+  280:  { categoria: "peluqueria", subcategoria: "champus" },  // WELLA
+  288:  { categoria: "peluqueria", subcategoria: "champus" },  // PERICHE
+  293:  { categoria: "peluqueria", subcategoria: "champus" },  // KÉRASTASE
+  529:  { categoria: "peluqueria", subcategoria: "champus" },  // HIPERTIN
+  284:  { categoria: "peluqueria", subcategoria: "champus" },  // DR. SANTE
+  286:  { categoria: "peluqueria", subcategoria: "champus" },  // KEEN STROK
+  1004: { categoria: "peluqueria", subcategoria: "champus" },  // VIS PLANTIS
+  281:  { categoria: "peluqueria", subcategoria: "champus" },  // GLOSSCO
+  285:  { categoria: "peluqueria", subcategoria: "champus" },  // LIHETO
+  289:  { categoria: "peluqueria", subcategoria: "champus" },  // L'ORÉAL
+  997:  { categoria: "peluqueria", subcategoria: "champus" },  // SALERM
+  538:  { categoria: "peluqueria", subcategoria: "champus" },  // KEYRA
+  294:  { categoria: "peluqueria", subcategoria: "champus" },  // REVLON
+  290:  { categoria: "peluqueria", subcategoria: "champus" },  // MONTIBELLO
+  1024: { categoria: "peluqueria", subcategoria: "champus" },  // ARUAL
+  283:  { categoria: "peluqueria", subcategoria: "champus" },  // SCHAWARZKOPF
+  1017: { categoria: "peluqueria", subcategoria: "champus" },  // LENDAN
+  291:  { categoria: "peluqueria", subcategoria: "champus" },  // NOVON
+  292:  { categoria: "barberia",   subcategoria: "champus-barba" }, // KUUL for men
+
+  // ── PELUQUERÍA · Acondicionadores por marca ───────────────────────────────
+  386:  { categoria: "peluqueria", subcategoria: "acondicionadores" }, // VALQUER
+  563:  { categoria: "peluqueria", subcategoria: "acondicionadores" }, // FANOLA
+  556:  { categoria: "peluqueria", subcategoria: "acondicionadores" }, // YUNSEY
+  555:  { categoria: "peluqueria", subcategoria: "acondicionadores" }, // Otras marcas
+  554:  { categoria: "peluqueria", subcategoria: "acondicionadores" }, // WELLA
+  557:  { categoria: "peluqueria", subcategoria: "acondicionadores" }, // SCHWARZKOPF
+  559:  { categoria: "peluqueria", subcategoria: "acondicionadores" }, // REVLON
+  1006: { categoria: "peluqueria", subcategoria: "acondicionadores" }, // VIS PLANTIS
+  560:  { categoria: "peluqueria", subcategoria: "acondicionadores" }, // PERICHE
+  553:  { categoria: "peluqueria", subcategoria: "acondicionadores" }, // L'OREAL
+  996:  { categoria: "peluqueria", subcategoria: "acondicionadores" }, // TAHE
+  998:  { categoria: "peluqueria", subcategoria: "acondicionadores" }, // SALERM
+  552:  { categoria: "peluqueria", subcategoria: "acondicionadores" }, // KERASTASE
+  558:  { categoria: "peluqueria", subcategoria: "acondicionadores" }, // GLOSSCO
+  1023: { categoria: "peluqueria", subcategoria: "acondicionadores" }, // LENDAN
+  1025: { categoria: "peluqueria", subcategoria: "acondicionadores" }, // ARUAL
+
+  // ── PELUQUERÍA · Aparatos y otras ────────────────────────────────────────
+  423:  { categoria: "peluqueria", subcategoria: "secadores-y-planchas" }, // Aparatos Peluqueria (id alt)
+  119:  { categoria: "peluqueria", subcategoria: "secadores-y-planchas" }, // Aparatología Peluqueria
+  443:  { categoria: "peluqueria", subcategoria: "ampollas-y-serums" },    // Aceites (oferta)
+  442:  { categoria: "peluqueria", subcategoria: "ampollas-y-serums" },    // Ampollas (Oferta)
+
+  // ── ESTÉTICA · Corporales ─────────────────────────────────────────────────
+  66:   { categoria: "estetica", subcategoria: "cremas-corporales" }, // Corporales de Estética
+
+  // ── BARBERÍA / Caballero · marcas completas ───────────────────────────────
+  1027: { categoria: "barberia", subcategoria: "cuidado-caballero" }, // DON ALGODON
+  1013: { categoria: "barberia", subcategoria: "cuidado-caballero" }, // COIFFER
+  1012: { categoria: "barberia", subcategoria: "cuidado-caballero" }, // CANDELAHN
+  1026: { categoria: "barberia", subcategoria: "cuidado-caballero" }, // CANTU
   945: { categoria: "barberia", subcategoria: "barberia-general" },   // BARBER SHOP raíz
   108: { categoria: "barberia", subcategoria: "ceras-barbero" },
   947: { categoria: "barberia", subcategoria: "cuidado-caballero" },  // HEY JOE

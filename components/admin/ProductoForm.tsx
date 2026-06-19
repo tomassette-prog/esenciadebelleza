@@ -9,6 +9,7 @@ interface Props {
   action: (prev: { error?: string } | null, formData: FormData) => Promise<{ error?: string }>;
   marcas: Marca[];
   categoriasExistentes: string[];
+  subcategoriasPorCategoria?: Record<string, string[]>;
   defaultValues?: {
     nombre?: string;
     categoria?: string;
@@ -45,12 +46,13 @@ function SubmitButton({ label }: { label: string }) {
   );
 }
 
-export function ProductoForm({ action, marcas, categoriasExistentes, defaultValues = {}, modo, productoId }: Props) {
+export function ProductoForm({ action, marcas, categoriasExistentes, subcategoriasPorCategoria = {}, defaultValues = {}, modo, productoId }: Props) {
   const [state, formAction] = useFormState(action, null);
   const [nombre, setNombre] = useState(defaultValues.nombre ?? "");
   const [categoria, setCategoria] = useState(defaultValues.categoria ?? "");
   const [subcategoria, setSubcategoria] = useState(defaultValues.subcategoria ?? "");
   const [nuevaCategoria, setNuevaCategoria] = useState(false);
+  const [nuevaSubcategoria, setNuevaSubcategoria] = useState(false);
   const slugPreview = slugifyCategoria(categoria);
   const subcatPreview = subcategoria ? slugifyCategoria(subcategoria) : "general";
   const slugProducto = slugifyCategoria(nombre);
@@ -185,7 +187,7 @@ export function ProductoForm({ action, marcas, categoriasExistentes, defaultValu
                 name="categoria"
                 required
                 value={categoria}
-                onChange={(e) => setCategoria(e.target.value)}
+                onChange={(e) => { setCategoria(e.target.value); setSubcategoria(""); setNuevaSubcategoria(false); }}
                 className="input-clean w-full"
                 placeholder="Ej: Peluquería"
               />
@@ -194,7 +196,7 @@ export function ProductoForm({ action, marcas, categoriasExistentes, defaultValu
                 name="categoria"
                 required
                 value={categoria}
-                onChange={(e) => setCategoria(e.target.value)}
+                onChange={(e) => { setCategoria(e.target.value); setSubcategoria(""); setNuevaSubcategoria(false); }}
                 className="input-clean w-full"
               >
                 <option value="">Seleccionar categoría</option>
@@ -209,14 +211,50 @@ export function ProductoForm({ action, marcas, categoriasExistentes, defaultValu
             <label className="block text-xs uppercase tracking-widest text-neutral-600 mb-1.5">
               Subcategoría
             </label>
-            <input
-              type="text"
-              name="subcategoria"
-              value={subcategoria}
-              onChange={(e) => setSubcategoria(e.target.value)}
-              className="input-clean w-full"
-              placeholder="Ej: Tintes"
-            />
+            {subcategoriasPorCategoria[categoria]?.length > 0 && !nuevaSubcategoria ? (
+              <>
+                <select
+                  name="subcategoria"
+                  value={subcategoria}
+                  onChange={(e) => {
+                    if (e.target.value === "__nueva__") {
+                      setNuevaSubcategoria(true);
+                      setSubcategoria("");
+                    } else {
+                      setSubcategoria(e.target.value);
+                    }
+                  }}
+                  className="input-clean w-full"
+                >
+                  <option value="">— Seleccionar subcategoría —</option>
+                  {subcategoriasPorCategoria[categoria].map((s) => (
+                    <option key={s} value={s}>{s}</option>
+                  ))}
+                  <option value="__nueva__">+ Nueva subcategoría...</option>
+                </select>
+              </>
+            ) : (
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  name="subcategoria"
+                  value={subcategoria}
+                  onChange={(e) => setSubcategoria(e.target.value)}
+                  className="input-clean w-full"
+                  placeholder="Ej: tintes"
+                  autoFocus={nuevaSubcategoria}
+                />
+                {nuevaSubcategoria && subcategoriasPorCategoria[categoria]?.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => { setNuevaSubcategoria(false); setSubcategoria(defaultValues.subcategoria ?? ""); }}
+                    className="text-xs text-neutral-400 hover:text-neutral-700 whitespace-nowrap px-2"
+                  >
+                    ← Volver
+                  </button>
+                )}
+              </div>
+            )}
           </div>
         </div>
 

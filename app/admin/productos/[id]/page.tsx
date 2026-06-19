@@ -31,12 +31,22 @@ export default async function EditarProductoPage({ params }: { params: Promise<{
       .eq("id", id)
       .single(),
     supabase.from("marcas").select("id, nombre, slug, logo_url, activa").eq("activa", true).order("nombre"),
-    supabase.from("productos_padre").select("categoria").eq("activo", true),
+    supabase.from("productos_padre").select("categoria, subcategoria").eq("activo", true),
   ]);
 
   if (!producto) notFound();
 
   const categorias = [...new Set((catData ?? []).map((p: { categoria: string }) => p.categoria))].sort();
+
+  const subcategoriasPorCategoria: Record<string, string[]> = {};
+  for (const p of (catData ?? []) as { categoria: string; subcategoria: string | null }[]) {
+    if (!p.subcategoria) continue;
+    if (!subcategoriasPorCategoria[p.categoria]) subcategoriasPorCategoria[p.categoria] = [];
+    if (!subcategoriasPorCategoria[p.categoria].includes(p.subcategoria))
+      subcategoriasPorCategoria[p.categoria].push(p.subcategoria);
+  }
+  Object.values(subcategoriasPorCategoria).forEach(arr => arr.sort());
+
   const urlPreview = `/productos/${slugifyCategoria(producto.categoria)}/${slugifyCategoria(producto.subcategoria ?? "general")}/${producto.slug}`;
 
   // Binding del server action con el id del producto
@@ -82,6 +92,7 @@ export default async function EditarProductoPage({ params }: { params: Promise<{
         action={accionActualizar as Parameters<typeof ProductoForm>[0]["action"]}
         marcas={marcas ?? []}
         categoriasExistentes={categorias as string[]}
+        subcategoriasPorCategoria={subcategoriasPorCategoria}
         modo="editar"
         productoId={id}
         defaultValues={{

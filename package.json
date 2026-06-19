@@ -10,7 +10,11 @@
     "lint": "next lint",
     "scrape": "ts-node --project tsconfig.scripts.json scraper.ts",
     "import": "ts-node --project tsconfig.scripts.json -r dotenv/config scripts/import-catalogo.ts",
-    "import:woo": "ts-node --project tsconfig.scripts.json scripts/import-woo.ts"
+    "import:woo": "ts-node --project tsconfig.scripts.json scripts/import-woo.ts",
+    "import:woo:nuevos": "ts-node --project tsconfig.scripts.json scripts/import-woo.ts --solo-nuevos",
+    "seo:batch": "ts-node --project tsconfig.scripts.json scripts/seo-batch.ts",
+    "seo:batch:todos": "ts-node --project tsconfig.scripts.json scripts/seo-batch.ts --todos",
+    "upload:logos": "ts-node --project tsconfig.scripts.json scripts/upload-logos.ts"
   },
   "dependencies": {
     "@stripe/react-stripe-js": "^6.6.0",

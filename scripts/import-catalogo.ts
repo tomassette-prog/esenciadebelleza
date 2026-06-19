@@ -10,6 +10,7 @@
 import * as fs from "fs";
 import * as path from "path";
 import { createClient } from "@supabase/supabase-js";
+import { generarSeoProducto } from "../lib/seo-generator";
 
 // ─── Configuración ────────────────────────────────────────────────────────────
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
@@ -156,6 +157,14 @@ async function main(): Promise<void> {
       const paddedSlug = slug; // upsert por slug, maneja colisiones
 
       // ── Producto padre ──
+      const seo = generarSeoProducto({
+        nombre: p.nombre.trim(),
+        marca: p.marca ?? null,
+        categoria: p.categoria.trim(),
+        subcategoria: p.subcategoria?.trim() ?? null,
+        descripcion: p.descripcion ?? null,
+      });
+
       const padre = {
         nombre: p.nombre.trim(),
         slug: paddedSlug,
@@ -165,9 +174,9 @@ async function main(): Promise<void> {
         subcategoria: p.subcategoria?.trim() ?? null,
         imagen_principal_url: p.imagen_principal ?? null,
         activo: true,
-        // SEO inicial básico (se puede enriquecer con IA después)
-        seo_title: `${p.nombre} | Esencia de Belleza`.slice(0, 60),
-        seo_description: `Compra ${p.nombre} en Esencia de Belleza. Envío rápido en España.`.slice(0, 155),
+        seo_title: seo.seo_title,
+        seo_description: seo.seo_description,
+        texto_enriquecido_seo: seo.texto_enriquecido_seo,
       };
 
       padresBatch.push(padre);

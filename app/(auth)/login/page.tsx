@@ -14,6 +14,8 @@ export default function LoginPage({
   const [loading, setLoading] = useState(false);
   const redirectTo = searchParams.redirectTo ?? searchParams.redirect ?? "/cuenta";
 
+  const ADMIN_EMAILS = ["ziarresamot@gmail.com"];
+
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError("");
@@ -24,7 +26,7 @@ export default function LoginPage({
     const password = (form.elements.namedItem("password") as HTMLInputElement).value;
 
     const supabase = createClient();
-    const { error: authError } = await supabase.auth.signInWithPassword({ email, password });
+    const { data, error: authError } = await supabase.auth.signInWithPassword({ email, password });
 
     if (authError) {
       setError("Credenciales incorrectas. Verifica tu email y contraseña.");
@@ -32,8 +34,14 @@ export default function LoginPage({
       return;
     }
 
-    // Redirigir tras login exitoso con full reload para que el servidor lea las cookies
-    window.location.href = redirectTo;
+    // Si es admin y no hay redirectTo específico, ir al panel admin
+    const destino = redirectTo !== "/cuenta"
+      ? redirectTo
+      : ADMIN_EMAILS.includes(data.user?.email ?? "")
+        ? "/admin/productos"
+        : "/cuenta";
+
+    window.location.href = destino;
   }
 
   return (

@@ -21,7 +21,8 @@ dotenv.config({ path: ".env.local" });
 
 import { createClient } from "@supabase/supabase-js";
 import * as https from "https";
-import { WOO_CAT_MAP, SEO_TEMPLATES } from "../lib/categorias";
+import { WOO_CAT_MAP } from "../lib/categorias";
+import { generarSeoProducto } from "../lib/seo-generator";
 
 // ── Config ────────────────────────────────────────────────────────────────────
 const WOO_URL    = process.env.WOO_URL!;
@@ -270,19 +271,19 @@ function detectarMarca(nombre: string): string | null {
 }
 
 // ── Generación de SEO ─────────────────────────────────────────────────────────
-function generarSeo(nombre: string, subcategoria: string) {
-  const tpl = SEO_TEMPLATES[subcategoria] ?? SEO_TEMPLATES["default"];
-  return {
-    seo_title:       truncar(tpl.title.replace("{nombre}", nombre), 60),
-    seo_description: truncar(tpl.desc.replace("{nombre}", nombre),  155),
-  };
-}
+// (delegado a lib/seo-generator.ts — plantillas completas por tipo de producto)
 
 // ── Main ──────────────────────────────────────────────────────────────────────
 async function main() {
+  // Modo de operación:
+  //   --solo-nuevos   → solo importa productos que NO existen aún en Supabase (por slug)
+  //   (sin flag)      → actualiza todo excepto activo/destacado/nuevo (comportamiento actual)
+  const soloNuevos = process.argv.includes("--solo-nuevos");
+
   console.log("═══════════════════════════════════════════════════");
   console.log("  Esencia de Belleza — Importación WooCommerce v2");
   console.log(`  Tienda: ${WOO_URL}`);
+  console.log(`  Modo:   ${soloNuevos ? "SOLO NUEVOS (omite existentes)" : "ACTUALIZAR TODO (preserva activo/destacado/nuevo)"}`);
   console.log("═══════════════════════════════════════════════════\n");
 
   // 1. Cargar categorías para resolución jerárquica
@@ -297,15 +298,41 @@ async function main() {
   let importadosPadre = 0;
   let importadasVariaciones = 0;
   let sinClasificar = 0;
+  let omitidos = 0;
   let errores = 0;
+
+  // Si --solo-nuevos, pre-cargar todos los slugs existentes en Supabase
+  let slugsExistentes = new Set<string>();
+  if (soloNuevos) {
+    console.log("③ Cargando slugs existentes en Supabase…");
+    let offset = 0;
+    while (true) {
+      const { data } = await supabase
+        .from("productos_padre")
+        .select("slug")
+        .range(offset, offset + 999);
+      if (!data || data.length === 0) break;
+      data.forEach(r => slugsExistentes.add(r.slug));
+      if (data.length < 1000) break;
+      offset += 1000;
+    }
+    console.log(`   Productos ya en catálogo: ${slugsExistentes.size}`);
+  }
 
   // 3. Procesar en lotes de BATCH
   for (let i = 0; i < productos.length; i += BATCH) {
     const lote = productos.slice(i, i + BATCH);
-    const padresRows: object[] = [];
+    const padresRows: Record<string, unknown>[] = [];
     const variacionesPorSlug = new Map<string, object[]>();
 
     for (const p of lote) {
+      // ── Modo solo-nuevos: saltar si ya existe ──────────────────────────────
+      const slugP = p.slug || slugify(p.name);
+      if (soloNuevos && slugsExistentes.has(slugP)) {
+        omitidos++;
+        continue;
+      }
+
       // ── Marca ──────────────────────────────────────────────────────────────
       const marcaNombre = detectarMarca(p.name);
       const marcaId = marcaNombre ? await upsertMarca(marcaNombre) : null;
@@ -320,7 +347,13 @@ async function main() {
       }
 
       // ── SEO ────────────────────────────────────────────────────────────────
-      const { seo_title, seo_description } = generarSeo(p.name, subcategoria);
+      const { seo_title, seo_description, texto_enriquecido_seo } = generarSeoProducto({
+        nombre: p.name,
+        marca: marcaNombre,
+        categoria,
+        subcategoria,
+        descripcion: p.description || p.short_description || null,
+      });
 
       const slug = p.slug || slugify(p.name);
 
@@ -334,6 +367,7 @@ async function main() {
         marca_id:             marcaId || null,
         seo_title,
         seo_description,
+        texto_enriquecido_seo,
         activo:               true,
         destacado:            false,
         nuevo:                false,
@@ -357,10 +391,30 @@ async function main() {
       // Los variables se rellenan después con fetchVariations
     }
 
-    // ── Upsert padres ──────────────────────────────────────────────────────────
+    // ── Upsert padres (preservando destacado/nuevo/activo si ya existen) ──────
+    // 1. Ver cuáles slugs ya existen para conservar sus flags manuales
+    const slugsLote = padresRows.map(r => r.slug);
+    const { data: existentes } = await supabase
+      .from("productos_padre")
+      .select("slug, activo, destacado, nuevo")
+      .in("slug", slugsLote);
+    const existMap = new Map((existentes ?? []).map(e => [e.slug, e]));
+
+    // 2. Para los que ya existen, mantener activo/destacado/nuevo
+    const padresRowsFinal = padresRows.map(r => {
+      const ex = existMap.get(r.slug);
+      if (!ex) return r; // nuevo → usar defaults del import
+      return {
+        ...r,
+        activo:    ex.activo,    // preservar
+        destacado: ex.destacado, // preservar
+        nuevo:     ex.nuevo,     // preservar
+      };
+    });
+
     const { data: padresInsertados, error: errPadre } = await supabase
       .from("productos_padre")
-      .upsert(padresRows, { onConflict: "slug" })
+      .upsert(padresRowsFinal, { onConflict: "slug" })
       .select("id, slug");
 
     if (errPadre) {
@@ -438,6 +492,7 @@ async function main() {
   console.log(`  Productos padre : ${importadosPadre}`);
   console.log(`  Variaciones     : ${importadasVariaciones}`);
   console.log(`  Sin clasificar  : ${sinClasificar}`);
+  if (soloNuevos) console.log(`  Omitidos (ya existían): ${omitidos}`);
   console.log(`  Errores         : ${errores}`);
   console.log("═══════════════════════════════════════════════════");
 }

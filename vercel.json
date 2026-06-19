@@ -64,6 +64,89 @@
       "source": "/cgi-bin/(.*)",
       "destination": "/",
       "permanent": false
+    },
+    {
+      "source": "/index.php",
+      "has": [{ "type": "query", "key": "page", "value": "hair" }],
+      "destination": "/productos/peluqueria",
+      "permanent": true
+    },
+    {
+      "source": "/index.php",
+      "has": [{ "type": "query", "key": "page", "value": "paint" }],
+      "destination": "/productos/peluqueria/tintes",
+      "permanent": true
+    },
+    {
+      "source": "/index.php",
+      "has": [{ "type": "query", "key": "page", "value": "face" }],
+      "destination": "/productos/estetica",
+      "permanent": true
+    },
+    {
+      "source": "/index.php",
+      "has": [{ "type": "query", "key": "page", "value": "body" }],
+      "destination": "/productos/estetica",
+      "permanent": true
+    },
+    {
+      "source": "/index.php",
+      "has": [{ "type": "query", "key": "page", "value": "depi" }],
+      "destination": "/productos/estetica",
+      "permanent": true
+    },
+    {
+      "source": "/index.php",
+      "has": [{ "type": "query", "key": "page", "value": "spa" }],
+      "destination": "/productos/estetica",
+      "permanent": true
+    },
+    {
+      "source": "/index.php",
+      "has": [{ "type": "query", "key": "page", "value": "hand" }],
+      "destination": "/productos/estetica",
+      "permanent": true
+    },
+    {
+      "source": "/index.php",
+      "has": [{ "type": "query", "key": "page", "value": "lipo" }],
+      "destination": "/productos/estetica",
+      "permanent": true
+    },
+    {
+      "source": "/index.php",
+      "has": [{ "type": "query", "key": "page", "value": "sun" }],
+      "destination": "/productos/estetica",
+      "permanent": true
+    },
+    {
+      "source": "/index.php",
+      "has": [{ "type": "query", "key": "page", "value": "touch" }],
+      "destination": "/productos/estetica",
+      "permanent": true
+    },
+    {
+      "source": "/index.php",
+      "has": [{ "type": "query", "key": "page", "value": "maps" }],
+      "destination": "/sobre-nosotros",
+      "permanent": true
+    },
+    {
+      "source": "/index.php",
+      "has": [{ "type": "query", "key": "page", "value": "netWork" }],
+      "destination": "/sobre-nosotros",
+      "permanent": true
+    },
+    {
+      "source": "/index.php",
+      "has": [{ "type": "query", "key": "page", "value": "ender" }],
+      "destination": "/",
+      "permanent": true
+    },
+    {
+      "source": "/index.php",
+      "destination": "/",
+      "permanent": true
     }
   ]
 }

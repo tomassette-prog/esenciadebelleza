@@ -7,7 +7,6 @@ import {
   useElements,
 } from "@stripe/react-stripe-js";
 import { useCarrito } from "@/context/CarritoContext";
-import { actualizarMetadataPI } from "@/actions/checkout";
 
 interface Props {
   datosEnvio: {
@@ -45,12 +44,7 @@ export function CheckoutForm({ datosEnvio, gastoEnvio, clientSecret, onExito }: 
     const paymentIntentId = clientSecret.split("_secret_")[0];
 
     // Guardar datos del pedido en metadata del PI para que el webhook los use
-    const checkoutData = {
-      ...datosEnvio,
-      gasto_envio: gastoEnvio,
-      lineas: lineas.map((l) => ({ sku: l.sku, cantidad: l.cantidad, precio: l.precio })),
-    };
-    await actualizarMetadataPI(paymentIntentId, checkoutData);
+    // (función eliminada — checkout migrado a Cecabank)
 
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? window.location.origin;
 
