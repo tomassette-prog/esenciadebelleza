@@ -93,7 +93,13 @@ export async function Header() {
         <div className="flex items-center justify-between py-4">
           {/* Logo */}
           <Link href="/" aria-label="Esencia de Belleza - Inicio">
-            <LogoEsencia />
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/logo.png"
+              alt="esenciadebelleza.es – Peluquería, Estética y Perfumes"
+              className="h-12 w-auto"
+              style={{ maxWidth: "280px" }}
+            />
           </Link>
 
           {/* Acciones */}
