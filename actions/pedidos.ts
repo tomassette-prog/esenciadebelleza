@@ -89,9 +89,11 @@ export async function lanzarPedidoWoo(
   if (errGet || !pedido) return { error: "Pedido no encontrado" };
   if (pedido.woo_order_id) return { error: "Este pedido ya fue enviado a WooCommerce" };
 
-  const wooUrl = process.env.WOO_URL!;
-  const wooKey = process.env.WOO_CONSUMER_KEY!;
-  const wooSec = process.env.WOO_CONSUMER_SECRET!;
+  const wooUrl  = process.env.WOO_URL!;
+  // Soporte tanto para WooCommerce Consumer Key/Secret como para Application Passwords de WordPress
+  const wooUser = process.env.WOO_CONSUMER_KEY!;   // 'admin' o ck_...
+  const wooPass = process.env.WOO_CONSUMER_SECRET!; // App Password o cs_...
+  const auth = Buffer.from(`${wooUser}:${wooPass}`).toString("base64");
 
   const dir = pedido.direccion_envio as Record<string, string>;
   const refPago = (pedido.stripe_payment_id ?? pedido.id).toString().slice(0, 20).toUpperCase();
@@ -180,7 +182,6 @@ export async function lanzarPedidoWoo(
   };
 
   try {
-    const auth = Buffer.from(`${wooKey}:${wooSec}`).toString("base64");
     const res = await fetch(`${wooUrl}/wp-json/wc/v3/orders`, {
       method:  "POST",
       headers: {
