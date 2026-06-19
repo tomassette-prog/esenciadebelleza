@@ -33,16 +33,10 @@ export default async function ProductosPage() {
   const BASE_URL = "https://esenciadebelleza.es";
   const supabase = await createClient();
 
-  // Conteo real por categoría usando RPC/agregación en BD (evita límite de 1000 filas)
-  // Query 1: conteo por categoría con productos activos y con stock
-  const { data: conteosRaw } = await supabase
-    .from("productos_padre")
-    .select("categoria, variaciones:productos_variaciones!inner(activa)", { count: "exact", head: false })
-    .eq("activo", true)
-    .eq("variaciones.activa", true)
-    .range(0, 9999);
+  // Conteo real por categoría usando función SQL (COUNT DISTINCT, sin límite)
+  const { data: conteosRaw } = await supabase.rpc("get_category_counts");
 
-  // Query 2: una imagen por categoría (solo necesitamos 1 por cat, sin join pesado)
+  // Imagen representativa por categoría
   const { data: imagenesRaw } = await supabase
     .from("productos_padre")
     .select("categoria, imagen_principal_url")
@@ -50,7 +44,6 @@ export default async function ProductosPage() {
     .not("imagen_principal_url", "is", null)
     .order("categoria");
 
-  // Imagen representativa por categoría (primera encontrada)
   const imagenPorCat = new Map<string, string>();
   for (const p of imagenesRaw ?? []) {
     if (!imagenPorCat.has(p.categoria) && p.imagen_principal_url) {
@@ -58,20 +51,14 @@ export default async function ProductosPage() {
     }
   }
 
-  // Agrupar conteos
-  const catMap = new Map<string, number>();
-  for (const p of conteosRaw ?? []) {
-    catMap.set(p.categoria, (catMap.get(p.categoria) ?? 0) + 1);
-  }
-
-  const categorias: CategoriaInfo[] = Array.from(catMap.entries())
-    .map(([nombre, total]) => ({
-      slug: slugifyCategoria(nombre),
-      nombre,
-      total,
-      imagen: imagenPorCat.get(nombre) ?? null,
-    }))
-    .sort((a, b) => b.total - a.total);
+  const categorias: CategoriaInfo[] = (conteosRaw ?? []).map(
+    (row: { categoria: string; total: number }) => ({
+      slug: slugifyCategoria(row.categoria),
+      nombre: row.categoria,
+      total: Number(row.total),
+      imagen: imagenPorCat.get(row.categoria) ?? null,
+    })
+  );
 
   // Destacados globales (12 productos con stock)
   const { data: destacadosRaw } = await supabase

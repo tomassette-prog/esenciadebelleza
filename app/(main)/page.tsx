@@ -93,21 +93,14 @@ export default async function HomePage() {
     .order("nombre");
   const marcasConLogo = marcasRaw ?? [];
 
-  // Categorías con conteo real (range 0-9999 para superar límite de 1000)
-  const { data: todosRaw } = await supabase
-    .from("productos_padre")
-    .select("categoria, variaciones:productos_variaciones!inner(activa)")
-    .eq("activo", true)
-    .eq("variaciones.activa", true)
-    .range(0, 9999);
+  // Conteo real de categorías usando función SQL (COUNT DISTINCT, sin límite de filas)
+  const { data: todosRaw } = await supabase.rpc("get_category_counts");
 
-  const catMap = new Map<string, number>();
-  for (const p of todosRaw ?? []) {
-    catMap.set(p.categoria, (catMap.get(p.categoria) ?? 0) + 1);
-  }
-  const categorias = Array.from(catMap.entries())
-    .map(([nombre, total]) => ({ slug: slugifyCategoria(nombre), nombre, total }))
-    .sort((a, b) => b.total - a.total);
+  const categorias = (todosRaw ?? []).map((row: { categoria: string; total: number }) => ({
+    slug: slugifyCategoria(row.categoria),
+    nombre: row.categoria,
+    total: Number(row.total),
+  }));
 
   function toProductoCatalogo(p: ReturnType<typeof Object.assign>): ProductoCatalogo {
     const vars = (p.variaciones ?? []).filter((v: { activa: boolean }) => v.activa);
