@@ -144,6 +144,10 @@ export const NAV_ITEMS: NavItem[] = [
     label: "Marcas",
     href: "/marcas",
   },
+  {
+    label: "Blog",
+    href: "/blog",
+  },
 ];
 
 // ─── Mapa WooCommerce → taxonomía canónica ────────────────────────────────────
