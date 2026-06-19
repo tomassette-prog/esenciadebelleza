@@ -30,8 +30,10 @@ export function generarCamposCeca(params: {
   importeCentimos: number;   // ej: 1595 para €15,95
   urlOk:           string;
   urlNok:          string;
+  urlNot?:         string;   // URL de notificación server-to-server (opcional)
 }): { gatewayUrl: string; campos: Record<string, string> } {
   const { numOper, importeCentimos, urlOk, urlNok } = params;
+  const urlNot = params.urlNot ?? "https://esenciadebelleza.es/api/ceca/notificacion";
 
   const merchantId  = process.env.CECA_MERCHANT_ID!;
   const acquirerBin = process.env.CECA_ACQUIRER_BIN!;
@@ -55,6 +57,7 @@ export function generarCamposCeca(params: {
       TerminalID:     terminalId,
       URL_OK:         urlOk,
       URL_NOK:        urlNok,
+      URL_NOT:        urlNot,   // Notificación server-to-server
       Firma:          f,
       Cifrado:        cifrado,
       Num_operacion:  numOper,
