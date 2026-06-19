@@ -28,6 +28,13 @@ export const metadata: Metadata = {
   keywords: ["peluquería", "estética", "tintes", "champú", "perfumes", "productos profesionales"],
   authors: [{ name: "Esencia de Belleza" }],
   creator: "Esencia de Belleza",
+  icons: {
+    icon: [
+      { url: "/favicon.svg", type: "image/svg+xml" },
+      { url: "/favicon.ico", sizes: "any" },
+    ],
+    apple: { url: "/favicon.svg", type: "image/svg+xml" },
+  },
   robots: {
     index: true,
     follow: true,

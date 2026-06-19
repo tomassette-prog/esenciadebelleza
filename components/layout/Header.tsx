@@ -91,16 +91,14 @@ export async function Header() {
         {/* Top bar */}
         <div className="flex items-center justify-between py-4">
           {/* Logo */}
-          <Link href="/" className="flex flex-col leading-none">
-            <span
-              className="text-2xl font-light tracking-tight text-neutral-900"
-              style={{ fontFamily: "var(--font-cormorant)" }}
-            >
-              Esencia de Belleza
-            </span>
-            <span className="text-[10px] tracking-[0.25em] uppercase text-neutral-400">
-              Peluquería · Estética · Perfumería
-            </span>
+          <Link href="/" className="flex items-center leading-none" aria-label="Esencia de Belleza - Inicio">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/logo.svg"
+              alt="esenciadebelleza.es"
+              className="h-10 w-auto"
+              style={{ maxWidth: "260px" }}
+            />
           </Link>
 
           {/* Acciones */}
