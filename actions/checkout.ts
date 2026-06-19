@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { generarNumOper, generarCamposCeca } from "@/lib/cecabank";
+import { stripe } from "@/lib/stripe";
 import type { LineaCarrito } from "@/context/CarritoContext";
 
 import { calcularGastoEnvio } from "@/lib/envio";
@@ -230,4 +231,99 @@ export async function crearPedidoWooCommerce(params: {
     console.error("[WC Order] Excepción:", err);
     return { wc_order_id: null, error: "No se pudo conectar con WooCommerce" };
   }
+}
+
+// ── Iniciar pago con Stripe Checkout ─────────────────────────────────────────
+export async function iniciarPagoStripe(
+  lineas: LineaCarrito[],
+  datosEnvio: {
+    email: string; nombre: string; apellidos: string; telefono: string;
+    direccion: string; ciudad: string; provincia: string; codigo_postal: string;
+    notas?: string;
+  }
+): Promise<{ url: string | null; error: string | null }> {
+  if (!lineas.length) return { url: null, error: "El carrito está vacío" };
+
+  const supabase   = createAdminClient();
+  const authClient = await createClient();
+  const { data: { user } } = await authClient.auth.getUser();
+
+  const totalProductos = lineas.reduce((acc, l) => acc + l.precio * l.cantidad, 0);
+  const gastoEnvio     = calcularGastoEnvio(totalProductos, datosEnvio.provincia);
+  if (gastoEnvio === -1) return { url: null, error: "No realizamos envíos a esa provincia." };
+
+  const totalFinal = totalProductos + gastoEnvio;
+  const siteUrl    = process.env.NEXT_PUBLIC_SITE_URL ?? "https://esenciadebelleza.es";
+
+  // Guardar pedido pendiente
+  const { data: pedido } = await supabase.from("pedidos").insert({
+    usuario_id:      user?.id ?? null,
+    estado:          "pendiente",
+    subtotal:        totalProductos,
+    gastos_envio:    gastoEnvio,
+    total:           totalFinal,
+    tipo_precio:     "b2c",
+    metodo_pago:     "stripe",
+    email_cliente:   datosEnvio.email,
+    notas:           datosEnvio.notas ?? "",
+    direccion_envio: {
+      nombre: datosEnvio.nombre, apellidos: datosEnvio.apellidos,
+      telefono: datosEnvio.telefono, direccion: datosEnvio.direccion,
+      ciudad: datosEnvio.ciudad, provincia: datosEnvio.provincia,
+      codigo_postal: datosEnvio.codigo_postal,
+    },
+  }).select("id").single();
+
+  if (pedido) {
+    await supabase.from("pedidos_lineas").insert(
+      lineas.map((l) => ({
+        pedido_id: pedido.id, variacion_id: l.variacion_id,
+        sku: l.sku, nombre_producto: l.nombre, nombre_variacion: l.nombre_variacion,
+        imagen_url: l.imagen_url, precio_unitario: l.precio,
+        cantidad: l.cantidad, subtotal: l.precio * l.cantidad,
+      }))
+    );
+  }
+
+  // Crear sesión de Stripe Checkout
+  const session = await stripe.checkout.sessions.create({
+    payment_method_types: ["card"],
+    mode:                 "payment",
+    customer_email:       datosEnvio.email,
+    locale:               "es",
+    line_items: [
+      ...lineas.map((l) => ({
+        price_data: {
+          currency:     "eur",
+          product_data: {
+            name:   l.nombre_variacion ? `${l.nombre} — ${l.nombre_variacion}` : l.nombre,
+            images: l.imagen_url ? [l.imagen_url] : [],
+          },
+          unit_amount: Math.round(l.precio * 100),
+        },
+        quantity: l.cantidad,
+      })),
+      ...(gastoEnvio > 0 ? [{
+        price_data: {
+          currency:     "eur",
+          product_data: { name: "Gastos de envío" },
+          unit_amount:  Math.round(gastoEnvio * 100),
+        },
+        quantity: 1,
+      }] : []),
+    ],
+    success_url: `${siteUrl}/checkout/confirmacion?session_id={CHECKOUT_SESSION_ID}&resultado=ok`,
+    cancel_url:  `${siteUrl}/checkout`,
+    metadata: {
+      pedido_id:     pedido?.id ?? "",
+      nombre_cliente: `${datosEnvio.nombre} ${datosEnvio.apellidos}`,
+    },
+  });
+
+  // Guardar el ID de sesión de Stripe en el pedido
+  if (pedido && session.id) {
+    await supabase.from("pedidos").update({ stripe_payment_id: session.id }).eq("id", pedido.id);
+  }
+
+  return { url: session.url, error: null };
 }

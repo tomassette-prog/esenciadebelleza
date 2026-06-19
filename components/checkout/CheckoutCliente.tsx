@@ -4,9 +4,8 @@ import { useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useCarrito } from "@/context/CarritoContext";
-import { iniciarPagoCeca } from "@/actions/checkout";
+import { iniciarPagoCeca, iniciarPagoStripe } from "@/actions/checkout";
 import { calcularGastoEnvio, getZonaEnvio } from "@/lib/envio";
-import PaypalSmartButtons from "@/components/checkout/PaypalSmartButtons";
 
 type Paso = "direccion" | "pago";
 
@@ -44,6 +43,7 @@ export function CheckoutCliente({
   const [cecaUrl, setCecaUrl]         = useState<string>("");
   const [gastoEnvioConf, setGastoEnvioConf] = useState(0);
   const [cargando, setCargando]       = useState(false);
+  const [cargandoStripe, setCargandoStripe] = useState(false);
   const [error, setError]             = useState<string | null>(null);
 
   const formCecaRef = useRef<HTMLFormElement>(null);
@@ -97,6 +97,18 @@ export function CheckoutCliente({
 
   function pagarConTarjeta() {
     if (formCecaRef.current) formCecaRef.current.submit();
+  }
+
+  async function pagarConStripe() {
+    setCargandoStripe(true);
+    setError(null);
+    const { url, error: err } = await iniciarPagoStripe(lineas, datos);
+    if (err || !url) {
+      setError(err ?? "Error al conectar con Stripe");
+      setCargandoStripe(false);
+      return;
+    }
+    window.location.href = url;
   }
 
   if (!lineas.length) {
@@ -309,58 +321,33 @@ export function CheckoutCliente({
               className="text-xl font-light text-neutral-900 mb-4"
               style={{ fontFamily: "var(--font-cormorant)" }}
             >
-              Pago seguro con tarjeta
+              Elige tu método de pago
             </h2>
 
-            <p className="text-sm text-neutral-600 mb-6">
-              Al pulsar el botón serás redirigido al TPV seguro de Cecabank donde podrás
-              introducir los datos de tu tarjeta (Visa, Mastercard, etc.).
-            </p>
-
-            <button onClick={pagarConTarjeta}
-              className="w-full py-4 bg-neutral-900 text-white text-xs tracking-widest uppercase hover:bg-neutral-700 transition-colors flex items-center justify-center gap-3"
+            {/* ── Stripe — pago principal ── */}
+            <button
+              onClick={pagarConStripe}
+              disabled={cargandoStripe}
+              className="w-full py-4 bg-neutral-900 text-white text-xs tracking-widest uppercase hover:bg-neutral-700 disabled:opacity-50 transition-colors flex items-center justify-center gap-3 mb-3"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
                   d="M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h3m-3.75 3h15a2.25 2.25 0 002.25-2.25V6.75A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25v10.5A2.25 2.25 0 004.5 19.5z" />
               </svg>
-              Pagar {(totalPrecio + gastoEnvioConf).toLocaleString("es-ES", { style: "currency", currency: "EUR" })} con tarjeta
+              {cargandoStripe
+                ? "Redirigiendo…"
+                : `Pagar ${(totalPrecio + gastoEnvioConf).toLocaleString("es-ES", { style: "currency", currency: "EUR" })} con tarjeta`}
             </button>
 
-            <p className="text-xs text-neutral-400 text-center mt-4 flex items-center justify-center gap-2">
+            <p className="text-xs text-neutral-400 text-center mb-5 flex items-center justify-center gap-2">
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
                   d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
               </svg>
-              Pago 100% seguro · Cifrado SSL · TPV Cecabank
+              Pago seguro Visa / Mastercard · Cifrado SSL
             </p>
 
-            {/* Divisor */}
-            <div className="flex items-center gap-3 my-5">
-              <div className="flex-1 h-px bg-neutral-200" />
-              <span className="text-xs text-neutral-400 uppercase tracking-widest">o también</span>
-              <div className="flex-1 h-px bg-neutral-200" />
-            </div>
-
-            {/* PayPal Smart Buttons (Apple Pay, Google Pay, PayPal, Tarjeta) */}
-            {process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID && (
-              <PaypalSmartButtons
-                lineas={lineas}
-                datosEnvio={{
-                  email:         datos.email,
-                  nombre:        datos.nombre,
-                  apellidos:     datos.apellidos,
-                  telefono:      datos.telefono,
-                  direccion:     datos.direccion,
-                  ciudad:        datos.ciudad,
-                  provincia:     datos.provincia,
-                  codigo_postal: datos.codigo_postal,
-                  notas:         datos.notas,
-                }}
-              />
-            )}
-
-            {/* Formulario oculto que se envía a Cecabank */}
+            {/* Formulario oculto que se envía a Cecabank (oculto, pendiente de resolver) */}
             <form ref={formCecaRef} action={cecaUrl} method="POST" className="hidden">
               {Object.entries(cecaCampos).map(([name, value]) => (
                 <input key={name} type="hidden" name={name} value={value} />
