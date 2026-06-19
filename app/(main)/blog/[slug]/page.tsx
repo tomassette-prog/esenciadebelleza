@@ -24,7 +24,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const supabase = createAdminClient();
   const { data: post } = await supabase
     .from("posts")
-    .select("titulo, seo_title, seo_description, imagen_url, slug")
+    .select("titulo, seo_title, seo_description, imagen_url, imagen_alt, keywords, slug")
     .eq("slug", slug)
     .eq("publicado", true)
     .single();
@@ -80,7 +80,7 @@ export default async function PostPage({ params }: PageProps) {
     headline: post.titulo,
     description: post.seo_description ?? post.resumen ?? "",
     image: post.imagen_url ?? undefined,
-    datePublished: post.published_at ?? post.created_at,
+    datePublished: post.published_at ?? post.updated_at,
     dateModified: post.updated_at,
     author: { "@type": "Organization", name: post.autor ?? "Esencia de Belleza" },
     publisher: {

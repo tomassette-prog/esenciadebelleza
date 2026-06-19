@@ -1,6 +1,7 @@
 "use client";
 
-import { useActionState, useState, useRef } from "react";
+import { useFormState, useFormStatus } from "react-dom";
+import { useRef, useState } from "react";
 import { crearPost, actualizarPost } from "@/actions/blog";
 import { subirImagenBlog } from "@/actions/blog-upload";
 
@@ -27,7 +28,7 @@ interface Props {
 export default function PostForm({ post }: Props) {
   const isEdit = !!post?.id;
   const action = isEdit ? actualizarPost.bind(null, post!.id!) : crearPost;
-  const [state, formAction, pending] = useActionState(action, null);
+  const [state, formAction] = useFormState(action, null);
 
   // Estado del upload de imagen
   const [imagenUrl, setImagenUrl]   = useState<string>(post?.imagen_url ?? "");
@@ -310,13 +311,7 @@ export default function PostForm({ post }: Props) {
 
       {/* Submit */}
       <div className="flex items-center gap-4 pt-2">
-        <button
-          type="submit"
-          disabled={pending}
-          className="px-8 py-3 bg-neutral-900 text-white text-xs tracking-widest uppercase hover:bg-neutral-700 disabled:opacity-50 transition-colors"
-        >
-          {pending ? "Guardando..." : isEdit ? "Guardar cambios" : "Crear post"}
-        </button>
+        <SubmitButton isEdit={isEdit} />
         <a
           href="/admin/blog"
           className="text-xs tracking-widest uppercase text-neutral-400 hover:text-neutral-700 transition-colors"
@@ -325,5 +320,18 @@ export default function PostForm({ post }: Props) {
         </a>
       </div>
     </form>
+  );
+}
+
+function SubmitButton({ isEdit }: { isEdit: boolean }) {
+  const { pending } = useFormStatus();
+  return (
+    <button
+      type="submit"
+      disabled={pending}
+      className="px-8 py-3 bg-neutral-900 text-white text-xs tracking-widest uppercase hover:bg-neutral-700 disabled:opacity-50 transition-colors"
+    >
+      {pending ? "Guardando..." : isEdit ? "Guardar cambios" : "Crear post"}
+    </button>
   );
 }
