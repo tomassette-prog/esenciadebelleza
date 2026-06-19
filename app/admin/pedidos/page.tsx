@@ -93,7 +93,8 @@ export default async function AdminPedidosPage({
               return (
                 <tr key={p.id as string} className="hover:bg-gray-50">
                   <td className="px-4 py-3 text-gray-500 whitespace-nowrap">
-                    {new Date(p.created_at as string).toLocaleDateString("es-ES")}
+                    <div>{new Date(p.created_at as string).toLocaleDateString("es-ES")}</div>
+                    <div className="text-xs text-gray-400">{new Date(p.created_at as string).toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" })}</div>
                   </td>
                   <td className="px-4 py-3">
                     <div className="font-medium text-gray-900">{dir.nombre} {dir.apellidos}</div>
