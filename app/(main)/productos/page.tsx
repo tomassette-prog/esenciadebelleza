@@ -140,32 +140,46 @@ export default async function ProductosPage() {
             >
               Categorías
             </h2>
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
               {categorias.map((cat) => (
                 <Link
                   key={cat.slug}
                   href={`/productos/${cat.slug}`}
-                  className="group relative aspect-square bg-neutral-50 overflow-hidden block"
+                  className="group relative aspect-[4/3] bg-neutral-100 overflow-hidden block"
                 >
-                  {cat.imagen && (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={cat.imagen}
-                      alt={formatCategoryName(cat.nombre)}
-                      className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105 opacity-60"
-                    />
+                  {cat.imagen ? (
+                    <>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={cat.imagen}
+                        alt={formatCategoryName(cat.nombre)}
+                        className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                      />
+                      {/* Overlay degradado siempre visible */}
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
+                    </>
+                  ) : (
+                    /* Sin imagen: fondo con patrón sutil */
+                    <div className="absolute inset-0 bg-neutral-900" />
                   )}
-                  <div className="absolute inset-0 flex flex-col items-center justify-center p-4 text-center">
+
+                  {/* Texto siempre en la parte inferior */}
+                  <div className="absolute bottom-0 left-0 right-0 p-4">
                     <span
-                      className="text-lg font-light text-neutral-900"
-                      style={{ fontFamily: "var(--font-cormorant)" }}
+                      className="block text-base font-light text-white leading-tight"
+                      style={{ fontFamily: "var(--font-cormorant)", textShadow: "0 1px 4px rgba(0,0,0,0.5)" }}
                     >
                       {formatCategoryName(cat.nombre)}
                     </span>
-                    <span className="text-xs text-neutral-500 mt-1">
+                    <span className="text-[10px] tracking-widest uppercase text-white/60 mt-0.5 block">
                       {cat.total} productos
                     </span>
                   </div>
+
+                  {/* Borde dorado al hover */}
+                  <div
+                    className="absolute inset-0 border-2 border-transparent group-hover:border-[#C9A84C] transition-colors duration-300 pointer-events-none"
+                  />
                 </Link>
               ))}
             </div>
