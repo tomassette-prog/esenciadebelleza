@@ -183,12 +183,7 @@ export default async function PostPage({ params }: PageProps) {
               prose-a:text-[#C9A84C] prose-a:no-underline hover:prose-a:underline
               prose-strong:text-neutral-800
               prose-table:text-sm prose-th:text-neutral-700 prose-th:font-medium
-              prose-td:text-neutral-600
-              [&_details]:border [&_details]:border-neutral-200 [&_details]:rounded-sm [&_details]:mb-3 [&_details]:overflow-hidden
-              [&_summary]:cursor-pointer [&_summary]:px-4 [&_summary]:py-3 [&_summary]:font-medium [&_summary]:text-neutral-800 [&_summary]:bg-neutral-50 [&_summary]:hover:bg-neutral-100 [&_summary]:list-none [&_summary]:flex [&_summary]:items-center [&_summary]:justify-between
-              [&_summary::-webkit-details-marker]:hidden
-              [&_details_p]:px-4 [&_details_p]:py-3 [&_details_p]:text-neutral-600 [&_details_p]:border-t [&_details_p]:border-neutral-200 [&_details_p]:m-0
-              [&_details[open]_summary]:bg-neutral-100"
+              prose-td:text-neutral-600"
             dangerouslySetInnerHTML={{ __html: post.contenido_html ?? "" }}
           />
 
