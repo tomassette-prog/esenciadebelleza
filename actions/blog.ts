@@ -73,9 +73,12 @@ export async function crearPost(
   const imagen_url      = (formData.get("imagen_url") as string | null)?.trim() || null;
   const imagen_alt      = (formData.get("imagen_alt") as string | null)?.trim() || null;
   const keywords        = (formData.get("keywords") as string | null)?.trim() || null;
-  const publicado       = formData.get("publicado") === "on";
-  const destacado       = formData.get("destacado") === "on";
-  const autor           = (formData.get("autor") as string | null)?.trim() || "Esencia de Belleza";
+  const publicado         = formData.get("publicado") === "on";
+  const destacado         = formData.get("destacado") === "on";
+  const autor             = (formData.get("autor") as string | null)?.trim() || "Esencia de Belleza";
+  const social_facebook   = (formData.get("social_facebook") as string | null)?.trim() || null;
+  const social_instagram  = (formData.get("social_instagram") as string | null)?.trim() || null;
+  const social_tiktok     = (formData.get("social_tiktok") as string | null)?.trim() || null;
 
   if (!titulo || !contenido_html) return { error: "Título y contenido son obligatorios" };
 
@@ -92,6 +95,9 @@ export async function crearPost(
     imagen_url,
     imagen_alt,
     keywords,
+    social_facebook,
+    social_instagram,
+    social_tiktok,
     publicado,
     destacado,
     autor,
@@ -122,9 +128,12 @@ export async function actualizarPost(
   const imagen_url      = (formData.get("imagen_url") as string | null)?.trim() || null;
   const imagen_alt      = (formData.get("imagen_alt") as string | null)?.trim() || null;
   const keywords        = (formData.get("keywords") as string | null)?.trim() || null;
-  const publicado       = formData.get("publicado") === "on";
-  const destacado       = formData.get("destacado") === "on";
-  const autor           = (formData.get("autor") as string | null)?.trim() || "Esencia de Belleza";
+  const publicado         = formData.get("publicado") === "on";
+  const destacado         = formData.get("destacado") === "on";
+  const autor             = (formData.get("autor") as string | null)?.trim() || "Esencia de Belleza";
+  const social_facebook   = (formData.get("social_facebook") as string | null)?.trim() || null;
+  const social_instagram  = (formData.get("social_instagram") as string | null)?.trim() || null;
+  const social_tiktok     = (formData.get("social_tiktok") as string | null)?.trim() || null;
 
   if (!titulo || !contenido_html) return { error: "Título y contenido son obligatorios" };
 
@@ -152,6 +161,9 @@ export async function actualizarPost(
     imagen_url,
     imagen_alt,
     keywords,
+    social_facebook,
+    social_instagram,
+    social_tiktok,
     publicado,
     destacado,
     autor,
