@@ -13,9 +13,9 @@ import * as crypto from "crypto";
 
 const CECA_GATEWAY_URL = "https://pgw.ceca.es/tpvweb/tpv/compra.action";
 
-/** 9 caracteres alfanuméricos únicos para Num_operacion */
+/** 9 dígitos numéricos únicos para Num_operacion (algunos contratos no aceptan letras) */
 export function generarNumOper(): string {
-  return crypto.randomUUID().replace(/-/g, "").substring(0, 9).toUpperCase();
+  return String(Date.now()).slice(-9);
 }
 
 /** Rellena con ceros a la izquierda, igual que PHP str_pad($v, $len, '0', STR_PAD_LEFT) */
