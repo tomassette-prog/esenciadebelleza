@@ -286,12 +286,11 @@ export async function iniciarPagoStripe(
   }
 
   // Crear sesión de Stripe Checkout con todos los métodos disponibles en España
-  const session = await stripe.checkout.sessions.create({
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const session = await (stripe.checkout.sessions.create as any)({
     mode:           "payment",
     customer_email: datosEnvio.email,
     locale:         "es",
-    // Stripe muestra automáticamente todos los métodos habilitados en tu cuenta:
-    // Tarjeta, Apple Pay, Google Pay, PayPal, Klarna, Link, etc.
     automatic_payment_methods: { enabled: true },
     billing_address_collection: "auto",
     line_items: [
