@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Breadcrumb } from "@/components/layout/Breadcrumb";
 import { buildBreadcrumbJsonLdItems, buildBreadcrumbJsonLd, slugifyCategoria, formatPrice } from "@/lib/seo";
@@ -21,7 +20,7 @@ export async function generateStaticParams() {
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { marca: marcaSlug } = await params;
-  const supabase = await createClient();
+  const supabase = createAdminClient();
 
   const { data: marca } = await supabase
     .from("marcas")
@@ -51,7 +50,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
 export default async function MarcaPage({ params }: PageProps) {
   const { marca: marcaSlug } = await params;
-  const supabase = await createClient();
+  const supabase = createAdminClient();
 
   const { data: marca } = await supabase
     .from("marcas")

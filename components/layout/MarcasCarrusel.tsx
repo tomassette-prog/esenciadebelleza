@@ -20,6 +20,7 @@ export default function MarcasCarrusel({ marcas }: Props) {
   const [dragging,  setDragging]  = useState(false);
   const [startX,    setStartX]    = useState(0);
   const [scrollLeft, setScrollLeft] = useState(0);
+  const dragDistRef = useRef(0);
 
   // Duplicar para loop visual
   const items = [...marcas, ...marcas];
@@ -30,6 +31,7 @@ export default function MarcasCarrusel({ marcas }: Props) {
     setDragging(true);
     setPaused(true);
     setStartX(e.clientX);
+    dragDistRef.current = 0;
     setScrollLeft(trackRef.current.scrollLeft);
     trackRef.current.setPointerCapture(e.pointerId);
   }
@@ -37,6 +39,7 @@ export default function MarcasCarrusel({ marcas }: Props) {
   function onPointerMove(e: React.PointerEvent) {
     if (!dragging || !trackRef.current) return;
     const delta = e.clientX - startX;
+    dragDistRef.current = Math.abs(delta);
     trackRef.current.scrollLeft = scrollLeft - delta;
   }
 
@@ -91,7 +94,7 @@ export default function MarcasCarrusel({ marcas }: Props) {
               href={`/marcas/${marca.slug}`}
               draggable={false}
               className="inline-flex flex-col items-center justify-center mx-6 shrink-0 opacity-60 hover:opacity-100 transition-opacity gap-2 w-24"
-              onClick={(e) => { if (dragging) e.preventDefault(); }}
+              onClick={(e) => { if (dragDistRef.current > 5) e.preventDefault(); }}
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
