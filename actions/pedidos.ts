@@ -90,8 +90,8 @@ export async function lanzarPedidoWoo(
   if (pedido.woo_order_id) return { error: "Este pedido ya fue enviado a WooCommerce" };
 
   const wooUrl = process.env.WOO_URL!;
-  const wooKey = process.env.WOO_KEY!;
-  const wooSec = process.env.WOO_SECRET!;
+  const wooKey = process.env.WOO_CONSUMER_KEY!;
+  const wooSec = process.env.WOO_CONSUMER_SECRET!;
 
   const dir = pedido.direccion_envio as Record<string, string>;
   const refPago = (pedido.stripe_payment_id ?? pedido.id).toString().slice(0, 20).toUpperCase();

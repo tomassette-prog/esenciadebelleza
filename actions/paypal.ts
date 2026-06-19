@@ -8,7 +8,7 @@ import type { LineaCarrito } from "@/context/CarritoContext";
 const PAYPAL_BASE = "https://api-m.paypal.com"; // live
 
 async function getPaypalToken(): Promise<string> {
-  const clientId = process.env.PAYPAL_CLIENT_ID!;
+  const clientId = process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID!;
   const secret   = process.env.PAYPAL_SECRET_KEY!;
 
   const res = await fetch(`${PAYPAL_BASE}/v1/oauth2/token`, {
