@@ -4,6 +4,7 @@ import { useFormState, useFormStatus } from "react-dom";
 import { useRef, useState, useCallback } from "react";
 import { crearPost, actualizarPost } from "@/actions/blog";
 import { subirImagenBlog } from "@/actions/blog-upload";
+import { buscarProductosParaEnlace, type ProductoSugerido } from "@/actions/blog-search";
 
 interface Post {
   id?: string;
@@ -29,6 +30,8 @@ interface EnlaceProducto {
   nombre: string;
   urlActual: string;
   urlCorrecta: string;
+  sugerencias?: ProductoSugerido[];
+  buscando?: boolean;
 }
 
 interface Props {
@@ -46,6 +49,84 @@ function slugify(text: string): string {
     .trim()
     .replace(/\s+/g, "-")
     .slice(0, 100);
+}
+
+/**
+ * Convierte el texto/HTML mezclado que devuelve Gemini a HTML limpio y semántico.
+ * Gemini a veces mezcla texto plano con HTML. Esta función:
+ * 1. Divide el contenido en bloques separados por líneas en blanco
+ * 2. Detecta si cada bloque es ya HTML o texto plano
+ * 3. Convierte texto plano: líneas cortas → <h2>, texto largo → <p>
+ * 4. Optimiza para SEO: H2 semánticos, párrafos limpios, sin spans vacíos
+ */
+function formatearHtmlGemini(raw: string): string {
+  if (!raw) return "";
+
+  // Si parece HTML bien formado (mayoría de bloques con tags), devolver limpio
+  const yaHtml = (raw.match(/<(p|h[1-6]|ul|ol|table|div)[^>]*>/gi) ?? []).length;
+  const totalLineas = raw.split("\n").filter(l => l.trim()).length;
+
+  // Normalizar saltos de línea
+  let texto = raw
+    .replace(/\r\n/g, "\n")
+    .replace(/\r/g, "\n");
+
+  // Si el contenido ya es predominantemente HTML, solo hacer limpieza
+  if (yaHtml / Math.max(totalLineas, 1) > 0.3) {
+    return limpiarHtml(texto);
+  }
+
+  // Contenido principalmente texto plano → convertir
+  const bloques = texto.split(/\n{2,}/);
+  const resultado: string[] = [];
+
+  for (const bloque of bloques) {
+    const b = bloque.trim();
+    if (!b) continue;
+
+    // Bloque ya es HTML
+    if (b.startsWith("<")) {
+      resultado.push(limpiarHtml(b));
+      continue;
+    }
+
+    // Líneas dentro del bloque
+    const lineas = b.split("\n").map(l => l.trim()).filter(Boolean);
+
+    if (lineas.length === 1) {
+      const linea = lineas[0];
+      // Línea corta sin punto al final = título de sección → H2
+      if (linea.length < 100 && !linea.endsWith(".") && !linea.endsWith(",")) {
+        resultado.push(`<h2>${linea}</h2>`);
+      } else {
+        resultado.push(`<p>${linea}</p>`);
+      }
+    } else {
+      // Múltiples líneas: primera puede ser subtítulo
+      const primera = lineas[0];
+      const resto = lineas.slice(1).join(" ");
+
+      if (primera.length < 100 && !primera.endsWith(".") && !primera.endsWith(",") && resto.length > 50) {
+        resultado.push(`<h2>${primera}</h2>`);
+        resultado.push(`<p>${resto}</p>`);
+      } else {
+        resultado.push(`<p>${lineas.join(" ")}</p>`);
+      }
+    }
+  }
+
+  return resultado.join("\n");
+}
+
+function limpiarHtml(html: string): string {
+  return html
+    // Eliminar atributos style/class vacíos
+    .replace(/\s+(style|class)=""/gi, "")
+    // Normalizar saltos de línea dentro de tags
+    .replace(/<(p|h[1-6])[^>]*>\s*<\/(p|h[1-6])>/gi, "")
+    // Eliminar spans vacíos
+    .replace(/<span[^>]*>\s*<\/span>/gi, "")
+    .trim();
 }
 
 function detectarEnlaces(html: string): Omit<EnlaceProducto, "id" | "urlCorrecta">[] {
@@ -200,6 +281,7 @@ export default function PostForm({ post }: Props) {
   const [seoDesc,       setSeoDesc]       = useState(post?.seo_description ?? "");
   const [keywords,      setKeywords]      = useState(post?.keywords ?? "");
   const [imagenUrl,     setImagenUrl]     = useState(post?.imagen_url ?? "");
+  const [imagenAlt,     setImagenAlt]     = useState(post?.imagen_alt ?? "");
 
   // Importador Gemini
   const [jsonInput,  setJsonInput]  = useState("");
@@ -309,7 +391,6 @@ export default function PostForm({ post }: Props) {
 
     if (data.titulo)          setTitulo(data.titulo);
     if (data.resumen)         setResumen(data.resumen);
-    if (data.contenido_html)  setContenidoHtml(data.contenido_html);
     if (data.seo_title)       setSeoTitle(data.seo_title.slice(0, 60));
     if (data.seo_description) setSeoDesc(data.seo_description.slice(0, 160));
     if (data.keywords)        setKeywords(data.keywords);
@@ -317,16 +398,48 @@ export default function PostForm({ post }: Props) {
     const slugBase = data.slug || data.titulo || "";
     setSlug(slugify(slugBase));
 
-    const html = data.contenido_html ?? "";
-    const detectados = detectarEnlaces(html);
-    setEnlaces(
-      detectados.map((e, i) => ({
-        ...e,
-        id: `link-${i}`,
-        urlCorrecta: e.urlActual,
-      }))
-    );
+    // Formatear HTML: convierte texto plano a H2/P correctos
+    const htmlBruto = data.contenido_html ?? "";
+    const htmlFormateado = formatearHtmlGemini(htmlBruto);
+    setContenidoHtml(htmlFormateado);
+
+    // Auto-fill alt text de imagen con el título
+    if (data.titulo) {
+      setImagenAlt(data.titulo + " — Esencia de Belleza");
+    }
+
+    // Detectar enlaces en el HTML formateado y buscar en catálogo
+    const detectados = detectarEnlaces(htmlFormateado);
+    const enlacesIniciales: EnlaceProducto[] = detectados.map((e, i) => ({
+      ...e,
+      id: `link-${i}`,
+      urlCorrecta: e.urlActual,
+      sugerencias: [],
+      buscando: false,
+    }));
+    setEnlaces(enlacesIniciales);
     setEnlacesAplicados(false);
+
+    // Buscar automáticamente cada producto en el catálogo
+    setTimeout(async () => {
+      for (let i = 0; i < enlacesIniciales.length; i++) {
+        const enlace = enlacesIniciales[i];
+        const resultados = await buscarProductosParaEnlace(enlace.nombre);
+        setEnlaces((prev) =>
+          prev.map((l) =>
+            l.id === enlace.id
+              ? {
+                  ...l,
+                  sugerencias: resultados,
+                  // Auto-seleccionar si solo hay 1 resultado
+                  urlCorrecta: resultados.length === 1 ? resultados[0].url : l.urlCorrecta,
+                }
+              : l
+          )
+        );
+      }
+    }, 100);
+
     setImportOpen(false);
   }, [jsonInput]);
 
@@ -335,6 +448,19 @@ export default function PostForm({ post }: Props) {
     setContenidoHtml((prev) => aplicarEnlaces(prev, enlaces));
     setEnlacesAplicados(true);
   }, [enlaces]);
+
+  async function buscarEnlace(enlaceId: string, nombre: string) {
+    setEnlaces((prev) => prev.map((l) => l.id === enlaceId ? { ...l, buscando: true } : l));
+    const resultados = await buscarProductosParaEnlace(nombre);
+    setEnlaces((prev) =>
+      prev.map((l) =>
+        l.id === enlaceId
+          ? { ...l, sugerencias: resultados, buscando: false,
+              urlCorrecta: resultados.length === 1 ? resultados[0].url : l.urlCorrecta }
+          : l
+      )
+    );
+  }
 
   // ── Upload imagen ──────────────────────────────────────────────────────────
   async function handleUpload() {
@@ -426,17 +552,62 @@ export default function PostForm({ post }: Props) {
 
           {!enlacesAplicados && (
             <>
-              <div className="space-y-3">
+              <div className="space-y-4">
                 {enlaces.map((enlace, idx) => (
-                  <div key={enlace.id} className="bg-white border border-blue-100 p-4 space-y-2 rounded-sm">
-                    <p className="text-xs font-medium text-neutral-800">
-                      <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-blue-100 text-blue-700 text-xs mr-2">
-                        {idx + 1}
-                      </span>
-                      {enlace.nombre}
-                    </p>
+                  <div key={enlace.id} className="bg-white border border-blue-100 p-4 space-y-3 rounded-sm">
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs font-medium text-neutral-800">
+                        <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-blue-100 text-blue-700 text-xs mr-2">
+                          {idx + 1}
+                        </span>
+                        {enlace.nombre}
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => buscarEnlace(enlace.id, enlace.nombre)}
+                        disabled={enlace.buscando}
+                        className="text-xs px-3 py-1 border border-blue-200 text-blue-600 hover:bg-blue-50 disabled:opacity-50 transition-colors"
+                      >
+                        {enlace.buscando ? "Buscando..." : "🔍 Buscar en tienda"}
+                      </button>
+                    </div>
+
+                    {/* Sugerencias del catálogo */}
+                    {enlace.sugerencias && enlace.sugerencias.length > 0 && (
+                      <div className="space-y-1">
+                        <p className="text-xs text-neutral-500">Productos encontrados en el catálogo:</p>
+                        {enlace.sugerencias.map((s) => (
+                          <button
+                            key={s.url}
+                            type="button"
+                            onClick={() =>
+                              setEnlaces((prev) =>
+                                prev.map((l) => l.id === enlace.id ? { ...l, urlCorrecta: s.url } : l)
+                              )
+                            }
+                            className={`w-full text-left px-3 py-2 text-xs border transition-colors ${
+                              enlace.urlCorrecta === s.url
+                                ? "border-blue-400 bg-blue-50 text-blue-800"
+                                : "border-neutral-200 hover:border-blue-300 hover:bg-blue-50/50 text-neutral-700"
+                            }`}
+                          >
+                            <span className="font-medium">{s.nombre}</span>
+                            {s.marca && <span className="text-neutral-400 ml-1">· {s.marca}</span>}
+                            <span className="block text-neutral-400 font-mono mt-0.5">{s.url}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+
+                    {enlace.sugerencias && enlace.sugerencias.length === 0 && !enlace.buscando && enlace.sugerencias !== undefined && (
+                      <p className="text-xs text-amber-600">
+                        No se encontraron productos con ese nombre. Escribe la URL manualmente.
+                      </p>
+                    )}
+
+                    {/* URL manual */}
                     <div className="flex items-center gap-2">
-                      <span className="text-xs text-neutral-400 shrink-0 w-28">URL del producto:</span>
+                      <span className="text-xs text-neutral-400 shrink-0 w-20">URL elegida:</span>
                       <input
                         type="text"
                         value={enlace.urlCorrecta}
@@ -446,21 +617,25 @@ export default function PostForm({ post }: Props) {
                             prev.map((l) => l.id === enlace.id ? { ...l, urlCorrecta: val } : l)
                           );
                         }}
-                        className="flex-1 border border-neutral-200 px-3 py-1.5 text-xs font-mono focus:outline-none focus:border-blue-400 transition-colors"
-                        placeholder="/productos/peluqueria/tratamientos/nombre-producto"
+                        className={`flex-1 border px-3 py-1.5 text-xs font-mono focus:outline-none transition-colors ${
+                          enlace.urlCorrecta
+                            ? "border-green-300 bg-green-50/30 focus:border-green-500"
+                            : "border-neutral-200 focus:border-blue-400"
+                        }`}
+                        placeholder="/productos/categoria/subcategoria/slug-producto"
                       />
                     </div>
-                    {enlace.urlActual && enlace.urlActual !== enlace.urlCorrecta && (
-                      <p className="text-xs text-neutral-400 pl-28 -mt-1">
+                    {enlace.urlActual && enlace.urlActual !== enlace.urlCorrecta && enlace.urlActual.startsWith("/") && (
+                      <p className="text-xs text-neutral-400">
                         Gemini sugirió: <code className="text-neutral-500 bg-neutral-50 px-1">{enlace.urlActual}</code>
                         <button
                           type="button"
                           onClick={() => setEnlaces((prev) =>
                             prev.map((l) => l.id === enlace.id ? { ...l, urlCorrecta: enlace.urlActual } : l)
                           )}
-                          className="ml-2 text-blue-500 underline hover:text-blue-700"
+                          className="ml-2 text-blue-500 underline"
                         >
-                          usar esta URL
+                          usar esta
                         </button>
                       </p>
                     )}
@@ -613,15 +788,19 @@ export default function PostForm({ post }: Props) {
 
         <div>
           <label className="block text-xs tracking-wider uppercase text-neutral-600 mb-1.5">
-            Alt text <span className="text-neutral-400 normal-case">(describe la imagen para Google Images)</span>
+            Alt text <span className="text-neutral-400 normal-case">(describe la imagen para Google Images — se rellena con el título)</span>
           </label>
           <input
             name="imagen_alt"
             type="text"
-            defaultValue={post?.imagen_alt ?? ""}
+            value={imagenAlt}
+            onChange={(e) => setImagenAlt(e.target.value)}
             className="w-full border border-neutral-200 px-3 py-2.5 text-sm focus:outline-none focus:border-neutral-900 bg-white"
             placeholder="Mujer aplicando keratina en peluquería profesional"
           />
+          <p className="text-xs text-neutral-400 mt-1">
+            Incluye la keyword principal. Describe la imagen con detalle para SEO.
+          </p>
         </div>
       </div>
 
