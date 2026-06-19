@@ -54,9 +54,8 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Crear sesión Stripe
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const session = await (stripe.checkout.sessions.create as any)({
+    // Crear sesión Stripe (cast para compatibilidad con versión del SDK)
+    const session = await (stripe.checkout.sessions.create as (p: object) => Promise<{ id: string; url: string }>)({
       mode:           "payment",
       customer_email: datosEnvio.email,
       locale:         "es",
