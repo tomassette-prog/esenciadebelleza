@@ -58,6 +58,32 @@ const nextConfig = {
         destination: "/productos",
         permanent: true,
       },
+      // Sitemaps antiguos de WordPress → nuevo sitemap de Next.js (301 con link juice)
+      {
+        source: "/sitemap_index.xml",
+        destination: "/sitemap.xml",
+        permanent: true,
+      },
+      {
+        source: "/category-sitemap.xml",
+        destination: "/sitemap.xml",
+        permanent: true,
+      },
+      {
+        source: "/product-sitemap.xml",
+        destination: "/sitemap.xml",
+        permanent: true,
+      },
+      {
+        source: "/page-sitemap.xml",
+        destination: "/sitemap.xml",
+        permanent: true,
+      },
+      {
+        source: "/post-sitemap.xml",
+        destination: "/sitemap.xml",
+        permanent: true,
+      },
     ];
   },
 
