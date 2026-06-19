@@ -11,7 +11,7 @@
  */
 import * as crypto from "crypto";
 
-const CECA_GATEWAY_URL = "https://pgw.ceca.es/tpvvirtual/servlet/operaciones";
+const CECA_GATEWAY_URL = "https://pgw.ceca.es/tpvweb/tpv/compra.action";
 
 /** 9 caracteres alfanuméricos únicos para Num_operacion */
 export function generarNumOper(): string {
