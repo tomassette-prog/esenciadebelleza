@@ -54,12 +54,12 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Crear sesión Stripe (cast para compatibilidad con versión del SDK)
-    const session = await (stripe.checkout.sessions.create as (p: object) => Promise<{ id: string; url: string }>)({
+    // Crear sesión Stripe
+    const session = await stripe.checkout.sessions.create({
       mode:           "payment",
       customer_email: datosEnvio.email,
       locale:         "es",
-      automatic_payment_methods: { enabled: true },
+      payment_method_types: ["card"],  // card incluye Apple Pay y Google Pay
       billing_address_collection: "auto",
       line_items: [
         ...lineas.map((l: { nombre: string; nombre_variacion?: string; imagen_url?: string; precio: number; cantidad: number }) => ({
@@ -91,11 +91,15 @@ export async function POST(req: NextRequest) {
       await supabase.from("pedidos").update({ stripe_payment_id: session.id }).eq("id", pedido.id);
     }
 
-    // Devolver la URL para que el cliente redirija
+    if (!session.url) {
+      return NextResponse.json({ error: "Stripe no devolvió una URL de pago" }, { status: 500 });
+    }
+
     return NextResponse.json({ url: session.url });
 
-  } catch (e) {
-    console.error("[stripe-checkout]", e);
-    return NextResponse.json({ error: "Error al crear la sesión de pago" }, { status: 500 });
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.error("[stripe-checkout]", msg);
+    return NextResponse.json({ error: msg }, { status: 500 });
   }
 }

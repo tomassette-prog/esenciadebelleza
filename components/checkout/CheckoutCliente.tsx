@@ -110,15 +110,16 @@ export function CheckoutCliente({
       });
       const json = await res.json();
       if (!res.ok || !json.url) {
-        setError(json.error ?? "Error al conectar con Stripe");
+        setError(json.error ?? `Error ${res.status} al conectar con Stripe`);
         setCargandoStripe(false);
         return;
       }
-      // Redirigir: window.location.assign es más compatible en móvil
+      // Redirigir a Stripe Checkout
       window.location.assign(json.url);
-    } catch {
-      setError("Error de conexión. Inténtalo de nuevo.");
+    } catch (e) {
+      setError("Error de red. Comprueba tu conexión e inténtalo de nuevo.");
       setCargandoStripe(false);
+      console.error("[pagarConStripe]", e);
     }
   }
 
