@@ -6,7 +6,7 @@ import Link from "next/link";
 import { useCarrito } from "@/context/CarritoContext";
 import { iniciarPagoCeca } from "@/actions/checkout";
 import { calcularGastoEnvio, getZonaEnvio } from "@/lib/envio";
-import PaypalButton from "@/components/checkout/PaypalButton";
+import PaypalSmartButtons from "@/components/checkout/PaypalSmartButtons";
 
 type Paso = "direccion" | "pago";
 
@@ -342,9 +342,9 @@ export function CheckoutCliente({
               <div className="flex-1 h-px bg-neutral-200" />
             </div>
 
-            {/* Botón PayPal */}
+            {/* PayPal Smart Buttons (Apple Pay, Google Pay, PayPal, Tarjeta) */}
             {process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID && (
-              <PaypalButton
+              <PaypalSmartButtons
                 lineas={lineas}
                 datosEnvio={{
                   email:         datos.email,

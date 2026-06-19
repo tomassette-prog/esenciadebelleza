@@ -79,18 +79,7 @@ export async function crearOrdenPaypal(
             },
           },
         ],
-        payment_source: {
-          paypal: {
-            experience_context: {
-              locale:              "es-ES",
-              brand_name:          "Esencia de Belleza",
-              landing_page:        "LOGIN",
-              user_action:         "PAY_NOW",
-              return_url:          "https://esenciadebelleza.es/checkout/confirmacion?metodo=paypal&resultado=ok",
-              cancel_url:          "https://esenciadebelleza.es/checkout?paypal=cancelado",
-            },
-          },
-        },
+        // Sin payment_source forzado → el SDK gestiona Apple Pay / Google Pay / PayPal en el frontend
       }),
     });
 
@@ -146,7 +135,7 @@ export async function crearOrdenPaypal(
       }))
     );
 
-    // Devolver el payer-action URL para redirigir al usuario
+    // Devolver el order.id para que el SDK de PayPal lo gestione en el frontend
     const approveLink = order.links?.find((l: { rel: string; href: string }) => l.rel === "payer-action")?.href;
     return { orderId: approveLink ?? order.id, gastoEnvio, error: null };
 
