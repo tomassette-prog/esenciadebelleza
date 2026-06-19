@@ -56,11 +56,10 @@ export async function POST(req: NextRequest) {
 
     // Crear sesión Stripe
     const session = await stripe.checkout.sessions.create({
-      mode:           "payment",
-      customer_email: datosEnvio.email,
-      locale:         "es",
-      payment_method_types: ["card"],  // card incluye Apple Pay y Google Pay
-      billing_address_collection: "auto",
+      mode:                        "payment",
+      locale:                      "es",
+      payment_method_types:        ["card"],
+      billing_address_collection:  "auto",
       line_items: [
         ...lineas.map((l: { nombre: string; nombre_variacion?: string; imagen_url?: string; precio: number; cantidad: number }) => ({
           price_data: {
