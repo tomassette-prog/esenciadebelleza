@@ -18,7 +18,8 @@ export default async function MarcasPage() {
 
   const { data: marcas } = await supabase
     .from("marcas")
-    .select("id, nombre, slug, logo_url, descripcion")
+    .select("id, nombre, slug, logo_url")
+    .eq("activa", true)
     .order("nombre");
 
   const breadcrumbJsonLd = buildBreadcrumbJsonLdItems([
