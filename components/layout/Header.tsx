@@ -92,14 +92,30 @@ export async function Header() {
         {/* Top bar */}
         <div className="flex items-center justify-between py-4">
           {/* Logo */}
-          <Link href="/" aria-label="Esencia de Belleza - Inicio">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src="/logo.png"
-              alt="esenciadebelleza.es – Peluquería, Estética y Perfumes"
-              className="h-12 w-auto"
-              style={{ maxWidth: "280px" }}
-            />
+          <Link href="/" className="flex flex-col leading-none" aria-label="Esencia de Belleza - Inicio">
+            <span style={{
+              fontFamily: "var(--font-cormorant), 'Cormorant Garamond', Georgia, serif",
+              fontSize: "clamp(18px, 2.5vw, 26px)",
+              fontWeight: 400,
+              letterSpacing: "0.02em",
+              lineHeight: 1.1,
+            }}>
+              <span style={{ color: "#3D2018" }}>esencia</span>
+              <span style={{ color: "#C4857A", fontStyle: "italic", fontWeight: 600 }}>de</span>
+              <span style={{ color: "#3D2018" }}>belleza</span>
+              <span style={{ color: "#C4857A" }}>.es</span>
+            </span>
+            <span style={{
+              fontFamily: "var(--font-inter), sans-serif",
+              fontSize: "9px",
+              fontWeight: 300,
+              letterSpacing: "0.22em",
+              color: "#C4857A",
+              marginTop: "3px",
+              textTransform: "uppercase",
+            }}>
+              Peluquería · Estética · Perfumes
+            </span>
           </Link>
 
           {/* Acciones */}
