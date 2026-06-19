@@ -21,6 +21,7 @@ interface Props {
     seo_description?: string;
     destacado?: boolean;
     nuevo?: boolean;
+    oferta?: boolean;
     activo?: boolean;
     // Para variación única (solo en crear)
     sku?: string;
@@ -146,6 +147,15 @@ export function ProductoForm({ action, marcas, categoriasExistentes, subcategori
               className="w-4 h-4 accent-neutral-900"
             />
             <span className="text-sm text-neutral-700">Marcar como Nuevo</span>
+          </label>
+          <label className="flex items-center gap-2 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              name="oferta"
+              defaultChecked={defaultValues.oferta ?? false}
+              className="w-4 h-4 accent-red-600"
+            />
+            <span className="text-sm text-neutral-700">🔖 Oferta destacada</span>
           </label>
           {modo === "editar" && (
             <label className="flex items-center gap-2 cursor-pointer select-none">

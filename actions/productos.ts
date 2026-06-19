@@ -83,6 +83,7 @@ export async function crearProducto(
   const seo_description = (formData.get("seo_description") as string) || null;
   const destacado = formData.get("destacado") === "on";
   const nuevo = formData.get("nuevo") === "on";
+  const oferta = formData.get("oferta") === "on";
 
   // Variación inicial (obligatoria)
   const sku = (formData.get("sku") as string).trim();
@@ -112,6 +113,7 @@ export async function crearProducto(
       activo: true,
       destacado,
       nuevo,
+      oferta,
     })
     .select("id, slug, categoria, subcategoria")
     .single();
@@ -167,6 +169,7 @@ export async function actualizarProducto(
   const seo_description = (formData.get("seo_description") as string) || null;
   const destacado = formData.get("destacado") === "on";
   const nuevo_flag = formData.get("nuevo") === "on";
+  const oferta_flag = formData.get("oferta") === "on";
   const activo = formData.get("activo") !== "off";
 
   if (!nombre || !categoria) return { error: "Nombre y categoría son obligatorios." };
@@ -197,6 +200,7 @@ export async function actualizarProducto(
       seo_description,
       destacado,
       nuevo: nuevo_flag,
+      oferta: oferta_flag,
       activo,
     })
     .eq("id", id);

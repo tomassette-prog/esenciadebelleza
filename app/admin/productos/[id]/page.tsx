@@ -106,6 +106,7 @@ export default async function EditarProductoPage({ params }: { params: Promise<{
           seo_description: producto.seo_description ?? "",
           destacado: producto.destacado,
           nuevo: producto.nuevo,
+          oferta: (producto as Record<string, unknown>).oferta as boolean ?? false,
           activo: producto.activo,
         }}
       />

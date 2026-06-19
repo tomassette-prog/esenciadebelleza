@@ -3,6 +3,8 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { ProductoCard } from "@/components/producto/ProductoCard";
+import { CarruselProductos } from "@/components/producto/CarruselProductos";
+import { BlogStrip } from "@/components/layout/BlogStrip";
 import { slugifyCategoria, formatCategoryName } from "@/lib/seo";
 import type { ProductoCatalogo } from "@/types/producto";
 import MarcasCarrusel from "@/components/layout/MarcasCarrusel";
@@ -40,6 +42,20 @@ export default async function HomePage() {
     : { data: null };
 
   const posts = postsDestacados?.length ? postsDestacados : (postsRecientes ?? []);
+
+  // Ofertas destacadas para el carrusel entre marcas
+  const { data: ofertasRaw } = await supabase
+    .from("productos_padre")
+    .select(
+      `id, nombre, slug, categoria, subcategoria,
+       imagen_principal_url, destacado, nuevo,
+       marca:marcas(nombre),
+       variaciones:productos_variaciones!inner(precio_b2c, activa, stock)`
+    )
+    .eq("activo", true)
+    .eq("oferta", true)
+    .eq("variaciones.activa", true)
+    .limit(12);
 
   // Novedades / destacados para la home (solo con stock)
   const { data: destacadosRaw } = await supabase
@@ -116,6 +132,11 @@ export default async function HomePage() {
 
   const destacados: ProductoCatalogo[] = (destacadosRaw ?? []).map(toProductoCatalogo);
   const nuevos: ProductoCatalogo[] = (nuevosRaw ?? []).map(toProductoCatalogo);
+  const ofertas: ProductoCatalogo[] = (ofertasRaw ?? []).map(toProductoCatalogo);
+  // Si no hay ofertas, mostrar destacados en el carrusel
+  const carruselProductos = ofertas.length > 0 ? ofertas : destacados;
+  const carruselTitulo = ofertas.length > 0 ? "Ofertas destacadas" : "Productos destacados";
+  const carruselSubtitulo = ofertas.length > 0 ? "No te lo pierdas" : "Lo más popular";
   const tieneProductos = categorias.length > 0;
 
   return (
@@ -193,9 +214,19 @@ export default async function HomePage() {
         </div>
       </section>
 
-      {/* ── Carrusel de marcas ── */}
+      {/* ── Carrusel de marcas (marquee) ── */}
       {marcasConLogo.length > 0 && (
         <MarcasCarrusel marcas={marcasConLogo as { id: string; nombre: string; slug: string; logo_url: string }[]} />
+      )}
+
+      {/* ── Carrusel de ofertas / productos destacados ── */}
+      {tieneProductos && carruselProductos.length > 0 && (
+        <CarruselProductos
+          productos={carruselProductos}
+          titulo={carruselTitulo}
+          subtitulo={carruselSubtitulo}
+          verTodosHref="/productos"
+        />
       )}
 
       {/* ── Nuestras marcas ── */}
@@ -248,27 +279,6 @@ export default async function HomePage() {
         </section>
       )}
 
-      {/* ── Productos destacados ── */}
-      {destacados.length > 0 && (
-        <section className="py-16 px-6 bg-neutral-50">
-          <div className="container-main">
-            <div className="flex items-baseline justify-between mb-8">
-              <h2 className="text-2xl font-light text-neutral-900" style={{ fontFamily: "var(--font-cormorant)" }}>
-                Destacados
-              </h2>
-              <Link href="/productos" className="text-xs tracking-widest uppercase text-neutral-400 hover:text-neutral-700 transition-colors">
-                Ver todos →
-              </Link>
-            </div>
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-x-4 gap-y-10">
-              {destacados.map((p, i) => (
-                <ProductoCard key={p.id} producto={p} priority={i < 4} />
-              ))}
-            </div>
-          </div>
-        </section>
-      )}
-
       {/* ── Novedades ── */}
       {nuevos.length > 0 && (
         <section className="py-16 px-6 bg-white">
@@ -290,83 +300,8 @@ export default async function HomePage() {
         </section>
       )}
 
-      {/* ── Blog — artículos destacados ── */}
-      {posts.length > 0 && (
-        <section className="py-16 px-6 bg-white">
-          <div className="container-main">
-            <div className="flex items-baseline justify-between mb-10">
-              <div>
-                <p className="text-xs tracking-[0.3em] uppercase mb-1" style={{ color: "var(--color-oro)" }}>
-                  Consejos y tendencias
-                </p>
-                <h2 className="text-2xl font-light text-neutral-900" style={{ fontFamily: "var(--font-cormorant)" }}>
-                  Del blog
-                </h2>
-              </div>
-              <Link href="/blog" className="text-xs tracking-widest uppercase text-neutral-400 hover:text-neutral-700 transition-colors">
-                Ver todos →
-              </Link>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-              {posts.map((post) => (
-                <article key={post.slug} className="group flex flex-col">
-                  {/* Imagen */}
-                  <Link
-                    href={`/blog/${post.slug}`}
-                    className="block overflow-hidden aspect-[4/3] bg-neutral-100 mb-4"
-                  >
-                    {post.imagen_url ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={post.imagen_url}
-                        alt={post.titulo}
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                        loading="lazy"
-                      />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center">
-                        <div className="w-8 h-px bg-neutral-300" />
-                      </div>
-                    )}
-                  </Link>
-
-                  {/* Fecha */}
-                  {post.published_at && (
-                    <p className="text-xs tracking-wider uppercase text-neutral-400 mb-2">
-                      {new Date(post.published_at).toLocaleDateString("es-ES", {
-                        day: "numeric", month: "long", year: "numeric",
-                      })}
-                    </p>
-                  )}
-
-                  {/* Título */}
-                  <h3
-                    className="text-lg font-light text-neutral-900 leading-snug mb-3 group-hover:text-[#C9A84C] transition-colors"
-                    style={{ fontFamily: "var(--font-cormorant)" }}
-                  >
-                    <Link href={`/blog/${post.slug}`}>{post.titulo}</Link>
-                  </h3>
-
-                  {/* Resumen */}
-                  {post.resumen && (
-                    <p className="text-sm text-neutral-500 leading-relaxed line-clamp-2 flex-1">
-                      {post.resumen}
-                    </p>
-                  )}
-
-                  <Link
-                    href={`/blog/${post.slug}`}
-                    className="mt-4 text-xs tracking-widest uppercase text-neutral-900 hover:text-[#C9A84C] transition-colors inline-flex items-center gap-1.5"
-                  >
-                    Leer artículo →
-                  </Link>
-                </article>
-              ))}
-            </div>
-          </div>
-        </section>
-      )}
+      {/* ── Blog strip horizontal ── */}
+      <BlogStrip posts={posts} />
 
       {/* ── Banner profesionales ── */}
       <section className="py-16 px-6 bg-neutral-900">
