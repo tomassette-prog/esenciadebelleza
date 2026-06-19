@@ -285,12 +285,19 @@ export async function iniciarPagoStripe(
     );
   }
 
-  // Crear sesión de Stripe Checkout
+  // Crear sesión de Stripe Checkout con todos los métodos disponibles en España
   const session = await stripe.checkout.sessions.create({
-    payment_method_types: ["card"],
-    mode:                 "payment",
-    customer_email:       datosEnvio.email,
-    locale:               "es",
+    mode:           "payment",
+    customer_email: datosEnvio.email,
+    locale:         "es",
+    // Stripe activa automáticamente los métodos disponibles para España:
+    // Visa/Mastercard, Klarna, PayPal, Apple Pay, Google Pay, Bizum, SEPA...
+    payment_method_types: [
+      "card",
+      "klarna",
+      "paypal",
+    ],
+    billing_address_collection: "auto",
     line_items: [
       ...lineas.map((l) => ({
         price_data: {
