@@ -4,7 +4,7 @@ import { useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useCarrito } from "@/context/CarritoContext";
-import { iniciarPagoCeca, iniciarPagoStripe } from "@/actions/checkout";
+import { iniciarPagoCeca } from "@/actions/checkout";
 import { calcularGastoEnvio, getZonaEnvio } from "@/lib/envio";
 
 type Paso = "direccion" | "pago";
@@ -102,13 +102,24 @@ export function CheckoutCliente({
   async function pagarConStripe() {
     setCargandoStripe(true);
     setError(null);
-    const { url, error: err } = await iniciarPagoStripe(lineas, datos);
-    if (err || !url) {
-      setError(err ?? "Error al conectar con Stripe");
+    try {
+      const res = await fetch("/api/stripe/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ lineas, datosEnvio: datos }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.url) {
+        setError(json.error ?? "Error al conectar con Stripe");
+        setCargandoStripe(false);
+        return;
+      }
+      // Redirigir: window.location.assign es más compatible en móvil
+      window.location.assign(json.url);
+    } catch {
+      setError("Error de conexión. Inténtalo de nuevo.");
       setCargandoStripe(false);
-      return;
     }
-    window.location.href = url;
   }
 
   if (!lineas.length) {
