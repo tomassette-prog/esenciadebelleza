@@ -26,7 +26,7 @@ function ConfirmacionInner() {
 
     // ── Flujo Stripe ────────────────────────────────────────────────────────
     if (sessionId) {
-      // Stripe ya confirmó el pago — simplemente vaciamos el carrito
+      // Stripe ya confirmó el pago — vaciamos carrito y mostramos éxito
       vaciar();
       setEstado("exito");
       return;

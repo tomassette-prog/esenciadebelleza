@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 
+export const dynamic = "force-static";
+
 export const metadata: Metadata = {
   title: "Aviso Legal | Esencia de Belleza",
   description: "Aviso legal y condiciones generales de uso y contratación de Esencia de Belleza.",

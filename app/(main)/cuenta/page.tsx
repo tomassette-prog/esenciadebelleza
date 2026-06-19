@@ -26,13 +26,26 @@ export default async function CuentaPage({
     .eq("id", user.id)
     .single();
 
-  // Últimos 5 pedidos
-  const { data: pedidos } = await supabase
+  // Últimos 10 pedidos — por usuario_id O por email (compras como invitado)
+  const { data: pedidosPropios } = await supabase
     .from("pedidos")
-    .select("id, estado, total, created_at, numero_pedido")
+    .select("id, estado, total, created_at, metodo_pago, direccion_envio")
     .eq("usuario_id", user.id)
     .order("created_at", { ascending: false })
-    .limit(5);
+    .limit(10);
+
+  const { data: pedidosEmail } = await supabase
+    .from("pedidos")
+    .select("id, estado, total, created_at, metodo_pago, direccion_envio")
+    .eq("email_cliente", user.email!)
+    .is("usuario_id", null)
+    .order("created_at", { ascending: false })
+    .limit(10);
+
+  const pedidos = [
+    ...(pedidosPropios ?? []),
+    ...(pedidosEmail ?? []),
+  ].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).slice(0, 10);
 
   const esProfesional = perfil?.tipo_cliente === "b2b";
   const b2bAprobado   = perfil?.b2b_aprobado === true;
@@ -219,7 +232,7 @@ export default async function CuentaPage({
                     <div key={pedido.id} className="py-4 flex items-center justify-between gap-4">
                       <div>
                         <p className="text-sm font-medium text-neutral-900">
-                          #{pedido.numero_pedido ?? pedido.id.slice(0, 8).toUpperCase()}
+                          #{pedido.id.slice(0, 8).toUpperCase()}
                         </p>
                         <p className="text-xs text-neutral-400 mt-0.5">
                           {new Date(pedido.created_at).toLocaleDateString("es-ES", {
