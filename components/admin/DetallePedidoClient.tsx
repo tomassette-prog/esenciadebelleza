@@ -45,6 +45,7 @@ export default function DetallePedidoClient({ pedido }: { pedido: Pedido }) {
 
   const [coste, setCoste]       = useState(pedido.coste_proveedor?.toString() ?? "");
   const [ganancia, setGanancia] = useState(pedido.ganancia_neta?.toString() ?? "");
+  const [margen, setMargen]     = useState(""); // % de margen sobre el total del cliente
   const [notas, setNotas]       = useState(pedido.notas_internas ?? "");
   const [estado, setEstado]     = useState(pedido.estado);
   const [saving, setSaving]     = useState(false);
@@ -55,12 +56,39 @@ export default function DetallePedidoClient({ pedido }: { pedido: Pedido }) {
   const [notasProveedor, setNotasProveedor] = useState("");
   const [launching, setLaunching]       = useState(false);
 
+  // Base de cálculo: total sin gastos de envío (lo que paga el cliente por productos)
+  const baseCalculo = pedido.total - (pedido.gastos_envio ?? 0);
+
+  // Al cambiar el coste → recalcula ganancia y margen
   function handleCosteChange(val: string) {
     setCoste(val);
     const c = parseFloat(val);
-    if (!isNaN(c)) {
-      const g = pedido.total - (pedido.gastos_envio ?? 0) - c;
+    if (!isNaN(c) && baseCalculo > 0) {
+      const g = baseCalculo - c;
       setGanancia(g.toFixed(2));
+      setMargen(((g / baseCalculo) * 100).toFixed(1));
+    }
+  }
+
+  // Al cambiar el % → recalcula coste y ganancia
+  function handleMargenChange(val: string) {
+    setMargen(val);
+    const pct = parseFloat(val);
+    if (!isNaN(pct) && baseCalculo > 0) {
+      const g = (baseCalculo * pct) / 100;
+      const c = baseCalculo - g;
+      setGanancia(g.toFixed(2));
+      setCoste(c.toFixed(2));
+    }
+  }
+
+  // Al cambiar ganancia a mano → recalcula coste y margen
+  function handleGananciaChange(val: string) {
+    setGanancia(val);
+    const g = parseFloat(val);
+    if (!isNaN(g) && baseCalculo > 0) {
+      setCoste((baseCalculo - g).toFixed(2));
+      setMargen(((g / baseCalculo) * 100).toFixed(1));
     }
   }
 
@@ -207,7 +235,7 @@ export default function DetallePedidoClient({ pedido }: { pedido: Pedido }) {
       {/* Panel de gestión */}
       <div className="bg-white rounded-xl shadow p-5 space-y-4">
         <h2 className="font-semibold text-gray-700">Gestión interna</h2>
-        <div className="grid md:grid-cols-3 gap-4">
+        <div className="grid md:grid-cols-4 gap-4">
           <div>
             <label className="block text-xs text-gray-500 mb-1">Estado del pedido</label>
             <select
@@ -222,7 +250,7 @@ export default function DetallePedidoClient({ pedido }: { pedido: Pedido }) {
           </div>
           <div>
             <label className="block text-xs text-gray-500 mb-1">
-              Coste a depeluqueria (€) <span className="text-gray-400">— lo que les pagas</span>
+              Coste proveedor (€)
             </label>
             <input
               type="number" step="0.01" value={coste}
@@ -230,16 +258,33 @@ export default function DetallePedidoClient({ pedido }: { pedido: Pedido }) {
               placeholder="0.00"
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-rose-500 focus:border-rose-500"
             />
+            <p className="text-xs text-gray-400 mt-1">Lo que pagas a depeluqueria</p>
           </div>
           <div>
             <label className="block text-xs text-gray-500 mb-1">
-              Ganancia neta (€) <span className="text-gray-400">— se calcula sola</span>
+              % Margen
+            </label>
+            <div className="relative">
+              <input
+                type="number" step="0.1" min="0" max="100" value={margen}
+                onChange={(e) => handleMargenChange(e.target.value)}
+                placeholder="20"
+                className="w-full border border-blue-300 rounded-lg px-3 py-2 text-sm focus:ring-blue-500 focus:border-blue-500 bg-blue-50 pr-7"
+              />
+              <span className="absolute right-2 top-2 text-xs text-blue-400">%</span>
+            </div>
+            <p className="text-xs text-gray-400 mt-1">Sobre precio sin envío</p>
+          </div>
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">
+              Ganancia neta (€)
             </label>
             <input
               type="number" step="0.01" value={ganancia}
-              onChange={(e) => setGanancia(e.target.value)}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-green-500 focus:border-green-500 bg-green-50"
+              onChange={(e) => handleGananciaChange(e.target.value)}
+              className="w-full border border-green-300 rounded-lg px-3 py-2 text-sm focus:ring-green-500 focus:border-green-500 bg-green-50"
             />
+            <p className="text-xs text-gray-400 mt-1">Se recalcula automáticamente</p>
           </div>
         </div>
         <div>
