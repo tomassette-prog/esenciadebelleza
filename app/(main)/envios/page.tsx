@@ -52,16 +52,15 @@ export default function EnviosPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-neutral-100">
-              <tr><td className="py-2 pr-4">Provincia de Barcelona</td><td className="py-2">3,50 €</td></tr>
-              <tr><td className="py-2 pr-4">Cataluña (resto)</td><td className="py-2">4,00 €</td></tr>
-              <tr><td className="py-2 pr-4">Península</td><td className="py-2">4,50 €</td></tr>
-              <tr><td className="py-2 pr-4">Islas Baleares</td><td className="py-2">10,00 €</td></tr>
-              <tr><td className="py-2 pr-4">Portugal</td><td className="py-2">4,50 €</td></tr>
-              <tr><td className="py-2 pr-4">Islas Canarias</td><td className="py-2">10,00 €</td></tr>
-              <tr><td className="py-2 pr-4">Andorra / Gibraltar</td><td className="py-2">8,00 €</td></tr>
-              <tr><td className="py-2 pr-4">Ceuta / Melilla</td><td className="py-2">20,00 €</td></tr>
+              <tr><td className="py-2 pr-4">Provincia de Valencia</td><td className="py-2">Gratis desde 35 € · 5,00 € resto</td></tr>
+              <tr><td className="py-2 pr-4">Resto de Península</td><td className="py-2">Gratis desde 40 € · 5,00 € resto</td></tr>
+              <tr><td className="py-2 pr-4">Islas Baleares</td><td className="py-2">12,00 €</td></tr>
             </tbody>
           </table>
+        </div>
+
+        <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-sm text-amber-800">
+          <strong>Zonas sin servicio de envío:</strong> actualmente no realizamos envíos a Canarias, Ceuta, Melilla, Andorra ni Gibraltar. Pedimos disculpas por las molestias.
         </div>
         <p>
           Los pedidos que incluyan productos marcados con «Envío gratis» o que cumplan las condiciones de importe mínimo establecidas tendrán envío gratuito en todo el pedido.
@@ -72,13 +71,6 @@ export default function EnviosPage() {
         </h2>
         <p>
           Todos los pedidos viajan cubiertos con un seguro por el <strong>100% del valor de la mercancía</strong>. En caso de que su envío presente desperfectos debidos al transporte, deberá indicar las anomalías en el albarán del transportista en el momento de la entrega y contactar con nosotros en la mayor brevedad posible. Le recomendamos no tirar el embalaje hasta comprobar que todos los productos están en perfecto estado.
-        </p>
-
-        <h2 className="text-xl font-light text-neutral-900 mt-8 mb-3" style={{ fontFamily: "var(--font-cormorant)" }}>
-          Gestión aduanera
-        </h2>
-        <p>
-          Los envíos a Canarias, Ceuta, Melilla y otras zonas que requieran la gestión de un agente de aduanas pueden conllevar gastos adicionales (despacho de aduanas, impuestos locales, etc.) de los que Esencia de Belleza no se hace responsable.
         </p>
 
         <h2 className="text-xl font-light text-neutral-900 mt-8 mb-3" style={{ fontFamily: "var(--font-cormorant)" }}>
