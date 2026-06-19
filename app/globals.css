@@ -52,6 +52,37 @@
   margin: 0;
 }
 
+/* ── Imágenes en contenido del blog ── */
+.prose img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 2px;
+  display: block;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* Figuras con caption (texto sobre imagen) */
+.prose figure {
+  position: relative;
+  margin: 2rem 0;
+}
+.prose figure figcaption {
+  margin-top: 0.5rem;
+  font-size: 0.8rem;
+  color: #6b7280;
+  text-align: center;
+  line-height: 1.4;
+  background: transparent;
+}
+
+/* Evitar que imágenes con width/height inline rompan el layout */
+.prose img[style*="width"],
+.prose img[style*="height"] {
+  max-width: 100% !important;
+  height: auto !important;
+}
+
 
 @layer base {
   :root {

@@ -182,8 +182,10 @@ export default async function PostPage({ params }: PageProps) {
               prose-p:text-neutral-600 prose-p:leading-relaxed
               prose-a:text-[#C9A84C] prose-a:no-underline hover:prose-a:underline
               prose-strong:text-neutral-800
+              prose-img:rounded prose-img:max-w-full
               prose-table:text-sm prose-th:text-neutral-700 prose-th:font-medium
-              prose-td:text-neutral-600"
+              prose-td:text-neutral-600
+              [&_img]:max-w-full [&_img]:h-auto [&_img[style]]:max-w-full [&_img[style]]:h-auto"
             dangerouslySetInnerHTML={{ __html: post.contenido_html ?? "" }}
           />
 
