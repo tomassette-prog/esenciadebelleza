@@ -90,12 +90,7 @@ export async function lanzarPedidoWoo(
   if (pedido.woo_order_id) return { error: "Este pedido ya fue enviado a WooCommerce" };
 
   const wooUrl = process.env.WOO_URL!;
-  const wooToken = "eb_secret_esencia_2026"; // Token del endpoint personalizado
-
-  type LineaT = {
-    sku: string; nombre_producto: string; nombre_variacion?: string;
-    cantidad: number; precio_unitario: number; subtotal: number;
-  };
+  const wooToken = "eb_secret_esencia_2026";
 
   const dir = pedido.direccion_envio as Record<string, string>;
   const refPago = (pedido.stripe_payment_id ?? pedido.id).toString().slice(0, 20).toUpperCase();
