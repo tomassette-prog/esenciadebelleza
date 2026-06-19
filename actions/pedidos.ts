@@ -1,0 +1,193 @@
+"use server";
+
+import { createAdminClient } from "@/lib/supabase/admin";
+import { revalidatePath } from "next/cache";
+
+// ── Listar pedidos con métricas ──────────────────────────────────────────────
+export async function listarPedidos(pagina = 1, porPagina = 20) {
+  const supabase = createAdminClient();
+  const desde = (pagina - 1) * porPagina;
+
+  const { data, error, count } = await supabase
+    .from("pedidos")
+    .select(`
+      id, estado, total, subtotal, gastos_envio,
+      coste_proveedor, ganancia_neta, notas_internas,
+      woo_order_id, woo_estado, woo_enviado_at,
+      metodo_pago, email_cliente, direccion_envio,
+      created_at, tipo_precio,
+      pedidos_lineas ( id, nombre_producto, nombre_variacion, sku, cantidad, precio_unitario, subtotal )
+    `, { count: "exact" })
+    .order("created_at", { ascending: false })
+    .range(desde, desde + porPagina - 1);
+
+  if (error) return { pedidos: [], total: 0, error: error.message };
+  return { pedidos: data ?? [], total: count ?? 0, error: null };
+}
+
+// ── Detalle de un pedido ──────────────────────────────────────────────────────
+export async function obtenerPedido(id: string) {
+  const supabase = createAdminClient();
+  const { data, error } = await supabase
+    .from("pedidos")
+    .select(`
+      *,
+      pedidos_lineas ( * )
+    `)
+    .eq("id", id)
+    .single();
+
+  if (error) return { pedido: null, error: error.message };
+  return { pedido: data, error: null };
+}
+
+// ── Actualizar coste/ganancia y notas internas ────────────────────────────────
+export async function actualizarComision(
+  id: string,
+  datos: { coste_proveedor?: number; ganancia_neta?: number; notas_internas?: string }
+) {
+  const supabase = createAdminClient();
+  const { error } = await supabase
+    .from("pedidos")
+    .update(datos)
+    .eq("id", id);
+
+  if (error) return { error: error.message };
+  revalidatePath("/admin/pedidos");
+  revalidatePath(`/admin/pedidos/${id}`);
+  return { error: null };
+}
+
+// ── Actualizar estado del pedido ──────────────────────────────────────────────
+export async function actualizarEstadoPedido(id: string, estado: string) {
+  const supabase = createAdminClient();
+  const { error } = await supabase
+    .from("pedidos")
+    .update({ estado })
+    .eq("id", id);
+
+  if (error) return { error: error.message };
+  revalidatePath("/admin/pedidos");
+  revalidatePath(`/admin/pedidos/${id}`);
+  return { error: null };
+}
+
+// ── Lanzar pedido a WooCommerce (depeluqueriaproductos.com) ───────────────────
+export async function lanzarPedidoWoo(id: string) {
+  const supabase = createAdminClient();
+
+  // Obtener pedido con líneas
+  const { data: pedido, error: errGet } = await supabase
+    .from("pedidos")
+    .select("*, pedidos_lineas(*)")
+    .eq("id", id)
+    .single();
+
+  if (errGet || !pedido) return { error: "Pedido no encontrado" };
+  if (pedido.woo_order_id) return { error: "Este pedido ya fue enviado a WooCommerce" };
+
+  const wooUrl  = process.env.WOO_URL!;       // https://depeluqueriaproductos.com
+  const wooKey  = process.env.WOO_KEY!;        // ck_...
+  const wooSec  = process.env.WOO_SECRET!;     // cs_...
+
+  const dir = pedido.direccion_envio as Record<string, string>;
+
+  // Construir payload WooCommerce
+  const body = {
+    status:           "processing",
+    currency:         "EUR",
+    customer_note:    pedido.notas_internas ?? "",
+    billing: {
+      first_name: dir.nombre    ?? "",
+      last_name:  dir.apellidos ?? "",
+      email:      pedido.email_cliente,
+      phone:      dir.telefono  ?? "",
+      address_1:  dir.direccion ?? "",
+      city:       dir.ciudad    ?? "",
+      state:      dir.provincia ?? "",
+      postcode:   dir.codigo_postal ?? "",
+      country:    "ES",
+    },
+    shipping: {
+      first_name: dir.nombre    ?? "",
+      last_name:  dir.apellidos ?? "",
+      address_1:  dir.direccion ?? "",
+      city:       dir.ciudad    ?? "",
+      state:      dir.provincia ?? "",
+      postcode:   dir.codigo_postal ?? "",
+      country:    "ES",
+    },
+    line_items: (pedido.pedidos_lineas as Array<{
+      sku: string; nombre_producto: string; nombre_variacion: string | null;
+      cantidad: number; precio_unitario: number;
+    }>).map((l) => ({
+      sku:      l.sku,
+      name:     l.nombre_variacion ? `${l.nombre_producto} - ${l.nombre_variacion}` : l.nombre_producto,
+      quantity: l.cantidad,
+      price:    String(l.precio_unitario),
+    })),
+    shipping_lines: pedido.gastos_envio > 0 ? [{
+      method_id:    "flat_rate",
+      method_title: "Envío estándar",
+      total:        String(pedido.gastos_envio),
+    }] : [],
+    meta_data: [
+      { key: "_esencia_pedido_id",    value: pedido.id },
+      { key: "_esencia_metodo_pago",  value: pedido.metodo_pago ?? "" },
+    ],
+  };
+
+  try {
+    const auth = Buffer.from(`${wooKey}:${wooSec}`).toString("base64");
+    const res = await fetch(`${wooUrl}/wp-json/wc/v3/orders`, {
+      method:  "POST",
+      headers: {
+        "Content-Type":  "application/json",
+        "Authorization": `Basic ${auth}`,
+      },
+      body: JSON.stringify(body),
+    });
+
+    if (!res.ok) {
+      const txt = await res.text();
+      return { error: `WooCommerce respondió ${res.status}: ${txt.slice(0, 200)}` };
+    }
+
+    const woo = await res.json();
+
+    // Guardar el ID de WooCommerce en el pedido
+    await supabase.from("pedidos").update({
+      woo_order_id:   woo.id,
+      woo_estado:     "enviado",
+      woo_enviado_at: new Date().toISOString(),
+    }).eq("id", id);
+
+    revalidatePath("/admin/pedidos");
+    revalidatePath(`/admin/pedidos/${id}`);
+    return { wooId: woo.id, error: null };
+
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    await supabase.from("pedidos").update({ woo_estado: "error" }).eq("id", id);
+    return { error: msg };
+  }
+}
+
+// ── Métricas globales de comisiones ──────────────────────────────────────────
+export async function obtenerMetricas() {
+  const supabase = createAdminClient();
+
+  const { data, error } = await supabase
+    .from("pedidos")
+    .select("total, coste_proveedor, ganancia_neta, estado, created_at")
+    .neq("estado", "cancelado");
+
+  if (error || !data) return null;
+
+  const totalFacturado  = data.reduce((a, p) => a + (p.total ?? 0), 0);
+  const totalCoste      = data.reduce((a, p) => a + (p.coste_proveedor ?? 0), 0);
+  const totalGanancia   = data.reduce((a, p) => a + (p.ganancia_neta ?? 0), 0);
+  const pedidosPagados  = data.filter((p) => p.estado === "pagado" || p.estado === "enviado" || p.estado === "entregado").length;
+
+  return { totalFacturado, totalCoste, totalGanancia, pedidosPagados, totalPedidos: data.length };
+}

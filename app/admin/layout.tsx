@@ -106,6 +106,12 @@ export default async function AdminLayout({ children }: { children: ReactNode })
               Blog
             </Link>
             <Link
+              href="/admin/pedidos"
+              className="text-xs tracking-widest uppercase text-neutral-300 hover:text-white transition-colors"
+            >
+              Pedidos
+            </Link>
+            <Link
               href="/admin/profesionales"
               className="text-xs tracking-widest uppercase text-neutral-300 hover:text-white transition-colors"
             >
