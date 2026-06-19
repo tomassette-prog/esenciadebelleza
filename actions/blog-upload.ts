@@ -72,16 +72,9 @@ export async function subirImagenBlog(
   const nombreArchivo = `posts/${slug}-${timestamp}.${ext}`;
 
   const buffer = Buffer.from(await file.arrayBuffer());
-
   const supabase = createAdminClient();
 
-  // Asegurar que el bucket existe
-  const { data: buckets } = await supabase.storage.listBuckets();
-  const bucketExiste = (buckets ?? []).some((b) => b.name === BUCKET);
-  if (!bucketExiste) {
-    await supabase.storage.createBucket(BUCKET, { public: true });
-  }
-
+  // Intentar subir directamente (el bucket ya existe como público)
   const { error: uploadError } = await supabase.storage
     .from(BUCKET)
     .upload(nombreArchivo, buffer, {
@@ -89,7 +82,16 @@ export async function subirImagenBlog(
       upsert: false,
     });
 
-  if (uploadError) return { url: null, error: uploadError.message };
+  // Si falla por bucket inexistente, intentar crearlo y reintentar
+  if (uploadError && uploadError.message.includes("Bucket not found")) {
+    await supabase.storage.createBucket(BUCKET, { public: true, fileSizeLimit: 4194304 });
+    const { error: retryError } = await supabase.storage
+      .from(BUCKET)
+      .upload(nombreArchivo, buffer, { contentType: file.type, upsert: false });
+    if (retryError) return { url: null, error: retryError.message };
+  } else if (uploadError) {
+    return { url: null, error: uploadError.message };
+  }
 
   const { data: { publicUrl } } = supabase.storage.from(BUCKET).getPublicUrl(nombreArchivo);
 

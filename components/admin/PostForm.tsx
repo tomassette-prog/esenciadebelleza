@@ -124,6 +124,9 @@ export default function PostForm({ post }: Props) {
   const [uploading, setUploading] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
+  // Previsualización
+  const [previewOpen, setPreviewOpen] = useState(false);
+
   // ── Cargar JSON ────────────────────────────────────────────────────────────
   const cargarJson = useCallback(() => {
     setJsonError("");
@@ -591,10 +594,107 @@ export default function PostForm({ post }: Props) {
       {/* Submit */}
       <div className="flex items-center gap-4 pt-4 border-t border-neutral-100">
         <SubmitButton isEdit={isEdit} />
+        <button
+          type="button"
+          onClick={() => setPreviewOpen(true)}
+          className="px-6 py-3 border border-neutral-300 text-neutral-700 text-xs tracking-widest uppercase hover:border-neutral-900 hover:text-neutral-900 transition-colors flex items-center gap-2"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+              d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+          </svg>
+          Previsualizar
+        </button>
         <a href="/admin/blog" className="text-xs tracking-widest uppercase text-neutral-400 hover:text-neutral-700">
           Cancelar
         </a>
       </div>
+
+      {/* Modal de previsualización */}
+      {previewOpen && (
+        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/60 overflow-y-auto p-4">
+          <div className="relative bg-white w-full max-w-3xl my-8 shadow-2xl">
+            {/* Header del modal */}
+            <div className="sticky top-0 bg-white border-b border-neutral-100 px-6 py-4 flex items-center justify-between z-10">
+              <span className="text-xs tracking-widest uppercase text-neutral-500">
+                Previsualización del post
+              </span>
+              <button
+                type="button"
+                onClick={() => setPreviewOpen(false)}
+                className="text-neutral-400 hover:text-neutral-900 transition-colors p-1"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            {/* Contenido simulado del post */}
+            <div className="px-8 py-10">
+              {/* Fecha y autor */}
+              <p className="text-xs tracking-widest uppercase text-neutral-400 mb-4">
+                {new Date().toLocaleDateString("es-ES", { day: "numeric", month: "long", year: "numeric" })}
+                {" · Esencia de Belleza"}
+              </p>
+
+              {/* Título */}
+              <h1
+                className="text-3xl font-light text-neutral-900 leading-tight mb-5"
+                style={{ fontFamily: "Georgia, serif" }}
+              >
+                {titulo || <span className="text-neutral-300">Sin título</span>}
+              </h1>
+
+              {/* Resumen */}
+              {resumen && (
+                <p className="text-base text-neutral-500 leading-relaxed border-l-2 border-[#C9A84C] pl-4 mb-8">
+                  {resumen}
+                </p>
+              )}
+
+              {/* Imagen */}
+              {imagenUrl && (
+                <div className="mb-8 aspect-video overflow-hidden bg-neutral-100">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={imagenUrl} alt={titulo} className="w-full h-full object-cover" />
+                </div>
+              )}
+
+              {/* Contenido */}
+              {contenidoHtml ? (
+                <div
+                  className="prose prose-neutral max-w-none
+                    prose-headings:font-light prose-headings:text-neutral-900
+                    prose-h2:text-2xl prose-h2:mt-8 prose-h2:mb-3
+                    prose-h3:text-xl prose-h3:mt-6 prose-h3:mb-2
+                    prose-p:text-neutral-600 prose-p:leading-relaxed
+                    prose-a:text-[#C9A84C] prose-a:no-underline
+                    prose-strong:text-neutral-800
+                    prose-table:text-sm"
+                  dangerouslySetInnerHTML={{ __html: contenidoHtml }}
+                />
+              ) : (
+                <p className="text-neutral-300 italic">Sin contenido todavía.</p>
+              )}
+
+              {/* SEO info */}
+              <div className="mt-10 pt-6 border-t border-neutral-100 space-y-2 bg-neutral-50 -mx-8 px-8 py-5">
+                <p className="text-xs tracking-widest uppercase text-neutral-400 mb-3">SEO (como aparece en Google)</p>
+                <p className="text-blue-700 text-sm font-medium">{seoTitle || titulo}</p>
+                <p className="text-green-700 text-xs">esenciadebelleza.es/blog/{slug || "slug-del-post"}</p>
+                <p className="text-neutral-500 text-xs leading-relaxed">{seoDesc || resumen}</p>
+                {keywords && (
+                  <p className="text-xs text-neutral-400 mt-2">
+                    <span className="font-medium">Keywords:</span> {keywords}
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </form>
   );
 }
