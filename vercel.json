@@ -29,7 +29,7 @@
         },
         {
           "key": "Content-Security-Policy",
-          "value": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://js.stripe.com https://www.paypal.com https://www.paypalobjects.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https: http:; frame-src https://js.stripe.com https://hooks.stripe.com https://www.paypal.com; connect-src 'self' https://*.supabase.co https://api.stripe.com wss://*.supabase.co; object-src 'none'; base-uri 'self'; form-action 'self';"
+          "value": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://js.stripe.com https://www.paypal.com https://www.paypalobjects.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https: http:; frame-src https://js.stripe.com https://hooks.stripe.com https://www.paypal.com https://pgw.ceca.es; connect-src 'self' https://*.supabase.co https://api.stripe.com wss://*.supabase.co; object-src 'none'; base-uri 'self'; form-action 'self' https://pgw.ceca.es;"
         }
       ]
     }
