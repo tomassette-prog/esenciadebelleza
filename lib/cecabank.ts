@@ -18,10 +18,16 @@ export function generarNumOper(): string {
   return crypto.randomUUID().replace(/-/g, "").substring(0, 9).toUpperCase();
 }
 
+/** Rellena con ceros a la izquierda, igual que PHP str_pad($v, $len, '0', STR_PAD_LEFT) */
+function pad(value: string, length: number): string {
+  return value.padStart(length, "0");
+}
+
 function firma(partes: string[]): string {
   const clave = process.env.CECA_SECRET_KEY!;
   const raw   = clave + partes.join("");
-  return crypto.createHash("sha256").update(raw, "utf8").digest("hex").toUpperCase();
+  // PHP hash('sha256', ...) devuelve minúsculas – Cecabank es sensible al case
+  return crypto.createHash("sha256").update(raw, "utf8").digest("hex");
 }
 
 // ── Generar campos para el formulario POST al TPV ─────────────────────────────
@@ -35,14 +41,16 @@ export function generarCamposCeca(params: {
   const { numOper, importeCentimos, urlOk, urlNok } = params;
   const urlNot = params.urlNot ?? "https://esenciadebelleza.es/api/ceca/notificacion";
 
-  const merchantId  = process.env.CECA_MERCHANT_ID!;
-  const acquirerBin = process.env.CECA_ACQUIRER_BIN!;
-  const terminalId  = process.env.CECA_TERMINAL_ID!;
+  // Campos de credenciales con padding obligatorio (igual que el plugin PHP oficial)
+  const merchantId  = pad(process.env.CECA_MERCHANT_ID!,  9);
+  const acquirerBin = pad(process.env.CECA_ACQUIRER_BIN!, 10);
+  const terminalId  = pad(process.env.CECA_TERMINAL_ID!,  8);
   const importe     = String(importeCentimos);
   const tipoMoneda  = "978"; // EUR
   const exponente   = "2";
   const cifrado     = "SHA2";
 
+  // La firma se calcula con los valores ya rellenos
   const f = firma([
     merchantId, acquirerBin, terminalId,
     numOper, importe, tipoMoneda, exponente,
@@ -86,7 +94,7 @@ export function verificarFirmaCeca(params: {
           tipoMoneda, exponente, referencia, firmaRecibida } = params;
 
   const expected = firma([
-    merchantId, acquirerBin, terminalId,
+    pad(merchantId, 9), pad(acquirerBin, 10), pad(terminalId, 8),
     numOper, importe, tipoMoneda, exponente, referencia,
   ]);
 
