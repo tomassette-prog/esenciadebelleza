@@ -36,6 +36,7 @@ export async function GET(req: Request) {
         CECA_ACQUIRER_BIN_set: !!process.env.CECA_ACQUIRER_BIN,
         CECA_TERMINAL_ID_set:  !!process.env.CECA_TERMINAL_ID,
         CECA_SECRET_KEY_set:   !!process.env.CECA_SECRET_KEY,
+        CECA_CIFRADO:          process.env.CECA_CIFRADO ?? "SHA2 (default)",
       },
     },
   });

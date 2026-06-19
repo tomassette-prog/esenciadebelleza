@@ -24,9 +24,13 @@ function pad(value: string, length: number): string {
 }
 
 function firma(partes: string[]): string {
-  const clave = process.env.CECA_SECRET_KEY!;
-  const raw   = clave + partes.join("");
-  // PHP hash('sha256', ...) devuelve minúsculas – Cecabank es sensible al case
+  const clave   = process.env.CECA_SECRET_KEY!;
+  const cifrado = process.env.CECA_CIFRADO ?? "SHA2"; // SHA1 o SHA2
+  const raw     = clave + partes.join("").replace(/&amp;/g, "&");
+
+  if (cifrado === "SHA1") {
+    return crypto.createHash("sha1").update(raw, "utf8").digest("hex");
+  }
   return crypto.createHash("sha256").update(raw, "utf8").digest("hex");
 }
 
@@ -48,7 +52,7 @@ export function generarCamposCeca(params: {
   const importe     = String(importeCentimos);
   const tipoMoneda  = "978"; // EUR
   const exponente   = "2";
-  const cifrado     = "SHA2";
+  const cifrado     = process.env.CECA_CIFRADO ?? "SHA2";
 
   // La firma se calcula con los valores ya rellenos
   const f = firma([
