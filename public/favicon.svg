@@ -1,40 +1,29 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
   <!-- Fondo blanco con esquinas redondeadas -->
-  <rect width="512" height="512" rx="80" fill="#ffffff"/>
+  <rect width="512" height="512" rx="90" fill="#ffffff"/>
 
-  <!-- Icono centrado: frasco de perfume + flor de loto -->
-  <g transform="translate(256,256) scale(6.5)" fill="none" stroke="#E6C1B9" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-    <!-- Pétalos de loto superiores -->
-    <path d="M0 -16 C-2 -26, -9 -28, -9 -36 C-9 -28, -16 -26, -18 -18"/>
-    <path d="M0 -16 C2 -26, 9 -28, 9 -36 C9 -28, 16 -26, 18 -18"/>
-    <!-- Pétalo central -->
-    <path d="M-8 -17 C-6 -24, -1 -26, 0 -30 C1 -26, 6 -24, 8 -17"/>
-    <!-- Pétalos laterales bajos -->
-    <path d="M-18 -18 C-20 -13, -20 -8, -16 -5" stroke-width="1.2"/>
-    <path d="M18 -18 C20 -13, 20 -8, 16 -5" stroke-width="1.2"/>
+  <!-- Icono centrado: frasco de perfume + flor tipo rosa/loto encima -->
+  <g transform="translate(256,256) scale(7)" fill="none" stroke="#C9907A" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.4">
+    <!-- Pétalos de la flor (loto/rosa) sobre el frasco -->
+    <path d="M0 -32 C-1 -40, -6 -42, -7 -48 C-5 -41, -1 -38, 0 -33" fill="#C9907A" fill-opacity="0.2"/>
+    <path d="M0 -32 C1 -40, 6 -42, 7 -48 C5 -41, 1 -38, 0 -33" fill="#C9907A" fill-opacity="0.2"/>
+    <path d="M0 -32 C0 -41, 0 -44, 0 -50 C0 -44, 0 -41, 0 -33" fill="#C9907A" fill-opacity="0.2"/>
+    <path d="M0 -30 C-5 -36, -12 -35, -15 -40 C-11 -34, -6 -32, 0 -30" fill="#C9907A" fill-opacity="0.15" stroke-width="1.1"/>
+    <path d="M0 -30 C5 -36, 12 -35, 15 -40 C11 -34, 6 -32, 0 -30" fill="#C9907A" fill-opacity="0.15" stroke-width="1.1"/>
 
-    <!-- Cuello del frasco -->
-    <rect x="-5" y="-16" width="10" height="8" rx="1.5"/>
-    <!-- Tapón decorativo -->
-    <rect x="-3.5" y="-21" width="7" height="5.5" rx="1.5"/>
-    <!-- Pequeño botón del tapón -->
-    <circle cx="0" cy="-23.5" r="1.5" fill="#E6C1B9" stroke="none"/>
+    <!-- Tapón -->
+    <rect x="-7" y="-30" width="14" height="8" rx="2" fill="#ffffff"/>
+    <!-- Cuello -->
+    <rect x="-5" y="-22" width="10" height="8" rx="1" fill="#ffffff"/>
 
-    <!-- Cuerpo principal del frasco -->
-    <rect x="-14" y="-8" width="28" height="24" rx="3"/>
+    <!-- Cuerpo del frasco redondeado -->
+    <path d="M-14 -14 Q-17 -14, -17 -10 L-17 16 Q-17 20, -13 20 L13 20 Q17 20, 17 16 L17 -10 Q17 -14, 14 -14 Z"
+      fill="#ffffff"/>
 
-    <!-- Línea decorativa horizontal en el frasco -->
-    <line x1="-10" y1="4" x2="10" y2="4" stroke-width="0.8"/>
+    <!-- Línea decorativa -->
+    <line x1="-11" y1="0" x2="11" y2="0" stroke-width="0.8" opacity="0.7"/>
 
-    <!-- Etiqueta interior (rectángulo pequeño) -->
-    <rect x="-7" y="-4" width="14" height="8" rx="1.5" stroke-width="0.8" opacity="0.6"/>
-
-    <!-- Base del frasco con curva floral (tilde transformada) -->
-    <path d="M-14 16 Q-18 22, -22 24 Q-12 22, 0 18 Q12 22, 22 24 Q18 22, 14 16" stroke-width="1.3"/>
-
-    <!-- Pequeños puntos decorativos (esencia del perfume) -->
-    <circle cx="-20" cy="-24" r="1" fill="#E6C1B9" stroke="none" opacity="0.5"/>
-    <circle cx="20" cy="-24" r="1" fill="#E6C1B9" stroke="none" opacity="0.5"/>
-    <circle cx="0" cy="-38" r="1.2" fill="#E6C1B9" stroke="none" opacity="0.4"/>
+    <!-- Etiqueta ovalada -->
+    <ellipse cx="0" cy="10" rx="8" ry="6" stroke-width="0.9" opacity="0.65"/>
   </g>
 </svg>
