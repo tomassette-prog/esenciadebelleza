@@ -122,11 +122,6 @@ const nextConfig = {
         destination: "/sobre-nosotros",
         permanent: true,
       },
-      {
-        source: "/aviso-legal",
-        destination: "/aviso-legal",
-        permanent: false,
-      },
     ];
   },
 
