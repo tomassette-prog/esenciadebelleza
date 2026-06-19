@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useCarrito } from "@/context/CarritoContext";
 import { iniciarPagoCeca } from "@/actions/checkout";
 import { calcularGastoEnvio, getZonaEnvio } from "@/lib/envio";
+import PaypalButton from "@/components/checkout/PaypalButton";
 
 type Paso = "direccion" | "pago";
 
@@ -333,6 +334,31 @@ export function CheckoutCliente({
               </svg>
               Pago 100% seguro · Cifrado SSL · TPV Cecabank
             </p>
+
+            {/* Divisor */}
+            <div className="flex items-center gap-3 my-5">
+              <div className="flex-1 h-px bg-neutral-200" />
+              <span className="text-xs text-neutral-400 uppercase tracking-widest">o también</span>
+              <div className="flex-1 h-px bg-neutral-200" />
+            </div>
+
+            {/* Botón PayPal */}
+            {process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID && (
+              <PaypalButton
+                lineas={lineas}
+                datosEnvio={{
+                  email:         datos.email,
+                  nombre:        datos.nombre,
+                  apellidos:     datos.apellidos,
+                  telefono:      datos.telefono,
+                  direccion:     datos.direccion,
+                  ciudad:        datos.ciudad,
+                  provincia:     datos.provincia,
+                  codigo_postal: datos.codigo_postal,
+                  notas:         datos.notas,
+                }}
+              />
+            )}
 
             {/* Formulario oculto que se envía a Cecabank */}
             <form ref={formCecaRef} action={cecaUrl} method="POST" className="hidden">
