@@ -14,20 +14,30 @@ function ConfirmacionInner() {
   const [estado, setEstado] = useState<Estado>("cargando");
 
   useEffect(() => {
-    const numOper   = searchParams.get("num_oper")   ?? "";
-    const resultado = searchParams.get("resultado")  ?? "";
+    const numOper   = searchParams.get("num_oper")    ?? "";
+    const sessionId = searchParams.get("session_id")  ?? "";
+    const resultado = searchParams.get("resultado")   ?? "";
 
-    if (!numOper) {
-      setEstado("error");
-      return;
-    }
-
+    // Pago cancelado
     if (resultado === "ko") {
       setEstado("error");
       return;
     }
 
-    // Confirmar pedido (idempotente — si ya fue confirmado por notificación, no hace nada malo)
+    // ── Flujo Stripe ────────────────────────────────────────────────────────
+    if (sessionId) {
+      // Stripe ya confirmó el pago — simplemente vaciamos el carrito
+      vaciar();
+      setEstado("exito");
+      return;
+    }
+
+    // ── Flujo Cecabank ──────────────────────────────────────────────────────
+    if (!numOper) {
+      setEstado("error");
+      return;
+    }
+
     confirmarPedidoCeca(numOper).then(({ ok }) => {
       if (ok) {
         vaciar();
