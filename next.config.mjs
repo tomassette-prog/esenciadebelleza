@@ -84,6 +84,49 @@ const nextConfig = {
         destination: "/sitemap.xml",
         permanent: true,
       },
+      // Rutas antiguas de WordPress / WooCommerce → equivalentes Next.js
+      // (preservan link juice de backlinks al dominio expirado)
+      {
+        source: "/product-category/:path*",
+        destination: "/productos/:path*",
+        permanent: true,
+      },
+      {
+        source: "/category/:slug",
+        destination: "/productos",
+        permanent: true,
+      },
+      {
+        source: "/tag/:slug",
+        destination: "/productos",
+        permanent: true,
+      },
+      {
+        source: "/marca/:slug",
+        destination: "/marcas/:slug",
+        permanent: true,
+      },
+      {
+        source: "/blog/:slug",
+        destination: "/blog/:slug",
+        permanent: true,
+      },
+      // Páginas estáticas de WordPress comunes
+      {
+        source: "/contacto",
+        destination: "/sobre-nosotros",
+        permanent: true,
+      },
+      {
+        source: "/contact",
+        destination: "/sobre-nosotros",
+        permanent: true,
+      },
+      {
+        source: "/aviso-legal",
+        destination: "/aviso-legal",
+        permanent: false,
+      },
     ];
   },
 
