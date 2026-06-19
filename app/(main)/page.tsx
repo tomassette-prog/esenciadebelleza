@@ -5,6 +5,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { ProductoCard } from "@/components/producto/ProductoCard";
 import { slugifyCategoria, formatCategoryName } from "@/lib/seo";
 import type { ProductoCatalogo } from "@/types/producto";
+import MarcasCarrusel from "@/components/layout/MarcasCarrusel";
 
 export const revalidate = 3600;
 
@@ -194,35 +195,7 @@ export default async function HomePage() {
 
       {/* ── Carrusel de marcas ── */}
       {marcasConLogo.length > 0 && (
-        <section className="py-12 bg-white border-y border-neutral-100 overflow-hidden">
-          <p className="text-center text-xs tracking-[0.3em] uppercase text-neutral-400 mb-8"
-            style={{ fontFamily: "var(--font-inter)" }}>
-            Nuestras marcas
-          </p>
-          <div className="relative">
-            {/* Gradientes laterales */}
-            <div className="absolute left-0 top-0 bottom-0 w-16 z-10 bg-gradient-to-r from-white to-transparent pointer-events-none" />
-            <div className="absolute right-0 top-0 bottom-0 w-16 z-10 bg-gradient-to-l from-white to-transparent pointer-events-none" />
-            {/* Track doble (duplicado para loop continuo) */}
-            <div className="flex animate-marquee whitespace-nowrap">
-              {[...marcasConLogo, ...marcasConLogo].map((marca, i) => (
-                <Link
-                  key={`${marca.id}-${i}`}
-                  href={`/marcas/${marca.slug}`}
-                  className="inline-flex items-center justify-center mx-8 shrink-0 opacity-60 hover:opacity-100 transition-opacity"
-                >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={marca.logo_url!}
-                    alt={marca.nombre}
-                    className="h-10 w-auto object-contain"
-                    loading="lazy"
-                  />
-                </Link>
-              ))}
-            </div>
-          </div>
-        </section>
+        <MarcasCarrusel marcas={marcasConLogo as { id: string; nombre: string; slug: string; logo_url: string }[]} />
       )}
 
       {/* ── Nuestras marcas ── */}
