@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import { createClient } from "@supabase/supabase-js";
 import { createClient as createServerClient } from "@/lib/supabase/server";
 import { BotonesCarritoHeader } from "@/components/carrito/BotonesCarritoHeader";
+import { LogoEsencia } from "@/components/layout/LogoEsencia";
 import { NavMegaMenu } from "@/components/layout/NavMegaMenu";
 import { LogoutBtn } from "@/components/layout/LogoutBtn";
 
@@ -91,14 +92,8 @@ export async function Header() {
         {/* Top bar */}
         <div className="flex items-center justify-between py-4">
           {/* Logo */}
-          <Link href="/" className="flex items-center leading-none" aria-label="Esencia de Belleza - Inicio">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src="/logo.svg"
-              alt="esenciadebelleza.es"
-              className="h-10 w-auto"
-              style={{ maxWidth: "260px" }}
-            />
+          <Link href="/" aria-label="Esencia de Belleza - Inicio">
+            <LogoEsencia />
           </Link>
 
           {/* Acciones */}
