@@ -73,7 +73,10 @@ export async function actualizarEstadoPedido(id: string, estado: string) {
 }
 
 // ── Lanzar pedido a WooCommerce (depeluqueriaproductos.com) ───────────────────
-export async function lanzarPedidoWoo(id: string) {
+export async function lanzarPedidoWoo(
+  id: string,
+  extra?: { notas_proveedor?: string }
+) {
   const supabase = createAdminClient();
 
   // Obtener pedido con líneas
@@ -86,54 +89,93 @@ export async function lanzarPedidoWoo(id: string) {
   if (errGet || !pedido) return { error: "Pedido no encontrado" };
   if (pedido.woo_order_id) return { error: "Este pedido ya fue enviado a WooCommerce" };
 
-  const wooUrl  = process.env.WOO_URL!;       // https://depeluqueriaproductos.com
-  const wooKey  = process.env.WOO_KEY!;        // ck_...
-  const wooSec  = process.env.WOO_SECRET!;     // cs_...
+  const wooUrl = process.env.WOO_URL!;
+  const wooKey = process.env.WOO_KEY!;
+  const wooSec = process.env.WOO_SECRET!;
 
   const dir = pedido.direccion_envio as Record<string, string>;
+  const refPago = (pedido.stripe_payment_id ?? pedido.id).toString().slice(0, 20).toUpperCase();
 
-  // Construir payload WooCommerce
+  // Nota clara para el almacén de depeluqueriaproductos
+  const notaCliente = [
+    `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+    `PEDIDO DESDE ESENCIA DE BELLEZA`,
+    `Ref. pago: ${refPago}`,
+    `Método pago: ${(pedido.metodo_pago ?? "—").toUpperCase()}`,
+    ``,
+    `CLIENTE:`,
+    `  ${dir.nombre ?? ""} ${dir.apellidos ?? ""}`,
+    `  ${pedido.email_cliente}`,
+    `  Tel: ${dir.telefono ?? "—"}`,
+    ``,
+    `ENTREGA EN:`,
+    `  ${dir.direccion ?? ""}`,
+    `  ${dir.codigo_postal ?? ""} ${dir.ciudad ?? ""} (${dir.provincia ?? ""})`,
+    ``,
+    `PRODUCTOS:`,
+    ...(pedido.pedidos_lineas as Array<{
+      sku: string; nombre_producto: string; nombre_variacion?: string; cantidad: number;
+    }>).map((l) =>
+      `  [${l.sku}] ${l.nombre_producto}${l.nombre_variacion ? ` - ${l.nombre_variacion}` : ""} x${l.cantidad}`
+    ),
+    ``,
+    extra?.notas_proveedor ? `NOTAS: ${extra.notas_proveedor}` : "",
+    `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+  ].filter((l) => l !== undefined).join("\n");
+
+  type LineaT = {
+    sku: string; nombre_producto: string; nombre_variacion?: string;
+    cantidad: number; precio_unitario: number; subtotal: number;
+  };
+
   const body = {
-    status:           "processing",
-    currency:         "EUR",
-    customer_note:    pedido.notas_internas ?? "",
+    status:        "processing",
+    currency:      "EUR",
+    set_paid:      true,              // el cliente ya pagó en esenciadebelleza.es
+    customer_note: notaCliente,
+    payment_method:       "esencia_belleza",
+    payment_method_title: `Esencia de Belleza · Ref: ${refPago}`,
     billing: {
-      first_name: dir.nombre    ?? "",
-      last_name:  dir.apellidos ?? "",
+      first_name: dir.nombre      ?? "",
+      last_name:  dir.apellidos   ?? "",
       email:      pedido.email_cliente,
-      phone:      dir.telefono  ?? "",
-      address_1:  dir.direccion ?? "",
-      city:       dir.ciudad    ?? "",
-      state:      dir.provincia ?? "",
+      phone:      dir.telefono    ?? "",
+      address_1:  dir.direccion   ?? "",
+      city:       dir.ciudad      ?? "",
+      state:      dir.provincia   ?? "",
       postcode:   dir.codigo_postal ?? "",
       country:    "ES",
     },
     shipping: {
-      first_name: dir.nombre    ?? "",
-      last_name:  dir.apellidos ?? "",
-      address_1:  dir.direccion ?? "",
-      city:       dir.ciudad    ?? "",
-      state:      dir.provincia ?? "",
+      first_name: dir.nombre      ?? "",
+      last_name:  dir.apellidos   ?? "",
+      phone:      dir.telefono    ?? "",
+      address_1:  dir.direccion   ?? "",
+      city:       dir.ciudad      ?? "",
+      state:      dir.provincia   ?? "",
       postcode:   dir.codigo_postal ?? "",
       country:    "ES",
     },
-    line_items: (pedido.pedidos_lineas as Array<{
-      sku: string; nombre_producto: string; nombre_variacion: string | null;
-      cantidad: number; precio_unitario: number;
-    }>).map((l) => ({
+    line_items: (pedido.pedidos_lineas as LineaT[]).map((l) => ({
+      name:     l.nombre_variacion
+                  ? `${l.nombre_producto} — ${l.nombre_variacion}`
+                  : l.nombre_producto,
       sku:      l.sku,
-      name:     l.nombre_variacion ? `${l.nombre_producto} - ${l.nombre_variacion}` : l.nombre_producto,
       quantity: l.cantidad,
-      price:    String(l.precio_unitario),
+      subtotal: l.subtotal.toFixed(2),
+      total:    l.subtotal.toFixed(2),
     })),
     shipping_lines: pedido.gastos_envio > 0 ? [{
       method_id:    "flat_rate",
       method_title: "Envío estándar",
-      total:        String(pedido.gastos_envio),
+      total:        pedido.gastos_envio.toFixed(2),
     }] : [],
     meta_data: [
-      { key: "_esencia_pedido_id",    value: pedido.id },
-      { key: "_esencia_metodo_pago",  value: pedido.metodo_pago ?? "" },
+      { key: "_origen",             value: "esenciadebelleza.es" },
+      { key: "_eb_pedido_id",       value: pedido.id },
+      { key: "_eb_referencia_pago", value: refPago },
+      { key: "_eb_metodo_pago",     value: pedido.metodo_pago ?? "" },
+      { key: "_eb_total_cliente",   value: pedido.total.toFixed(2) },
     ],
   };
 
@@ -150,12 +192,11 @@ export async function lanzarPedidoWoo(id: string) {
 
     if (!res.ok) {
       const txt = await res.text();
-      return { error: `WooCommerce respondió ${res.status}: ${txt.slice(0, 200)}` };
+      return { error: `WooCommerce respondió ${res.status}: ${txt.slice(0, 300)}` };
     }
 
     const woo = await res.json();
 
-    // Guardar el ID de WooCommerce en el pedido
     await supabase.from("pedidos").update({
       woo_order_id:   woo.id,
       woo_estado:     "enviado",
@@ -164,7 +205,7 @@ export async function lanzarPedidoWoo(id: string) {
 
     revalidatePath("/admin/pedidos");
     revalidatePath(`/admin/pedidos/${id}`);
-    return { wooId: woo.id, error: null };
+    return { wooId: woo.id as number, error: null };
 
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e);
