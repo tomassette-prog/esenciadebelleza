@@ -7,6 +7,7 @@ import { Breadcrumb } from "@/components/layout/Breadcrumb";
 import { buildBreadcrumbJsonLdItems, buildBreadcrumbJsonLd, slugifyCategoria, formatPrice } from "@/lib/seo";
 
 export const revalidate = 3600;
+export const dynamicParams = true;
 
 interface PageProps {
   params: Promise<{ marca: string }>;
@@ -14,8 +15,8 @@ interface PageProps {
 
 export async function generateStaticParams() {
   const supabase = createAdminClient();
-  const { data } = await supabase.from("marcas").select("slug");
-  return (data ?? []).map((m) => ({ marca: m.slug }));
+  const { data } = await supabase.from("marcas").select("slug").eq("activa", true);
+  return (data ?? []).filter((m) => m.slug).map((m) => ({ marca: m.slug }));
 }
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
