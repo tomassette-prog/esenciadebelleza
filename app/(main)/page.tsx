@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { ProductoCard } from "@/components/producto/ProductoCard";
 import { slugifyCategoria, formatCategoryName } from "@/lib/seo";
 import type { ProductoCatalogo } from "@/types/producto";
@@ -16,6 +17,28 @@ export const metadata: Metadata = {
 
 export default async function HomePage() {
   const supabase = await createClient();
+
+  // Posts destacados para la sección del blog en home
+  const adminClient = createAdminClient();
+  const { data: postsDestacados } = await adminClient
+    .from("posts")
+    .select("slug, titulo, resumen, imagen_url, published_at")
+    .eq("publicado", true)
+    .eq("destacado", true)
+    .order("published_at", { ascending: false })
+    .limit(3);
+
+  // Si no hay destacados, tomar los 3 más recientes
+  const { data: postsRecientes } = !postsDestacados?.length
+    ? await adminClient
+        .from("posts")
+        .select("slug, titulo, resumen, imagen_url, published_at")
+        .eq("publicado", true)
+        .order("published_at", { ascending: false })
+        .limit(3)
+    : { data: null };
+
+  const posts = postsDestacados?.length ? postsDestacados : (postsRecientes ?? []);
 
   // Novedades / destacados para la home (solo con stock)
   const { data: destacadosRaw } = await supabase
@@ -288,6 +311,84 @@ export default async function HomePage() {
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-x-4 gap-y-10">
               {nuevos.map((p, i) => (
                 <ProductoCard key={p.id} producto={p} priority={i < 4} />
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* ── Blog — artículos destacados ── */}
+      {posts.length > 0 && (
+        <section className="py-16 px-6 bg-white">
+          <div className="container-main">
+            <div className="flex items-baseline justify-between mb-10">
+              <div>
+                <p className="text-xs tracking-[0.3em] uppercase mb-1" style={{ color: "var(--color-oro)" }}>
+                  Consejos y tendencias
+                </p>
+                <h2 className="text-2xl font-light text-neutral-900" style={{ fontFamily: "var(--font-cormorant)" }}>
+                  Del blog
+                </h2>
+              </div>
+              <Link href="/blog" className="text-xs tracking-widest uppercase text-neutral-400 hover:text-neutral-700 transition-colors">
+                Ver todos →
+              </Link>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+              {posts.map((post) => (
+                <article key={post.slug} className="group flex flex-col">
+                  {/* Imagen */}
+                  <Link
+                    href={`/blog/${post.slug}`}
+                    className="block overflow-hidden aspect-[4/3] bg-neutral-100 mb-4"
+                  >
+                    {post.imagen_url ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={post.imagen_url}
+                        alt={post.titulo}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                        loading="lazy"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center">
+                        <div className="w-8 h-px bg-neutral-300" />
+                      </div>
+                    )}
+                  </Link>
+
+                  {/* Fecha */}
+                  {post.published_at && (
+                    <p className="text-xs tracking-wider uppercase text-neutral-400 mb-2">
+                      {new Date(post.published_at).toLocaleDateString("es-ES", {
+                        day: "numeric", month: "long", year: "numeric",
+                      })}
+                    </p>
+                  )}
+
+                  {/* Título */}
+                  <h3
+                    className="text-lg font-light text-neutral-900 leading-snug mb-3 group-hover:text-[#C9A84C] transition-colors"
+                    style={{ fontFamily: "var(--font-cormorant)" }}
+                  >
+                    <Link href={`/blog/${post.slug}`}>{post.titulo}</Link>
+                  </h3>
+
+                  {/* Resumen */}
+                  {post.resumen && (
+                    <p className="text-sm text-neutral-500 leading-relaxed line-clamp-2 flex-1">
+                      {post.resumen}
+                    </p>
+                  )}
+
+                  <Link
+                    href={`/blog/${post.slug}`}
+                    className="mt-4 text-xs tracking-widest uppercase text-neutral-900 hover:text-[#C9A84C] transition-colors inline-flex items-center gap-1.5"
+                  >
+                    Leer artículo →
+                  </Link>
+                </article>
               ))}
             </div>
           </div>
