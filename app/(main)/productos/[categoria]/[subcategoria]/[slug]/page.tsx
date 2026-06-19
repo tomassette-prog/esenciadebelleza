@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import Image from "next/image";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
@@ -150,17 +151,15 @@ export default async function ProductoPage({ params, searchParams }: PageProps) 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-20">
           {/* Galería */}
           <div className="space-y-4">
-            {/* Imagen principal con priority para LCP */}
-            <div className="aspect-square bg-neutral-50 overflow-hidden">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
+            {/* Imagen principal — next/image para LCP optimizado (WebP/AVIF auto) */}
+            <div className="aspect-square bg-neutral-50 overflow-hidden relative">
+              <Image
                 src={variacionActiva?.imagen_url ?? p.imagen_principal_url ?? "/placeholder.webp"}
                 alt={`${p.nombre}${variacionActiva ? ` — ${variacionActiva.nombre_variacion}` : ""}`}
-                className="w-full h-full object-contain"
-                loading="eager"     // above the fold = priority
-                decoding="async"
-                width={800}
-                height={800}
+                fill
+                sizes="(max-width: 1024px) 100vw, 50vw"
+                className="object-contain"
+                priority
               />
             </div>
           </div>
