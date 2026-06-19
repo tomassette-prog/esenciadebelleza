@@ -1,4 +1,4 @@
-import Link from "next/link";
+﻿import Link from "next/link";
 import type { ReactNode } from "react";
 
 export default function AuthLayout({ children }: { children: ReactNode }) {
@@ -36,14 +36,14 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
 
         {/* Claim inferior */}
         <div className="relative z-10">
-          <div className="w-10 h-px mb-4" style={{ backgroundColor: "var(--color-oro, #C9A84C)" }} />
+          <div className="w-10 h-px mb-4" style={{ backgroundColor: "var(--color-oro, #C4857A)" }} />
           <p className="text-white/80 text-sm leading-relaxed max-w-xs font-light">
             Productos profesionales de belleza con precios para particulares y tarifas exclusivas para profesionales del sector.
           </p>
           <Link
             href="/profesionales"
             className="inline-block mt-4 text-xs tracking-widest uppercase border-b pb-0.5 text-white/60 hover:text-white transition-colors"
-            style={{ borderColor: "var(--color-oro, #C9A84C)" }}
+            style={{ borderColor: "var(--color-oro, #C4857A)" }}
           >
             Soy profesional →
           </Link>

@@ -1,4 +1,4 @@
-import { redirect } from "next/navigation";
+﻿import { redirect } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { logout, actualizarPerfil } from "@/actions/auth";
@@ -107,7 +107,7 @@ export default async function CuentaPage({
         <div
           className={`mb-6 p-4 border text-sm flex items-center gap-3 ${
             b2bAprobado
-              ? "bg-[#C9A84C]/10 border-[#C9A84C]/30 text-[#8B6914]"
+              ? "bg-[#C4857A]/10 border-[#C4857A]/30 text-[#7A4A40]"
               : "bg-amber-50 border-amber-200 text-amber-800"
           }`}
         >

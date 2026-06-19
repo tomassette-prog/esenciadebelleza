@@ -1,4 +1,4 @@
-import Link from "next/link";
+﻿import Link from "next/link";
 import { cookies } from "next/headers";
 import { createClient } from "@supabase/supabase-js";
 import { createClient as createServerClient } from "@/lib/supabase/server";
@@ -138,7 +138,7 @@ export async function Header() {
                   </svg>
                   <span className="hidden sm:block text-xs">
                     {esProfesional && (
-                      <span className="text-[#C9A84C] font-medium mr-1">PRO</span>
+                      <span className="text-[#C4857A] font-medium mr-1">PRO</span>
                     )}
                     {nombre}
                   </span>

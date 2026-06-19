@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
 
@@ -67,7 +67,7 @@ export function BlogStrip({ posts }: { posts: PostPreview[] }) {
                   </p>
                 )}
                 <h3
-                  className="text-base font-light text-neutral-900 leading-snug mb-2 group-hover:text-[#C9A84C] transition-colors line-clamp-2"
+                  className="text-base font-light text-neutral-900 leading-snug mb-2 group-hover:text-[#C4857A] transition-colors line-clamp-2"
                   style={{ fontFamily: "var(--font-cormorant)" }}
                 >
                   <Link href={`/blog/${post.slug}`}>{post.titulo}</Link>
@@ -79,7 +79,7 @@ export function BlogStrip({ posts }: { posts: PostPreview[] }) {
                 )}
                 <Link
                   href={`/blog/${post.slug}`}
-                  className="mt-3 text-[10px] tracking-widest uppercase text-neutral-700 hover:text-[#C9A84C] transition-colors"
+                  className="mt-3 text-[10px] tracking-widest uppercase text-neutral-700 hover:text-[#C4857A] transition-colors"
                 >
                   Leer →
                 </Link>

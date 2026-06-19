@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+﻿import type { Metadata } from "next";
 import Link from "next/link";
 import { createAdminClient } from "@/lib/supabase/admin";
 import EliminarPostBtn from "@/components/admin/EliminarPostBtn";
@@ -82,7 +82,7 @@ export default async function AdminBlogPage() {
                         {post.publicado ? "Publicado" : "Borrador"}
                       </span>
                       {post.destacado && (
-                        <span className="text-xs px-2 py-0.5 bg-[#C9A84C]/10 text-[#8B6914] border border-[#C9A84C]/30">
+                        <span className="text-xs px-2 py-0.5 bg-[#C4857A]/10 text-[#7A4A40] border border-[#C4857A]/30">
                           Destacado
                         </span>
                       )}

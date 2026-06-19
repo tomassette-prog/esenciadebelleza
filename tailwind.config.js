@@ -13,16 +13,16 @@ module.exports = {
       },
       colors: {
         oro: {
-          DEFAULT: "#C9A84C",
-          light:   "#E8D5A3",
-          dark:    "#8B6914",
+          DEFAULT: "#C4857A",
+          light:   "#E8C8C0",
+          dark:    "#7A4A40",
         },
       },
       typography: {
         DEFAULT: {
           css: {
             color: "#525252",
-            a: { color: "#C9A84C", "&:hover": { color: "#8B6914" } },
+            a: { color: "#C4857A", "&:hover": { color: "#7A4A40" } },
             h2: { fontFamily: "var(--font-cormorant), Georgia, serif", fontWeight: "300" },
             h3: { fontFamily: "var(--font-cormorant), Georgia, serif", fontWeight: "400" },
           },

@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+﻿import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import Image from "next/image";
 import { createClient } from "@/lib/supabase/server";
@@ -205,7 +205,7 @@ export default async function ProductoPage({ params, searchParams }: PageProps) 
                         }).format(variacionActiva.precio_b2c)}
                       </span>
                     </div>
-                    <span className="text-xs tracking-wider uppercase text-[#8B6914]">
+                    <span className="text-xs tracking-wider uppercase text-[#7A4A40]">
                       Precio profesional B2B
                     </span>
                   </>

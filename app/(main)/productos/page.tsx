@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+﻿import type { Metadata } from "next";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { ProductoCard } from "@/components/producto/ProductoCard";
@@ -175,7 +175,7 @@ export default async function ProductosPage() {
 
                   {/* Borde dorado al hover */}
                   <div
-                    className="absolute inset-0 border-2 border-transparent group-hover:border-[#C9A84C] transition-colors duration-300 pointer-events-none"
+                    className="absolute inset-0 border-2 border-transparent group-hover:border-[#C4857A] transition-colors duration-300 pointer-events-none"
                   />
                 </Link>
               ))}

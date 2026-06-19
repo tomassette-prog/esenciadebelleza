@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+﻿import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -154,7 +154,7 @@ export default async function PostPage({ params }: PageProps) {
             </h1>
 
             {post.resumen && (
-              <p className="text-lg text-neutral-500 leading-relaxed border-l-2 border-[#C9A84C] pl-4">
+              <p className="text-lg text-neutral-500 leading-relaxed border-l-2 border-[#C4857A] pl-4">
                 {post.resumen}
               </p>
             )}
@@ -180,7 +180,7 @@ export default async function PostPage({ params }: PageProps) {
               prose-h2:text-2xl prose-h2:mt-10 prose-h2:mb-4
               prose-h3:text-xl prose-h3:mt-8 prose-h3:mb-3
               prose-p:text-neutral-600 prose-p:leading-relaxed
-              prose-a:text-[#C9A84C] prose-a:no-underline hover:prose-a:underline
+              prose-a:text-[#C4857A] prose-a:no-underline hover:prose-a:underline
               prose-strong:text-neutral-800
               prose-img:rounded prose-img:max-w-full
               prose-table:text-sm prose-th:text-neutral-700 prose-th:font-medium
@@ -224,7 +224,7 @@ export default async function PostPage({ params }: PageProps) {
                     </Link>
                   )}
                   <h3
-                    className="text-lg font-light text-neutral-900 group-hover:text-[#C9A84C] transition-colors leading-snug"
+                    className="text-lg font-light text-neutral-900 group-hover:text-[#C4857A] transition-colors leading-snug"
                     style={{ fontFamily: "var(--font-cormorant)" }}
                   >
                     <Link href={`/blog/${r.slug}`}>{r.titulo}</Link>

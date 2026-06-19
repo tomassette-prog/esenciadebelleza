@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useFormState, useFormStatus } from "react-dom";
 import { useRef, useState, useCallback } from "react";
@@ -547,13 +547,13 @@ export default function PostForm({ post }: Props) {
       )}
 
       {/* ═══ IMPORTADOR GEMINI ═══ */}
-      <div className="border border-[#C9A84C]/40 bg-[#C9A84C]/5">
+      <div className="border border-[#C4857A]/40 bg-[#C4857A]/5">
         <button
           type="button"
           onClick={() => setImportOpen((o) => !o)}
           className="w-full flex items-center justify-between px-5 py-3 text-left"
         >
-          <span className="flex items-center gap-2 text-xs tracking-widest uppercase text-[#8B6914] font-medium">
+          <span className="flex items-center gap-2 text-xs tracking-widest uppercase text-[#7A4A40] font-medium">
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
                 d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414A1 1 0 0119 9.414V19a2 2 0 01-2 2z" />
@@ -562,11 +562,11 @@ export default function PostForm({ post }: Props) {
               ? "Cerrar importador"
               : `📋 Pegar JSON de Gemini — rellena todos los campos automáticamente${titulo ? " ✓ cargado" : ""}`}
           </span>
-          <span className="text-[#8B6914]">{importOpen ? "▲" : "▼"}</span>
+          <span className="text-[#7A4A40]">{importOpen ? "▲" : "▼"}</span>
         </button>
 
         {importOpen && (
-          <div className="px-5 pb-5 space-y-3 border-t border-[#C9A84C]/30 pt-4">
+          <div className="px-5 pb-5 space-y-3 border-t border-[#C4857A]/30 pt-4">
             <p className="text-xs text-neutral-500">
               Pega aquí el JSON completo que devuelve Gemini (el bloque <code className="bg-neutral-100 px-1">{"{ ... }"}</code> entero).
               Se rellenarán <strong>título, slug, resumen, contenido y todos los campos SEO</strong>.
@@ -576,7 +576,7 @@ export default function PostForm({ post }: Props) {
               value={jsonInput}
               onChange={(e) => setJsonInput(e.target.value)}
               rows={10}
-              className="w-full border border-neutral-200 px-3 py-2.5 text-xs font-mono text-neutral-600 focus:outline-none focus:border-[#C9A84C] transition-colors resize-y bg-white"
+              className="w-full border border-neutral-200 px-3 py-2.5 text-xs font-mono text-neutral-600 focus:outline-none focus:border-[#C4857A] transition-colors resize-y bg-white"
               placeholder={'{\n  "titulo": "Keratina vs alisado brasileño...",\n  "slug": "keratina-vs-alisado...",\n  "resumen": "...",\n  "contenido_html": "<h2>...</h2><p>...</p>",\n  "seo_title": "...",\n  "seo_description": "...",\n  "keywords": "keratina, alisado..."\n}'}
             />
             {jsonError && <p className="text-xs text-red-600">{jsonError}</p>}
@@ -584,7 +584,7 @@ export default function PostForm({ post }: Props) {
               type="button"
               onClick={cargarJson}
               disabled={!jsonInput.trim()}
-              className="px-6 py-2.5 bg-[#C9A84C] text-white text-xs tracking-widest uppercase hover:bg-[#8B6914] disabled:opacity-40 transition-colors"
+              className="px-6 py-2.5 bg-[#C4857A] text-white text-xs tracking-widest uppercase hover:bg-[#7A4A40] disabled:opacity-40 transition-colors"
             >
               Cargar y rellenar formulario →
             </button>
@@ -953,7 +953,7 @@ export default function PostForm({ post }: Props) {
           </span>
           <div className="flex items-center gap-3">
             {(titulo || contenidoHtml) && !socialFacebook && (
-              <span className="text-xs text-[#C9A84C]">Clic para generar automáticamente</span>
+              <span className="text-xs text-[#C4857A]">Clic para generar automáticamente</span>
             )}
             <span className="text-neutral-400">{rrssOpen ? "▲" : "▼"}</span>
           </div>
@@ -1140,7 +1140,7 @@ export default function PostForm({ post }: Props) {
 
               {/* Resumen */}
               {resumen && (
-                <p className="text-base text-neutral-500 leading-relaxed border-l-2 border-[#C9A84C] pl-4 mb-8">
+                <p className="text-base text-neutral-500 leading-relaxed border-l-2 border-[#C4857A] pl-4 mb-8">
                   {resumen}
                 </p>
               )}
@@ -1161,7 +1161,7 @@ export default function PostForm({ post }: Props) {
                     prose-h2:text-2xl prose-h2:mt-8 prose-h2:mb-3
                     prose-h3:text-xl prose-h3:mt-6 prose-h3:mb-2
                     prose-p:text-neutral-600 prose-p:leading-relaxed
-                    prose-a:text-[#C9A84C] prose-a:no-underline
+                    prose-a:text-[#C4857A] prose-a:no-underline
                     prose-strong:text-neutral-800
                     prose-table:text-sm"
                   dangerouslySetInnerHTML={{ __html: contenidoHtml }}

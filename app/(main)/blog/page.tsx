@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+﻿import type { Metadata } from "next";
 import Link from "next/link";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Breadcrumb } from "@/components/layout/Breadcrumb";
@@ -68,7 +68,7 @@ export default async function BlogPage() {
                 </p>
 
                 <h2
-                  className="text-xl font-light text-neutral-900 leading-snug mb-3 group-hover:text-[#C9A84C] transition-colors"
+                  className="text-xl font-light text-neutral-900 leading-snug mb-3 group-hover:text-[#C4857A] transition-colors"
                   style={{ fontFamily: "var(--font-cormorant)" }}
                 >
                   <Link href={`/blog/${post.slug}`}>{post.titulo}</Link>
@@ -82,7 +82,7 @@ export default async function BlogPage() {
 
                 <Link
                   href={`/blog/${post.slug}`}
-                  className="mt-4 text-xs tracking-widest uppercase text-neutral-900 hover:text-[#C9A84C] transition-colors inline-flex items-center gap-2"
+                  className="mt-4 text-xs tracking-widest uppercase text-neutral-900 hover:text-[#C4857A] transition-colors inline-flex items-center gap-2"
                 >
                   Leer artículo →
                 </Link>
