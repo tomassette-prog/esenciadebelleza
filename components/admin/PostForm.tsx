@@ -161,20 +161,71 @@ function aplicarEnlaces(html: string, enlaces: EnlaceProducto[]): string {
   let result = html;
   for (const enlace of enlaces) {
     if (!enlace.urlCorrecta) continue;
-    const nombreEscapado = enlace.nombre.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const ne = enlace.nombre.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const attr = `href="${enlace.urlCorrecta}" target="_blank" rel="noopener noreferrer"`;
 
-    // Actualizar href en anchors existentes
-    const regexAnchor = new RegExp(
-      `<a([^>]*)href="[^"]*"([^>]*)>\\s*\\[ENLACE_PRODUCTO:\\s*${nombreEscapado}\\s*\\]`,
+    // Patrón: <a href="...">[ENLACE_PRODUCTO: Nombre] texto extra</a>
+    // Necesitamos extraer el texto extra FUERA del anchor y dejar solo el nombre como ancla
+    const regexConCierre = new RegExp(
+      `<a[^>]*href="[^"]*"[^>]*>\\s*\\[ENLACE_PRODUCTO:\\s*${ne}\\s*\\](.*?)<\\/a>`,
+      "gis"
+    );
+    result = result.replace(regexConCierre, (_, textoExtra) => {
+      const extra = textoExtra?.trim() ?? "";
+      return `<a ${attr}>${enlace.nombre}</a>${extra ? " " + extra : ""}`;
+    });
+
+    // Patrón: <a href="...">[ENLACE_PRODUCTO: Nombre] SIN cierre en la misma expresión
+    const regexSinCierre = new RegExp(
+      `<a([^>]*)href="[^"]*"([^>]*)>\\s*\\[ENLACE_PRODUCTO:\\s*${ne}\\s*\\]`,
       "gi"
     );
-    result = result.replace(regexAnchor, `<a$1href="${enlace.urlCorrecta}"$2>${enlace.nombre}`);
+    result = result.replace(regexSinCierre, `<a ${attr}>${enlace.nombre}</a>`);
 
-    // Texto suelto → crear anchor
-    const regexSuelto = new RegExp(`\\[ENLACE_PRODUCTO:\\s*${nombreEscapado}\\s*\\]`, "gi");
-    result = result.replace(regexSuelto, `<a href="${enlace.urlCorrecta}">${enlace.nombre}</a>`);
+    // Patrón: texto suelto [ENLACE_PRODUCTO: Nombre]
+    const regexSuelto = new RegExp(`\\[ENLACE_PRODUCTO:\\s*${ne}\\s*\\]`, "gi");
+    result = result.replace(regexSuelto, `<a ${attr}>${enlace.nombre}</a>`);
   }
   return result;
+}
+
+// ── Generador de FAQ ──────────────────────────────────────────────────────────
+
+function stripHtmlSimple(html: string): string {
+  return html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+}
+
+/**
+ * Genera un bloque FAQ con <details><summary> a partir de los H2 del post.
+ * Optimizado para Google FAQ Rich Results y para el fragmento de respuesta.
+ */
+function generarFaqHtml(html: string): string {
+  // Extraer pares H2 + primer párrafo siguiente
+  const pares: { pregunta: string; respuesta: string }[] = [];
+
+  // Buscar todos los H2 con su párrafo siguiente
+  const regexH2 = /<h2[^>]*>([\s\S]*?)<\/h2>[\s\S]*?<p[^>]*>([\s\S]*?)<\/p>/gi;
+  let match;
+  while ((match = regexH2.exec(html)) !== null && pares.length < 6) {
+    const pregunta = stripHtmlSimple(match[1]).trim();
+    const respuesta = stripHtmlSimple(match[2]).trim().slice(0, 250);
+    if (pregunta && respuesta && pregunta.length < 120) {
+      // Convertir el H2 en pregunta si no termina en "?"
+      const preguntaFinal = pregunta.endsWith("?") ? pregunta : `¿${pregunta}?`;
+      pares.push({ pregunta: preguntaFinal, respuesta });
+    }
+  }
+
+  if (pares.length === 0) return "";
+
+  const items = pares
+    .map(
+      (p) =>
+        `<details>\n<summary>${p.pregunta}</summary>\n<p>${p.respuesta}</p>\n</details>`
+    )
+    .join("\n");
+
+  return `\n<h2>Preguntas frecuentes</h2>\n${items}`;
 }
 
 // ── Generador de contenido RRSS ───────────────────────────────────────────────
@@ -299,6 +350,16 @@ export default function PostForm({ post }: Props) {
 
   // Previsualización
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [faqGenerado, setFaqGenerado] = useState(false);
+
+  function agregarFaq() {
+    const faqHtml = generarFaqHtml(contenidoHtml);
+    if (!faqHtml) { alert("No se encontraron secciones H2 para generar FAQs. Asegúrate de que el contenido tiene subtítulos."); return; }
+    // Si ya hay un bloque FAQ, reemplazarlo
+    const sinFaqPrevio = contenidoHtml.replace(/<h2[^>]*>Preguntas frecuentes<\/h2>[\s\S]*$/i, "").trim();
+    setContenidoHtml(sinFaqPrevio + faqHtml);
+    setFaqGenerado(true);
+  }
 
   // Redes sociales
   const [socialFacebook,  setSocialFacebook]  = useState(post?.social_facebook  ?? "");
@@ -716,23 +777,36 @@ export default function PostForm({ post }: Props) {
       <div>
         <div className="flex items-center justify-between mb-1.5">
           <label className="text-xs tracking-wider uppercase text-neutral-600">Contenido HTML *</label>
-          {enlaces.length > 0 && !enlacesAplicados && (
-            <span className="text-xs text-amber-600">
-              ⚠ Aplica los {enlaces.length} enlaces antes de publicar
-            </span>
-          )}
-          {enlacesAplicados && (
-            <span className="text-xs text-green-600">✓ Enlaces aplicados</span>
-          )}
+          <div className="flex items-center gap-3">
+            {enlaces.length > 0 && !enlacesAplicados && (
+              <span className="text-xs text-amber-600">⚠ Aplica los {enlaces.length} enlaces antes de publicar</span>
+            )}
+            {enlacesAplicados && <span className="text-xs text-green-600">✓ Enlaces aplicados</span>}
+            <button
+              type="button"
+              onClick={agregarFaq}
+              title="Genera automáticamente una sección FAQ con <details><summary> a partir de los H2 del post. Ideal para posicionamiento en Google."
+              className={`text-xs px-3 py-1 border transition-colors tracking-wider uppercase flex items-center gap-1.5 ${
+                faqGenerado
+                  ? "border-green-300 bg-green-50 text-green-700"
+                  : "border-neutral-300 text-neutral-600 hover:border-neutral-900 hover:text-neutral-900"
+              }`}
+            >
+              {faqGenerado ? "✓ FAQ añadido" : "🤖 Generar FAQ"}
+            </button>
+          </div>
         </div>
         <textarea
           name="contenido_html"
           required
           rows={22}
           value={contenidoHtml}
-          onChange={(e) => setContenidoHtml(e.target.value)}
+          onChange={(e) => { setContenidoHtml(e.target.value); setFaqGenerado(false); }}
           className="w-full border border-neutral-200 px-3 py-2.5 text-sm focus:outline-none focus:border-neutral-900 transition-colors resize-y font-mono text-xs text-neutral-600"
         />
+        <p className="text-xs text-neutral-400 mt-1">
+          El FAQ genera una sección con <code>&lt;details&gt;&lt;summary&gt;</code> al final del post — Google lo muestra como <strong>fragmentos enriquecidos</strong> en los resultados de búsqueda.
+        </p>
       </div>
 
       {/* Imagen */}

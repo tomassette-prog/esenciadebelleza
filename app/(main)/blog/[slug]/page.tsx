@@ -91,12 +91,40 @@ export default async function PostPage({ params }: PageProps) {
     mainEntityOfPage: { "@type": "WebPage", "@id": `https://esenciadebelleza.es/blog/${post.slug}` },
   };
 
+  // FAQPage JSON-LD — extraer <details><summary> del contenido
+  const faqItems: { pregunta: string; respuesta: string }[] = [];
+  if (post.contenido_html) {
+    const regexDetails = /<details[^>]*>[\s\S]*?<summary[^>]*>([\s\S]*?)<\/summary>([\s\S]*?)<\/details>/gi;
+    let faqMatch;
+    while ((faqMatch = regexDetails.exec(post.contenido_html)) !== null) {
+      const pregunta = faqMatch[1].replace(/<[^>]+>/g, "").trim();
+      const respuesta = faqMatch[2].replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 300);
+      if (pregunta && respuesta) faqItems.push({ pregunta, respuesta });
+    }
+  }
+
+  const faqJsonLd = faqItems.length > 0 ? {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    mainEntity: faqItems.map(({ pregunta, respuesta }) => ({
+      "@type": "Question",
+      name: pregunta,
+      acceptedAnswer: { "@type": "Answer", text: respuesta },
+    })),
+  } : null;
+
   return (
     <>
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(articleJsonLd) }}
       />
+      {faqJsonLd && (
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(faqJsonLd) }}
+        />
+      )}
 
       <main className="container-main py-12 lg:py-16">
         <Breadcrumb
@@ -155,8 +183,13 @@ export default async function PostPage({ params }: PageProps) {
               prose-a:text-[#C9A84C] prose-a:no-underline hover:prose-a:underline
               prose-strong:text-neutral-800
               prose-table:text-sm prose-th:text-neutral-700 prose-th:font-medium
-              prose-td:text-neutral-600"
-            dangerouslySetInnerHTML={{ __html: post.contenido_html }}
+              prose-td:text-neutral-600
+              [&_details]:border [&_details]:border-neutral-200 [&_details]:rounded-sm [&_details]:mb-3 [&_details]:overflow-hidden
+              [&_summary]:cursor-pointer [&_summary]:px-4 [&_summary]:py-3 [&_summary]:font-medium [&_summary]:text-neutral-800 [&_summary]:bg-neutral-50 [&_summary]:hover:bg-neutral-100 [&_summary]:list-none [&_summary]:flex [&_summary]:items-center [&_summary]:justify-between
+              [&_summary::-webkit-details-marker]:hidden
+              [&_details_p]:px-4 [&_details_p]:py-3 [&_details_p]:text-neutral-600 [&_details_p]:border-t [&_details_p]:border-neutral-200 [&_details_p]:m-0
+              [&_details[open]_summary]:bg-neutral-100"
+            dangerouslySetInnerHTML={{ __html: post.contenido_html ?? "" }}
           />
 
           {/* Volver al blog */}
