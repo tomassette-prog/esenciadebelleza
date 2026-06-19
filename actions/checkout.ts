@@ -290,13 +290,9 @@ export async function iniciarPagoStripe(
     mode:           "payment",
     customer_email: datosEnvio.email,
     locale:         "es",
-    // Stripe activa automáticamente los métodos disponibles para España:
-    // Visa/Mastercard, Klarna, PayPal, Apple Pay, Google Pay, Bizum, SEPA...
-    payment_method_types: [
-      "card",
-      "klarna",
-      "paypal",
-    ],
+    // Stripe muestra automáticamente todos los métodos habilitados en tu cuenta:
+    // Tarjeta, Apple Pay, Google Pay, PayPal, Klarna, Link, etc.
+    automatic_payment_methods: { enabled: true },
     billing_address_collection: "auto",
     line_items: [
       ...lineas.map((l) => ({
