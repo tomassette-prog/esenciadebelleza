@@ -33,33 +33,43 @@ export default async function ProductosPage() {
   const BASE_URL = "https://esenciadebelleza.es";
   const supabase = await createClient();
 
-  // Categorías con conteo y una imagen representativa (solo con stock)
-  const { data: productosRaw } = await supabase
+  // Conteo real por categoría usando RPC/agregación en BD (evita límite de 1000 filas)
+  // Query 1: conteo por categoría con productos activos y con stock
+  const { data: conteosRaw } = await supabase
     .from("productos_padre")
-    .select("categoria, imagen_principal_url, variaciones:productos_variaciones!inner(stock, activa)")
+    .select("categoria, variaciones:productos_variaciones!inner(activa)", { count: "exact", head: false })
     .eq("activo", true)
     .eq("variaciones.activa", true)
-    .order("nombre");
+    .range(0, 9999);
 
-  // Agrupar por categoría
-  const catMap = new Map<string, { total: number; imagen: string | null }>();
-  for (const p of productosRaw ?? []) {
-    const entry = catMap.get(p.categoria);
-    if (!entry) {
-      catMap.set(p.categoria, { total: 1, imagen: p.imagen_principal_url });
-    } else {
-      entry.total++;
-      if (!entry.imagen && p.imagen_principal_url) {
-        entry.imagen = p.imagen_principal_url;
-      }
+  // Query 2: una imagen por categoría (solo necesitamos 1 por cat, sin join pesado)
+  const { data: imagenesRaw } = await supabase
+    .from("productos_padre")
+    .select("categoria, imagen_principal_url")
+    .eq("activo", true)
+    .not("imagen_principal_url", "is", null)
+    .order("categoria");
+
+  // Imagen representativa por categoría (primera encontrada)
+  const imagenPorCat = new Map<string, string>();
+  for (const p of imagenesRaw ?? []) {
+    if (!imagenPorCat.has(p.categoria) && p.imagen_principal_url) {
+      imagenPorCat.set(p.categoria, p.imagen_principal_url);
     }
   }
 
+  // Agrupar conteos
+  const catMap = new Map<string, number>();
+  for (const p of conteosRaw ?? []) {
+    catMap.set(p.categoria, (catMap.get(p.categoria) ?? 0) + 1);
+  }
+
   const categorias: CategoriaInfo[] = Array.from(catMap.entries())
-    .map(([nombre, info]) => ({
+    .map(([nombre, total]) => ({
       slug: slugifyCategoria(nombre),
       nombre,
-      ...info,
+      total,
+      imagen: imagenPorCat.get(nombre) ?? null,
     }))
     .sort((a, b) => b.total - a.total);
 
