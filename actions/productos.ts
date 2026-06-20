@@ -255,6 +255,68 @@ export async function eliminarProducto(id: string): Promise<{ error?: string }> 
   return {};
 }
 
+// ─── Toggle flag de carrusel (oferta / nuevo / destacado) ────────────────────
+export async function toggleCarruselFlag(
+  productoId: string,
+  flag: "oferta" | "nuevo" | "destacado",
+  valor: boolean
+): Promise<{ error?: string; ok?: boolean }> {
+  await verificarAdmin();
+  const supabase = createAdminClient();
+
+  const { error } = await supabase
+    .from("productos_padre")
+    .update({ [flag]: valor })
+    .eq("id", productoId);
+
+  if (error) return { error: error.message };
+
+  revalidatePath("/");
+  revalidatePath("/productos");
+  return { ok: true };
+}
+
+// ─── Buscar productos para el panel de carruseles ─────────────────────────────
+export async function buscarProductosCarrusel(q: string): Promise<{
+  id: string;
+  nombre: string;
+  marca: string | null;
+  imagen_principal_url: string | null;
+  oferta: boolean;
+  nuevo: boolean;
+  destacado: boolean;
+}[]> {
+  await verificarAdmin();
+  const supabase = createAdminClient();
+
+  let query = supabase
+    .from("productos_padre")
+    .select("id, nombre, imagen_principal_url, oferta, nuevo, destacado, marca:marcas(nombre)")
+    .eq("activo", true)
+    .order("nombre")
+    .limit(40);
+
+  if (q.trim()) {
+    query = query.ilike("nombre", `%${q.trim()}%`);
+  } else {
+    // Sin búsqueda: mostrar los que ya están en algún carrusel
+    query = query.or("oferta.eq.true,nuevo.eq.true,destacado.eq.true");
+  }
+
+  const { data, error } = await query;
+  if (error) return [];
+
+  return (data ?? []).map((p) => ({
+    id: p.id,
+    nombre: p.nombre,
+    marca: (p.marca as { nombre: string } | null)?.nombre ?? null,
+    imagen_principal_url: p.imagen_principal_url,
+    oferta: p.oferta ?? false,
+    nuevo: p.nuevo ?? false,
+    destacado: p.destacado ?? false,
+  }));
+}
+
 // ─── Crear variación ──────────────────────────────────────────────────────────
 export async function crearVariacion(
   _prev: { error?: string } | null,

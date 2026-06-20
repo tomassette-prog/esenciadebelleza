@@ -82,6 +82,12 @@ export default async function AdminLayout({ children }: { children: ReactNode })
           </span>
           <div className="flex items-center gap-6 ml-2">
             <Link
+              href="/admin/carruseles"
+              className="text-xs tracking-widest uppercase text-neutral-300 hover:text-white transition-colors"
+            >
+              Carruseles
+            </Link>
+            <Link
               href="/admin/productos"
               className="text-xs tracking-widest uppercase text-neutral-300 hover:text-white transition-colors"
             >
