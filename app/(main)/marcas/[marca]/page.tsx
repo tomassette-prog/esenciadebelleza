@@ -47,7 +47,19 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
 export default async function MarcaPage({ params }: PageProps) {
   const { marca: marcaSlug } = await params;
-  const supabase = createAdminClient();
+
+  let supabase;
+  try {
+    supabase = createAdminClient();
+  } catch (e) {
+    // Si falla createAdminClient (env vars), mostrar página de error descriptiva
+    return (
+      <main className="container-main py-20 text-center">
+        <h1 className="text-2xl text-neutral-700 mb-4">Error de configuración</h1>
+        <p className="text-neutral-500">No se pudo conectar con la base de datos. Contacte con el administrador.</p>
+      </main>
+    );
+  }
 
   const { data: marca, error } = await supabase
     .from("marcas")
@@ -55,7 +67,17 @@ export default async function MarcaPage({ params }: PageProps) {
     .eq("slug", marcaSlug)
     .maybeSingle();
 
-  if (error) console.error("[MarcaPage] Supabase error:", error.message, "slug:", marcaSlug);
+  // Si hay error de Supabase, mostrar info de debug en lugar de 404
+  if (error) {
+    return (
+      <main className="container-main py-20 text-center">
+        <h1 className="text-2xl text-neutral-700 mb-4">Error al cargar la marca</h1>
+        <p className="text-neutral-500 mb-2">Slug: <code>{marcaSlug}</code></p>
+        <p className="text-red-500 text-sm">{error.message}</p>
+      </main>
+    );
+  }
+
   if (!marca) notFound();
 
   const { data: productos } = await supabase
