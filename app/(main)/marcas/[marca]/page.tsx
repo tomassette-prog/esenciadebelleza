@@ -21,16 +21,14 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
   const { data: marca } = await supabase
     .from("marcas")
-    .select("nombre, descripcion")
+    .select("nombre")
     .eq("slug", marcaSlug)
     .single();
 
   if (!marca) return {};
 
   const title = `${marca.nombre} | Productos Profesionales | Esencia de Belleza`;
-  const description =
-    marca.descripcion ??
-    `Compra productos profesionales de ${marca.nombre} en Esencia de Belleza. Envío rápido en España. Precios para particulares y profesionales.`;
+  const description = `Compra productos profesionales de ${marca.nombre} en Esencia de Belleza. Envío rápido en España. Precios para particulares y profesionales.`;
 
   return {
     title: title.slice(0, 60),
@@ -63,7 +61,7 @@ export default async function MarcaPage({ params }: PageProps) {
 
   const { data: marca, error } = await supabase
     .from("marcas")
-    .select("id, nombre, slug, logo_url, descripcion")
+    .select("id, nombre, slug, logo_url")
     .eq("slug", marcaSlug)
     .maybeSingle();
 
