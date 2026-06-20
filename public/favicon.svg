@@ -1,1 +1,74 @@
-﻿<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512"><rect width="512" height="512" rx="80" fill="#ffffff"/><g transform="translate(256,256) scale(8.5) translate(-22,-28)"><path d="M22 19 C19 19 17 15 17 11 C17 7 19 4 22 4 C25 4 27 7 27 11 C27 15 25 19 22 19Z" fill="#C4857A" fill-opacity="0.3" stroke="#C4857A" stroke-width="0.9"/><path d="M22 19 C20 18 16 16 14 12 C12 9 12 5 15 4 C18 3 21 5 22 9 C23 12 23 17 22 19Z" fill="#C4857A" fill-opacity="0.25" stroke="#C4857A" stroke-width="0.9"/><path d="M22 19 C24 18 28 16 30 12 C32 9 32 5 29 4 C26 3 23 5 22 9 C21 12 21 17 22 19Z" fill="#C4857A" fill-opacity="0.25" stroke="#C4857A" stroke-width="0.9"/><path d="M22 19 C21 17 17 17 13 15 C9 13 7 10 9 7 C11 4 15 4 18 7 C20 9 22 15 22 19Z" fill="#C4857A" fill-opacity="0.2" stroke="#C4857A" stroke-width="0.8"/><path d="M22 19 C23 17 27 17 31 15 C35 13 37 10 35 7 C33 4 29 4 26 7 C24 9 22 15 22 19Z" fill="#C4857A" fill-opacity="0.2" stroke="#C4857A" stroke-width="0.8"/><rect x="17" y="19" width="10" height="5" rx="1.5" fill="white" stroke="#C4857A" stroke-width="1"/><rect x="19" y="24" width="6" height="5" rx="0.8" fill="white" stroke="#C4857A" stroke-width="1"/><ellipse cx="22" cy="43" rx="13" ry="10" fill="white" stroke="#C4857A" stroke-width="1.1"/><line x1="12" y1="43" x2="32" y2="43" stroke="#C4857A" stroke-width="0.7" opacity="0.5"/><ellipse cx="22" cy="46" rx="7" ry="3.5" fill="none" stroke="#C4857A" stroke-width="0.7" opacity="0.5"/></g></svg>
+﻿<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <radialGradient id="dropGrad" cx="40%" cy="35%" r="65%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="50%" stop-color="#F0D5CA"/>
+      <stop offset="100%" stop-color="#C4957A"/>
+    </radialGradient>
+    <linearGradient id="swirl2" x1="100%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#C4957A"/>
+      <stop offset="100%" stop-color="#E8C4B4"/>
+    </linearGradient>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="3" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <!-- Fondo circular blanco -->
+  <circle cx="256" cy="256" r="248" fill="#ffffff" stroke="#E8D5CC" stroke-width="2"/>
+
+  <!-- Arco exterior teal - izquierda -->
+  <path d="M 256 30 C 160 30, 80 90, 50 180 C 30 240, 35 300, 60 350"
+        fill="none" stroke="#3D5A5C" stroke-width="8" stroke-linecap="round" opacity="0.9"/>
+  <!-- Arco exterior teal - derecha -->
+  <path d="M 256 30 C 352 30, 432 90, 462 180 C 482 240, 477 300, 452 350"
+        fill="none" stroke="#3D5A5C" stroke-width="8" stroke-linecap="round" opacity="0.9"/>
+  <!-- Arco inferior teal -->
+  <path d="M 60 350 C 100 430, 170 475, 256 480 C 342 475, 412 430, 452 350"
+        fill="none" stroke="#3D5A5C" stroke-width="8" stroke-linecap="round" opacity="0.9"/>
+
+  <!-- Espirales internas rose gold - izquierda -->
+  <path d="M 256 80 C 200 100, 150 140, 130 200 C 115 250, 130 300, 160 340 C 185 370, 220 385, 256 390"
+        fill="none" stroke="url(#swirl2)" stroke-width="11" stroke-linecap="round" opacity="0.85"/>
+  <!-- Espirales internas rose gold - derecha -->
+  <path d="M 256 80 C 312 100, 362 140, 382 200 C 397 250, 382 300, 352 340 C 327 370, 292 385, 256 390"
+        fill="none" stroke="url(#swirl2)" stroke-width="11" stroke-linecap="round" opacity="0.85"/>
+
+  <!-- Curvas secundarias rose gold -->
+  <path d="M 256 120 C 210 135, 170 165, 155 215 C 143 255, 155 295, 180 325"
+        fill="none" stroke="#D4A898" stroke-width="7" stroke-linecap="round" opacity="0.7"/>
+  <path d="M 256 120 C 302 135, 342 165, 357 215 C 369 255, 357 295, 332 325"
+        fill="none" stroke="#D4A898" stroke-width="7" stroke-linecap="round" opacity="0.7"/>
+
+  <!-- Hoja superior izquierda -->
+  <ellipse cx="148" cy="95" rx="28" ry="14" fill="#3D5A5C" opacity="0.85" transform="rotate(-45 148 95)"/>
+  <line x1="148" y1="95" x2="164" y2="111" stroke="#5A7A7C" stroke-width="2" opacity="0.6"/>
+  <!-- Hoja superior derecha -->
+  <ellipse cx="364" cy="95" rx="28" ry="14" fill="#3D5A5C" opacity="0.85" transform="rotate(45 364 95)"/>
+  <line x1="364" y1="95" x2="348" y2="111" stroke="#5A7A7C" stroke-width="2" opacity="0.6"/>
+
+  <!-- Hoja izquierda media -->
+  <ellipse cx="75" cy="230" rx="26" ry="12" fill="#3D5A5C" opacity="0.8" transform="rotate(-20 75 230)"/>
+  <!-- Hoja derecha media -->
+  <ellipse cx="437" cy="230" rx="26" ry="12" fill="#3D5A5C" opacity="0.8" transform="rotate(20 437 230)"/>
+
+  <!-- Pequeñas hojas acento -->
+  <ellipse cx="108" cy="155" rx="16" ry="8" fill="#3D5A5C" opacity="0.7" transform="rotate(-55 108 155)"/>
+  <ellipse cx="404" cy="155" rx="16" ry="8" fill="#3D5A5C" opacity="0.7" transform="rotate(55 404 155)"/>
+
+  <!-- Espiral decorativa superior - teal -->
+  <path d="M 256 55 C 240 65, 230 80, 238 92 C 246 104, 260 100, 258 88"
+        fill="none" stroke="#3D5A5C" stroke-width="5" stroke-linecap="round" opacity="0.8"/>
+
+  <!-- GOTA CENTRAL -->
+  <path d="M 256 140 C 230 185, 205 220, 205 248 C 205 282, 228 305, 256 305 C 284 305, 307 282, 307 248 C 307 220, 282 185, 256 140 Z"
+        fill="#F0D0C0" opacity="0.4"/>
+  <path d="M 256 152 C 232 196, 210 228, 210 254 C 210 285, 231 306, 256 306 C 281 306, 302 285, 302 254 C 302 228, 280 196, 256 152 Z"
+        fill="url(#dropGrad)" filter="url(#glow)"/>
+  <!-- Reflejo interior gota -->
+  <path d="M 248 180 C 238 200, 232 218, 233 232 C 234 242, 239 248, 244 246 C 249 243, 248 230, 250 215 C 252 200, 252 188, 248 180 Z"
+        fill="#ffffff" opacity="0.55"/>
+  <path d="M 256 152 C 232 196, 210 228, 210 254 C 210 285, 231 306, 256 306 C 281 306, 302 285, 302 254 C 302 228, 280 196, 256 152 Z"
+        fill="none" stroke="#C9A882" stroke-width="1.5" opacity="0.5"/>
+</svg>

@@ -270,23 +270,12 @@ export default async function HomePage() {
 
       {/* ── Novedades ── */}
       {nuevos.length > 0 && (
-        <section className="py-16 px-6 bg-white">
-          <div className="container-main">
-            <div className="flex items-baseline justify-between mb-8">
-              <h2 className="text-2xl font-light text-neutral-900" style={{ fontFamily: "var(--font-cormorant)" }}>
-                Novedades
-              </h2>
-              <Link href="/productos" className="text-xs tracking-widest uppercase text-neutral-400 hover:text-neutral-700 transition-colors">
-                Ver todos →
-              </Link>
-            </div>
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-x-4 gap-y-10">
-              {nuevos.map((p, i) => (
-                <ProductoCard key={p.id} producto={p} priority={i < 4} />
-              ))}
-            </div>
-          </div>
-        </section>
+        <CarruselProductos
+          productos={nuevos}
+          titulo="Novedades"
+          subtitulo="Recién llegados"
+          verTodosHref="/productos"
+        />
       )}
 
       {/* ── Blog strip horizontal ── */}
