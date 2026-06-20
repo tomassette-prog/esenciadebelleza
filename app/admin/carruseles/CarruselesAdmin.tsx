@@ -45,22 +45,32 @@ export function CarruselesAdmin({ carruselesIniciales }: { carruselesIniciales: 
   const [creando, setCreando] = useState(false);
   const [nuevoNombre, setNuevoNombre] = useState("");
   const [nuevoSubtitulo, setNuevoSubtitulo] = useState("");
-  const [, startTransition] = useTransition();
+  const [isPending, startTransition] = useTransition();
   const [carruselAbierto, setCarruselAbierto] = useState<string | null>(null);
+  const [errorGlobal, setErrorGlobal] = useState<string | null>(null);
 
   const handleCrear = () => {
     if (!nuevoNombre.trim()) return;
+    setErrorGlobal(null);
     startTransition(async () => {
-      const res = await crearCarrusel(nuevoNombre.trim(), nuevoSubtitulo.trim());
-      if (!res.error && res.id) {
-        setCarruseles((prev) => [
-          ...prev,
-          { id: res.id!, nombre: nuevoNombre.trim(), subtitulo: nuevoSubtitulo.trim() || null, activo: true, orden: prev.length, productos: [] },
-        ]);
-        setNuevoNombre("");
-        setNuevoSubtitulo("");
-        setCreando(false);
-        setCarruselAbierto(res.id!);
+      try {
+        const res = await crearCarrusel(nuevoNombre.trim(), nuevoSubtitulo.trim());
+        if (res.error) {
+          setErrorGlobal(`Error al crear carrusel: ${res.error}. ¿Está ejecutada la migración SQL 010?`);
+          return;
+        }
+        if (res.id) {
+          setCarruseles((prev) => [
+            ...prev,
+            { id: res.id!, nombre: nuevoNombre.trim(), subtitulo: nuevoSubtitulo.trim() || null, activo: true, orden: prev.length, productos: [] },
+          ]);
+          setNuevoNombre("");
+          setNuevoSubtitulo("");
+          setCreando(false);
+          setCarruselAbierto(res.id!);
+        }
+      } catch (e) {
+        setErrorGlobal(`Error inesperado: ${e instanceof Error ? e.message : String(e)}`);
       }
     });
   };
@@ -78,6 +88,20 @@ export function CarruselesAdmin({ carruselesIniciales }: { carruselesIniciales: 
 
   return (
     <div className="space-y-4">
+      {/* Error global */}
+      {errorGlobal && (
+        <div className="bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3 flex items-start gap-3">
+          <span className="shrink-0">⚠</span>
+          <div className="flex-1">
+            <p>{errorGlobal}</p>
+            <p className="text-xs mt-1 text-red-500">
+              Ve a Supabase → SQL Editor y ejecuta el contenido de{" "}
+              <code className="bg-red-100 px-1">supabase/migrations/010_carruseles_custom.sql</code>
+            </p>
+          </div>
+          <button onClick={() => setErrorGlobal(null)} className="text-red-400 hover:text-red-700">✕</button>
+        </div>
+      )}
       {/* Botón crear */}
       {!creando ? (
         <button
@@ -107,10 +131,14 @@ export function CarruselesAdmin({ carruselesIniciales }: { carruselesIniciales: 
             onKeyDown={(e) => e.key === "Enter" && handleCrear()}
           />
           <div className="flex gap-2">
-            <button onClick={handleCrear} className="px-4 py-2 text-sm bg-neutral-900 text-white hover:bg-neutral-700 transition-colors">
-              Crear
+            <button
+              onClick={handleCrear}
+              disabled={isPending || !nuevoNombre.trim()}
+              className="px-4 py-2 text-sm bg-neutral-900 text-white hover:bg-neutral-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              {isPending ? "Creando…" : "Crear"}
             </button>
-            <button onClick={() => setCreando(false)} className="px-4 py-2 text-sm border border-neutral-300 hover:border-neutral-600 transition-colors">
+            <button onClick={() => { setCreando(false); setNuevoNombre(""); setNuevoSubtitulo(""); }} className="px-4 py-2 text-sm border border-neutral-300 hover:border-neutral-600 transition-colors">
               Cancelar
             </button>
           </div>
