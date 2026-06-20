@@ -128,9 +128,6 @@ export default async function MarcaPage({ params }: PageProps) {
               {marca.nombre}
             </h1>
             <div className="w-12 h-px mb-3" style={{ backgroundColor: "var(--color-oro)" }} />
-            {marca.descripcion && (
-              <p className="text-sm text-neutral-500 max-w-xl">{marca.descripcion}</p>
-            )}
           </div>
           <span className="ml-auto text-xs text-neutral-400 shrink-0">
             {productos?.length ?? 0} productos
