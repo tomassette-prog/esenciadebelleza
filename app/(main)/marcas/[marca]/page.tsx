@@ -5,7 +5,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { Breadcrumb } from "@/components/layout/Breadcrumb";
 import { buildBreadcrumbJsonLdItems, buildBreadcrumbJsonLd, slugifyCategoria, formatPrice } from "@/lib/seo";
 
-export const revalidate = 3600;
+export const revalidate = 0;          // sin caché — siempre SSR
+export const dynamic = "force-dynamic"; // nunca estático
 export const dynamicParams = true;
 
 interface PageProps {
@@ -48,12 +49,13 @@ export default async function MarcaPage({ params }: PageProps) {
   const { marca: marcaSlug } = await params;
   const supabase = createAdminClient();
 
-  const { data: marca } = await supabase
+  const { data: marca, error } = await supabase
     .from("marcas")
     .select("id, nombre, slug, logo_url, descripcion")
     .eq("slug", marcaSlug)
-    .single();
+    .maybeSingle();
 
+  if (error) console.error("[MarcaPage] Supabase error:", error.message, "slug:", marcaSlug);
   if (!marca) notFound();
 
   const { data: productos } = await supabase
