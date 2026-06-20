@@ -1,6 +1,6 @@
 ﻿import type { Metadata } from "next";
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { Breadcrumb } from "@/components/layout/Breadcrumb";
 import { buildBreadcrumbJsonLdItems } from "@/lib/seo";
 
@@ -14,7 +14,7 @@ export const metadata: Metadata = {
 };
 
 export default async function MarcasPage() {
-  const supabase = await createClient();
+  const supabase = createAdminClient();
 
   const { data: marcas } = await supabase
     .from("marcas")

@@ -51,7 +51,7 @@ export const metadata: Metadata = {
     site: "@esenciadebelleza",
   },
   verification: {
-    google: process.env.NEXT_PUBLIC_GOOGLE_VERIFICATION ?? "",
+    google: process.env.NEXT_PUBLIC_GOOGLE_VERIFICATION ?? "ywMmHXPdPu-R7nA5JBfSM0K9IWhTF09cVJZIFpxpuMA",
   },
 };
 
