@@ -12,11 +12,7 @@ interface PageProps {
   params: Promise<{ marca: string }>;
 }
 
-export async function generateStaticParams() {
-  const supabase = createAdminClient();
-  const { data } = await supabase.from("marcas").select("slug").eq("activa", true);
-  return (data ?? []).filter((m) => m.slug).map((m) => ({ marca: m.slug }));
-}
+// Sin generateStaticParams — SSR puro para evitar 404 por slugs no pre-generados en build
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { marca: marcaSlug } = await params;
