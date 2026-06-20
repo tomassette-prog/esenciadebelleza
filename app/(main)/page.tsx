@@ -29,7 +29,7 @@ export default async function HomePage() {
     .eq("publicado", true)
     .eq("destacado", true)
     .order("published_at", { ascending: false })
-    .limit(3);
+    .limit(10);
 
   // Si no hay destacados, tomar los 3 más recientes
   const { data: postsRecientes } = !postsDestacados?.length
@@ -38,7 +38,7 @@ export default async function HomePage() {
         .select("slug, titulo, resumen, imagen_url, published_at")
         .eq("publicado", true)
         .order("published_at", { ascending: false })
-        .limit(3)
+        .limit(10)
     : { data: null };
 
   const posts = postsDestacados?.length ? postsDestacados : (postsRecientes ?? []);
@@ -69,7 +69,7 @@ export default async function HomePage() {
     .eq("activo", true)
     .eq("destacado", true)
     .eq("variaciones.activa", true)
-    .limit(8);
+    .limit(12);
 
   const { data: nuevosRaw } = await supabase
     .from("productos_padre")
@@ -82,7 +82,23 @@ export default async function HomePage() {
     .eq("activo", true)
     .eq("nuevo", true)
     .eq("variaciones.activa", true)
-    .limit(8);
+    .limit(12);
+
+  // Fallback: cualquier producto activo con stock si no hay ninguno marcado
+  const necesitaFallback = !ofertasRaw?.length && !destacadosRaw?.length && !nuevosRaw?.length;
+  const { data: fallbackRaw } = necesitaFallback
+    ? await supabase
+        .from("productos_padre")
+        .select(
+          `id, nombre, slug, categoria, subcategoria,
+           imagen_principal_url, destacado, nuevo,
+           marca:marcas(nombre),
+           variaciones:productos_variaciones!inner(precio_b2c, activa, stock)`
+        )
+        .eq("activo", true)
+        .eq("variaciones.activa", true)
+        .limit(12)
+    : { data: null };
 
   // Marcas con logo para el carrusel
   const { data: marcasRaw } = await supabase
@@ -122,10 +138,18 @@ export default async function HomePage() {
   const destacados: ProductoCatalogo[] = (destacadosRaw ?? []).map(toProductoCatalogo);
   const nuevos: ProductoCatalogo[] = (nuevosRaw ?? []).map(toProductoCatalogo);
   const ofertas: ProductoCatalogo[] = (ofertasRaw ?? []).map(toProductoCatalogo);
-  // Si no hay ofertas, mostrar destacados en el carrusel
-  const carruselProductos = ofertas.length > 0 ? ofertas : destacados;
-  const carruselTitulo = ofertas.length > 0 ? "Ofertas destacadas" : "Productos destacados";
-  const carruselSubtitulo = ofertas.length > 0 ? "No te lo pierdas" : "Lo más popular";
+  const fallback: ProductoCatalogo[] = (fallbackRaw ?? []).map(toProductoCatalogo);
+
+  // Carrusel 1: Ofertas → Destacados → Fallback (cualquier producto)
+  const carruselProductos = ofertas.length > 0 ? ofertas : destacados.length > 0 ? destacados : fallback;
+  const carruselTitulo = ofertas.length > 0 ? "Ofertas destacadas" : destacados.length > 0 ? "Productos destacados" : "Nuestros productos";
+  const carruselSubtitulo = ofertas.length > 0 ? "No te lo pierdas" : destacados.length > 0 ? "Lo más popular" : "Catálogo";
+
+  // Carrusel 2: Novedades → Fallback si no hay nuevos marcados
+  const carruselNuevos = nuevos.length > 0 ? nuevos : fallback.slice(0, 8);
+  const tituloNuevos = nuevos.length > 0 ? "Novedades" : "Descubre nuestro catálogo";
+  const subtituloNuevos = nuevos.length > 0 ? "Recién llegados" : "Selección";
+
   const tieneProductos = categorias.length > 0;
 
   return (
@@ -269,11 +293,11 @@ export default async function HomePage() {
       )}
 
       {/* ── Novedades ── */}
-      {nuevos.length > 0 && (
+      {carruselNuevos.length > 0 && (
         <CarruselProductos
-          productos={nuevos}
-          titulo="Novedades"
-          subtitulo="Recién llegados"
+          productos={carruselNuevos}
+          titulo={tituloNuevos}
+          subtitulo={subtituloNuevos}
           verTodosHref="/productos"
         />
       )}

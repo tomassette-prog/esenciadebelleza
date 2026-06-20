@@ -101,14 +101,73 @@ const nextConfig = {
         destination: "/productos",
         permanent: true,
       },
+      // Productos individuales de WooCommerce
+      {
+        source: "/product/:slug",
+        destination: "/producto/:slug",
+        permanent: true,
+      },
+      {
+        source: "/tienda/:slug",
+        destination: "/producto/:slug",
+        permanent: true,
+      },
+      {
+        source: "/shop/:slug",
+        destination: "/producto/:slug",
+        permanent: true,
+      },
+      // Marcas
       {
         source: "/marca/:slug",
         destination: "/marcas/:slug",
         permanent: true,
       },
       {
-        source: "/blog/:slug",
+        source: "/brand/:slug",
+        destination: "/marcas/:slug",
+        permanent: true,
+      },
+      // Blog: URLs antiguas de WordPress
+      {
+        source: "/blog/category/:cat",
+        destination: "/blog",
+        permanent: true,
+      },
+      {
+        source: "/blog/tag/:tag",
+        destination: "/blog",
+        permanent: true,
+      },
+      {
+        source: "/noticias/:slug",
         destination: "/blog/:slug",
+        permanent: true,
+      },
+      {
+        source: "/articulo/:slug",
+        destination: "/blog/:slug",
+        permanent: true,
+      },
+      {
+        source: "/post/:slug",
+        destination: "/blog/:slug",
+        permanent: true,
+      },
+      {
+        source: "/consejos/:slug",
+        destination: "/blog/:slug",
+        permanent: true,
+      },
+      // Búsqueda
+      {
+        source: "/search",
+        destination: "/buscar",
+        permanent: true,
+      },
+      {
+        source: "/busqueda",
+        destination: "/buscar",
         permanent: true,
       },
       // Páginas estáticas de WordPress comunes
@@ -120,6 +179,37 @@ const nextConfig = {
       {
         source: "/contact",
         destination: "/sobre-nosotros",
+        permanent: true,
+      },
+      {
+        source: "/quienes-somos",
+        destination: "/sobre-nosotros",
+        permanent: true,
+      },
+      {
+        source: "/about",
+        destination: "/sobre-nosotros",
+        permanent: true,
+      },
+      {
+        source: "/about-us",
+        destination: "/sobre-nosotros",
+        permanent: true,
+      },
+      // Políticas
+      {
+        source: "/privacy-policy",
+        destination: "/privacidad",
+        permanent: true,
+      },
+      {
+        source: "/terminos",
+        destination: "/aviso-legal",
+        permanent: true,
+      },
+      {
+        source: "/terms",
+        destination: "/aviso-legal",
         permanent: true,
       },
     ];
