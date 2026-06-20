@@ -20,9 +20,9 @@ export const metadata: Metadata = {
 
 export default async function HomePage() {
   const supabase = await createClient();
+  const adminClient = createAdminClient();
 
   // Posts destacados para la sección del blog en home
-  const adminClient = createAdminClient();
   const { data: postsDestacados } = await adminClient
     .from("posts")
     .select("slug, titulo, resumen, imagen_url, published_at")
@@ -31,7 +31,7 @@ export default async function HomePage() {
     .order("published_at", { ascending: false })
     .limit(10);
 
-  // Si no hay destacados, tomar los 3 más recientes
+  // Si no hay destacados, tomar los 10 más recientes
   const { data: postsRecientes } = !postsDestacados?.length
     ? await adminClient
         .from("posts")
@@ -100,6 +100,24 @@ export default async function HomePage() {
         .limit(12)
     : { data: null };
 
+  // Carruseles personalizados de la home
+  const { data: carruselesData } = await adminClient
+    .from("carruseles")
+    .select(`
+      id, nombre, subtitulo, orden,
+      productos:carrusel_productos(
+        orden,
+        producto:productos_padre(
+          id, nombre, slug, categoria, subcategoria,
+          imagen_principal_url, destacado, nuevo,
+          marca:marcas(nombre),
+          variaciones:productos_variaciones!inner(precio_b2c, activa, stock)
+        )
+      )
+    `)
+    .eq("activo", true)
+    .order("orden");
+
   // Marcas con logo para el carrusel
   const { data: marcasRaw } = await supabase
     .from("marcas")
@@ -140,15 +158,25 @@ export default async function HomePage() {
   const ofertas: ProductoCatalogo[] = (ofertasRaw ?? []).map(toProductoCatalogo);
   const fallback: ProductoCatalogo[] = (fallbackRaw ?? []).map(toProductoCatalogo);
 
-  // Carrusel 1: Ofertas → Destacados → Fallback (cualquier producto)
+  // Carrusel 1: Ofertas → Destacados → Fallback
   const carruselProductos = ofertas.length > 0 ? ofertas : destacados.length > 0 ? destacados : fallback;
   const carruselTitulo = ofertas.length > 0 ? "Ofertas destacadas" : destacados.length > 0 ? "Productos destacados" : "Nuestros productos";
   const carruselSubtitulo = ofertas.length > 0 ? "No te lo pierdas" : destacados.length > 0 ? "Lo más popular" : "Catálogo";
 
-  // Carrusel 2: Novedades → Fallback si no hay nuevos marcados
+  // Carrusel 2: Novedades → Fallback
   const carruselNuevos = nuevos.length > 0 ? nuevos : fallback.slice(0, 8);
   const tituloNuevos = nuevos.length > 0 ? "Novedades" : "Descubre nuestro catálogo";
   const subtituloNuevos = nuevos.length > 0 ? "Recién llegados" : "Selección";
+
+  // Carruseles personalizados (desde la tabla carruseles)
+  const carruselesPersonalizados = (carruselesData ?? []).map((c) => {
+    const productos: ProductoCatalogo[] = (c.productos ?? [])
+      .sort((a: { orden: number }, b: { orden: number }) => a.orden - b.orden)
+      .map((r: { producto: ReturnType<typeof Object.assign> | null }) => r.producto)
+      .filter(Boolean)
+      .map(toProductoCatalogo);
+    return { id: c.id, nombre: c.nombre, subtitulo: c.subtitulo, productos };
+  }).filter((c) => c.productos.length > 0);
 
   const tieneProductos = categorias.length > 0;
 
@@ -239,8 +267,21 @@ export default async function HomePage() {
           titulo={carruselTitulo}
           subtitulo={carruselSubtitulo}
           verTodosHref="/productos"
+          autoScrollMs={4500}
         />
       )}
+
+      {/* ── Carruseles personalizados de la home ── */}
+      {carruselesPersonalizados.map((c) => (
+        <CarruselProductos
+          key={c.id}
+          productos={c.productos}
+          titulo={c.nombre}
+          subtitulo={c.subtitulo ?? undefined}
+          verTodosHref="/productos"
+          autoScrollMs={5000}
+        />
+      ))}
 
       {/* ── Nuestras marcas ── */}
       {tieneProductos && marcasConLogo.length > 0 && (

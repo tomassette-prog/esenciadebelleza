@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { useRef } from "react";
+import { useRef, useEffect, useCallback } from "react";
 import Link from "next/link";
 import type { ProductoCatalogo } from "@/types/producto";
 import { ProductoCard } from "@/components/producto/ProductoCard";
@@ -10,10 +10,12 @@ interface Props {
   titulo: string;
   subtitulo?: string;
   verTodosHref?: string;
+  autoScrollMs?: number; // 0 = sin auto-scroll
 }
 
-export function CarruselProductos({ productos, titulo, subtitulo, verTodosHref = "/productos" }: Props) {
+export function CarruselProductos({ productos, titulo, subtitulo, verTodosHref = "/productos", autoScrollMs = 4000 }: Props) {
   const scrollRef = useRef<HTMLDivElement>(null);
+  const pausadoRef = useRef(false);
 
   if (!productos.length) return null;
 
@@ -21,6 +23,26 @@ export function CarruselProductos({ productos, titulo, subtitulo, verTodosHref =
     if (!scrollRef.current) return;
     scrollRef.current.scrollBy({ left: dir === "right" ? 280 : -280, behavior: "smooth" });
   };
+
+  // Auto-scroll circular
+  // eslint-disable-next-line react-hooks/rules-of-hooks
+  const autoScroll = useCallback(() => {
+    if (!scrollRef.current || pausadoRef.current) return;
+    const el = scrollRef.current;
+    const atEnd = el.scrollLeft + el.clientWidth >= el.scrollWidth - 10;
+    if (atEnd) {
+      el.scrollTo({ left: 0, behavior: "smooth" });
+    } else {
+      el.scrollBy({ left: 280, behavior: "smooth" });
+    }
+  }, []);
+
+  // eslint-disable-next-line react-hooks/rules-of-hooks
+  useEffect(() => {
+    if (!autoScrollMs) return;
+    const interval = setInterval(autoScroll, autoScrollMs);
+    return () => clearInterval(interval);
+  }, [autoScroll, autoScrollMs]);
 
   return (
     <section className="py-16 bg-white overflow-hidden">
@@ -69,11 +91,12 @@ export function CarruselProductos({ productos, titulo, subtitulo, verTodosHref =
       <div className="relative">
         <div
           ref={scrollRef}
+          onMouseEnter={() => { pausadoRef.current = true; }}
+          onMouseLeave={() => { pausadoRef.current = false; }}
+          onTouchStart={() => { pausadoRef.current = true; }}
+          onTouchEnd={() => { setTimeout(() => { pausadoRef.current = false; }, 2000); }}
           className="flex gap-4 overflow-x-auto scroll-smooth pb-2 px-6"
-          style={{
-            scrollbarWidth: "none",
-            msOverflowStyle: "none",
-          }}
+          style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
         >
           {productos.map((p, i) => (
             <div key={p.id} className="flex-shrink-0 w-52 sm:w-60">
