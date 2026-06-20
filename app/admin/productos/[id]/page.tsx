@@ -54,14 +54,17 @@ export default async function EditarProductoPage({ params }: { params: Promise<{
 
   return (
     <div className="max-w-3xl space-y-6">
-      {/* Breadcrumb */}
+      {/* Cabecera con volver */}
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2 text-sm text-neutral-500">
-          <Link href="/admin/productos" className="hover:text-neutral-900 transition-colors">
-            Productos
+        <div className="flex items-center gap-3">
+          <Link
+            href="/admin/productos"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs border border-neutral-300 text-neutral-600 hover:border-neutral-600 hover:text-neutral-900 transition-colors"
+          >
+            ← Volver al listado
           </Link>
-          <span>/</span>
-          <span className="text-neutral-900 line-clamp-1">{producto.nombre}</span>
+          <span className="text-neutral-300">/</span>
+          <span className="text-sm text-neutral-600 line-clamp-1 max-w-xs">{producto.nombre}</span>
         </div>
         <div className="flex items-center gap-3">
           <Link
