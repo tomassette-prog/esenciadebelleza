@@ -309,7 +309,7 @@ export async function buscarProductosCarrusel(q: string): Promise<{
   return (data ?? []).map((p) => ({
     id: p.id,
     nombre: p.nombre,
-    marca: (p.marca as { nombre: string } | null)?.nombre ?? null,
+    marca: (Array.isArray(p.marca) ? p.marca[0] : p.marca as { nombre: string } | null)?.nombre ?? null,
     imagen_principal_url: p.imagen_principal_url,
     oferta: p.oferta ?? false,
     nuevo: p.nuevo ?? false,

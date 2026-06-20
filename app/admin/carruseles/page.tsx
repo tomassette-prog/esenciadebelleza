@@ -28,11 +28,11 @@ export default async function AdminCarruselesPage() {
       <div className="flex flex-wrap gap-4 mb-8 p-4 bg-neutral-50 border border-neutral-100 text-xs text-neutral-600">
         <span className="flex items-center gap-2">
           <span className="inline-block w-3 h-3 rounded-sm bg-amber-400" />
-          <strong>Oferta</strong> — aparece en el carrusel "Ofertas destacadas"
+          <strong>Oferta</strong> — aparece en el carrusel &ldquo;Ofertas destacadas&rdquo;
         </span>
         <span className="flex items-center gap-2">
           <span className="inline-block w-3 h-3 rounded-sm bg-emerald-500" />
-          <strong>Novedad</strong> — aparece en el carrusel "Novedades"
+          <strong>Novedad</strong> — aparece en el carrusel &ldquo;Novedades&rdquo;
         </span>
         <span className="flex items-center gap-2">
           <span className="inline-block w-3 h-3 rounded-sm bg-sky-500" />
