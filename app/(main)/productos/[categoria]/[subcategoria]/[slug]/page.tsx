@@ -12,6 +12,7 @@ import {
 } from "@/lib/seo";
 import { AnadirAlCarritoBtn } from "@/components/producto/AnadirAlCarritoBtn";
 import { Breadcrumb } from "@/components/layout/Breadcrumb";
+import { BotonesCompartir } from "@/components/layout/BotonesCompartir";
 import type { ProductoCompleto } from "@/types/producto";
 
 // ─── Tipos de parámetros de la ruta ──────────────────────────────────────────
@@ -266,13 +267,23 @@ export default async function ProductoPage({ params, searchParams }: PageProps) 
               />
             )}
 
-            {/* SEO enriquecido (visible en página pero orientado a bots) */}
+            {/* SEO enriquecido */}
             {p.texto_enriquecido_seo && (
               <div
                 className="prose prose-sm prose-neutral max-w-none text-neutral-500 text-sm border-t border-neutral-100 pt-6"
                 dangerouslySetInnerHTML={{ __html: p.texto_enriquecido_seo }}
               />
             )}
+
+            {/* Compartir */}
+            <div className="border-t border-neutral-100 pt-6">
+              <BotonesCompartir
+                url={`https://esenciadebelleza.es/productos/${slugifyCategoria(p.categoria)}/${slugifyCategoria(p.subcategoria ?? "general")}/${p.slug}`}
+                titulo={p.nombre}
+                descripcion={p.descripcion_general?.replace(/<[^>]+>/g, "").slice(0, 160) ?? ""}
+                imagen={p.imagen_principal_url ?? ""}
+              />
+            </div>
           </div>
         </div>
       </div>

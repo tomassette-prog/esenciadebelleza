@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Breadcrumb } from "@/components/layout/Breadcrumb";
+import { BotonesCompartir } from "@/components/layout/BotonesCompartir";
 
 export const revalidate = 3600;
 
@@ -160,6 +161,16 @@ export default async function PostPage({ params }: PageProps) {
             )}
           </header>
 
+          {/* Compartir — arriba */}
+          <div className="mb-8">
+            <BotonesCompartir
+              url={`https://esenciadebelleza.es/blog/${post.slug}`}
+              titulo={post.titulo}
+              descripcion={post.resumen ?? ""}
+              imagen={post.imagen_url ?? ""}
+            />
+          </div>
+
           {/* Imagen destacada */}
           {post.imagen_url && (
             <div className="mb-10 aspect-[16/9] overflow-hidden bg-neutral-100">
@@ -189,8 +200,18 @@ export default async function PostPage({ params }: PageProps) {
             dangerouslySetInnerHTML={{ __html: post.contenido_html ?? "" }}
           />
 
+          {/* Compartir — pie */}
+          <div className="mt-12 pt-8 border-t border-neutral-100">
+            <BotonesCompartir
+              url={`https://esenciadebelleza.es/blog/${post.slug}`}
+              titulo={post.titulo}
+              descripcion={post.resumen ?? ""}
+              imagen={post.imagen_url ?? ""}
+            />
+          </div>
+
           {/* Volver al blog */}
-          <div className="mt-16 pt-8 border-t border-neutral-100">
+          <div className="mt-8">
             <Link
               href="/blog"
               className="text-xs tracking-widest uppercase text-neutral-500 hover:text-neutral-900 transition-colors"
