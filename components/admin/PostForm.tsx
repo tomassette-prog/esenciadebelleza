@@ -343,6 +343,20 @@ export default function PostForm({ post }: Props) {
   const [enlaces, setEnlaces] = useState<EnlaceProducto[]>([]);
   const [enlacesAplicados, setEnlacesAplicados] = useState(false);
 
+  // Buscador manual por enlace
+  const [busquedaManual, setBusquedaManual] = useState<Record<string, string>>({});
+  const [resultadosManual, setResultadosManual] = useState<Record<string, ProductoSugerido[]>>({});
+  const [buscandoManual, setBuscandoManual] = useState<Record<string, boolean>>({});
+
+  async function buscarManual(enlaceId: string) {
+    const query = busquedaManual[enlaceId]?.trim();
+    if (!query || query.length < 2) return;
+    setBuscandoManual((prev) => ({ ...prev, [enlaceId]: true }));
+    const resultados = await buscarProductosParaEnlace(query);
+    setResultadosManual((prev) => ({ ...prev, [enlaceId]: resultados }));
+    setBuscandoManual((prev) => ({ ...prev, [enlaceId]: false }));
+  }
+
   // Upload imagen
   const [uploadMsg, setUploadMsg] = useState("");
   const [uploading, setUploading] = useState(false);
@@ -662,9 +676,57 @@ export default function PostForm({ post }: Props) {
 
                     {enlace.sugerencias && enlace.sugerencias.length === 0 && !enlace.buscando && enlace.sugerencias !== undefined && (
                       <p className="text-xs text-amber-600">
-                        No se encontraron productos con ese nombre. Escribe la URL manualmente.
+                        No se encontraron productos automáticamente. Usa el buscador manual.
                       </p>
                     )}
+
+                    {/* Buscador manual */}
+                    <div className="space-y-2 border-t border-blue-100 pt-3">
+                      <p className="text-xs text-neutral-500 font-medium">Buscar otro producto a mano:</p>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          value={busquedaManual[enlace.id] ?? ""}
+                          onChange={(e) => setBusquedaManual((prev) => ({ ...prev, [enlace.id]: e.target.value }))}
+                          onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); buscarManual(enlace.id); } }}
+                          className="flex-1 border border-neutral-200 px-3 py-1.5 text-xs focus:outline-none focus:border-[#C4857A] transition-colors"
+                          placeholder="Ej: kerastase champú nutritive..."
+                        />
+                        <button
+                          type="button"
+                          onClick={() => buscarManual(enlace.id)}
+                          disabled={buscandoManual[enlace.id] || !busquedaManual[enlace.id]?.trim()}
+                          className="px-3 py-1.5 bg-neutral-800 text-white text-xs hover:bg-neutral-700 disabled:opacity-40 transition-colors shrink-0"
+                        >
+                          {buscandoManual[enlace.id] ? "..." : "Buscar"}
+                        </button>
+                      </div>
+                      {resultadosManual[enlace.id]?.length === 0 && !buscandoManual[enlace.id] && (
+                        <p className="text-xs text-amber-600">Sin resultados. Prueba con otras palabras.</p>
+                      )}
+                      {(resultadosManual[enlace.id] ?? []).length > 0 && (
+                        <div className="space-y-1">
+                          {resultadosManual[enlace.id].map((s) => (
+                            <button
+                              key={s.url}
+                              type="button"
+                              onClick={() => setEnlaces((prev) =>
+                                prev.map((l) => l.id === enlace.id ? { ...l, urlCorrecta: s.url } : l)
+                              )}
+                              className={`w-full text-left px-3 py-2 text-xs border transition-colors ${
+                                enlace.urlCorrecta === s.url
+                                  ? "border-[#C4857A] bg-[#C4857A]/10 text-[#7A4A40]"
+                                  : "border-neutral-200 hover:border-[#C4857A]/50 hover:bg-[#C4857A]/5 text-neutral-700"
+                              }`}
+                            >
+                              <span className="font-medium">{s.nombre}</span>
+                              {s.marca && <span className="text-neutral-400 ml-1">· {s.marca}</span>}
+                              <span className="block text-neutral-400 font-mono mt-0.5">{s.url}</span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
 
                     {/* URL manual */}
                     <div className="flex items-center gap-2">
