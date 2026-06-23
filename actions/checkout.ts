@@ -7,6 +7,7 @@ import { stripe } from "@/lib/stripe";
 import type { LineaCarrito } from "@/context/CarritoContext";
 
 import { calcularGastoEnvio } from "@/lib/envio";
+import { enviarNotificacionPedido } from "@/lib/email";
 
 // ── Iniciar pago con Cecabank ─────────────────────────────────────────────────
 export async function iniciarPagoCeca(
@@ -118,7 +119,7 @@ export async function confirmarPedidoCeca(
 
   const { data: pedido } = await supabase
     .from("pedidos")
-    .select("id, email_cliente, direccion_envio, gastos_envio, estado")
+    .select("id, email_cliente, direccion_envio, gastos_envio, total, tipo_precio, estado")
     .eq("stripe_payment_id", numOper)
     .single();
 
@@ -134,10 +135,31 @@ export async function confirmarPedidoCeca(
   // Obtener líneas para crear pedido en WooCommerce
   const { data: lineas } = await supabase
     .from("pedidos_lineas")
-    .select("sku, cantidad, precio_unitario")
+    .select("sku, cantidad, precio_unitario, nombre_producto, nombre_variacion")
     .eq("pedido_id", pedido.id);
 
   const dir = pedido.direccion_envio as Record<string, string>;
+
+  // Enviar notificación por email al admin
+  void enviarNotificacionPedido({
+    pedidoId:   pedido.id,
+    email:      pedido.email_cliente,
+    nombre:     dir.nombre    ?? "",
+    apellidos:  dir.apellidos ?? "",
+    total:      pedido.total  ?? 0,
+    gastoEnvio: pedido.gastos_envio ?? 0,
+    metodoPago: "Cecabank",
+    tipoPrecio: pedido.tipo_precio ?? "b2c",
+    provincia:  dir.provincia ?? "",
+    ciudad:     dir.ciudad    ?? "",
+    lineas: (lineas ?? []).map((l) => ({
+      nombre:           l.nombre_producto ?? l.sku,
+      nombre_variacion: l.nombre_variacion,
+      cantidad:         l.cantidad,
+      precio:           l.precio_unitario,
+    })),
+  });
+
   const { wc_order_id } = await crearPedidoWooCommerce({
     email:         pedido.email_cliente,
     nombre:        dir.nombre        ?? "",

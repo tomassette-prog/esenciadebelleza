@@ -46,6 +46,14 @@ export const metadata: Metadata = {
     locale: "es_ES",
     url: "https://esenciadebelleza.es",
     siteName: "Esencia de Belleza",
+    images: [
+      {
+        url: "https://esenciadebelleza.es/og-default.jpg",
+        width: 1200,
+        height: 630,
+        alt: "Esencia de Belleza — Peluquería · Estética · Perfumes",
+      },
+    ],
   },
   twitter: {
     card: "summary_large_image",

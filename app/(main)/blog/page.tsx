@@ -9,6 +9,22 @@ export const metadata: Metadata = {
   title: "Blog de Belleza y Peluquería | Esencia de Belleza",
   description: "Consejos, tendencias y tutoriales de peluquería y estética profesional. Aprende los mejores tratamientos capilares y técnicas de belleza.",
   alternates: { canonical: "https://esenciadebelleza.es/blog" },
+  openGraph: {
+    title: "Blog de Belleza y Peluquería | Esencia de Belleza",
+    description: "Consejos, tendencias y tutoriales de peluquería y estética profesional. Aprende los mejores tratamientos capilares y técnicas de belleza.",
+    url: "https://esenciadebelleza.es/blog",
+    siteName: "Esencia de Belleza",
+    locale: "es_ES",
+    type: "website",
+    images: [
+      {
+        url: "https://esenciadebelleza.es/og-blog.jpg",
+        width: 1200,
+        height: 630,
+        alt: "Blog de Esencia de Belleza",
+      },
+    ],
+  },
 };
 
 export default async function BlogPage() {

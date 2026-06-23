@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { stripe } from "@/lib/stripe";
 import { crearPedidoWooCommerce } from "@/actions/checkout";
+import { enviarNotificacionPedido } from "@/lib/email";
+import { createAdminClient } from "@/lib/supabase/admin";
 import Stripe from "stripe";
 
 export async function POST(req: NextRequest) {
@@ -41,6 +43,41 @@ export async function POST(req: NextRequest) {
           console.error("[Stripe Webhook] No se pudo crear pedido en WC:", error);
         } else {
           console.log(`[Stripe Webhook] Pedido creado en WC: #${wc_order_id}`);
+        }
+
+        // Enviar notificación email al admin
+        const supabase = createAdminClient();
+        const { data: pedido } = await supabase
+          .from("pedidos")
+          .select("id, email_cliente, total, gastos_envio, tipo_precio, direccion_envio")
+          .eq("stripe_payment_id", pi.id)
+          .maybeSingle();
+
+        if (pedido) {
+          const { data: lineas } = await supabase
+            .from("pedidos_lineas")
+            .select("nombre_producto, nombre_variacion, cantidad, precio_unitario")
+            .eq("pedido_id", pedido.id);
+
+          const dir = (pedido.direccion_envio ?? {}) as Record<string, string>;
+          void enviarNotificacionPedido({
+            pedidoId:   pedido.id,
+            email:      pedido.email_cliente ?? datos.email,
+            nombre:     dir.nombre    ?? datos.nombre    ?? "",
+            apellidos:  dir.apellidos ?? datos.apellidos ?? "",
+            total:      pedido.total  ?? parseFloat(meta.total ?? "0"),
+            gastoEnvio: pedido.gastos_envio ?? parseFloat(meta.gasto_envio ?? "0"),
+            metodoPago: "Stripe",
+            tipoPrecio: pedido.tipo_precio ?? "b2c",
+            provincia:  dir.provincia ?? datos.provincia ?? "",
+            ciudad:     dir.ciudad    ?? datos.ciudad    ?? "",
+            lineas: (lineas ?? []).map((l) => ({
+              nombre:           l.nombre_producto,
+              nombre_variacion: l.nombre_variacion,
+              cantidad:         l.cantidad,
+              precio:           l.precio_unitario,
+            })),
+          });
         }
       } catch (err) {
         console.error("[Stripe Webhook] Error parseando checkout_data:", err);

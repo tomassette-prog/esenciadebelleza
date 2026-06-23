@@ -68,7 +68,56 @@ export function buildCategoriaMetadata(categoria: string, subcategoria?: string)
 
 // ─── JSON-LD schemas ──────────────────────────────────────────────────────────
 
+// 14 días naturales de desistimiento, devolución por correo a cargo del cliente
+// (conforme a la página /devoluciones del sitio)
+const RETURN_POLICY = {
+  "@type": "MerchantReturnPolicy",
+  applicableCountry: "ES",
+  returnPolicyCategory:
+    "https://schema.org/MerchantReturnFiniteReturnWindow",
+  merchantReturnDays: 14,
+  returnMethod: "https://schema.org/ReturnByMail",
+  returnFees: "https://schema.org/ReturnShippingFees",
+  returnPolicySeasonalOverride: [],
+};
+
+// Envío estándar: 5 € (gratis desde 40 € en Península); entrega 24 h express
+// (conforme a la página /envios del sitio — zona Península)
+const SHIPPING_DETAILS = {
+  "@type": "OfferShippingDetails",
+  shippingRate: {
+    "@type": "MonetaryAmount",
+    value: "5.00",
+    currency: "EUR",
+  },
+  shippingDestination: {
+    "@type": "DefinedRegion",
+    addressCountry: "ES",
+  },
+  deliveryTime: {
+    "@type": "ShippingDeliveryTime",
+    handlingTime: {
+      "@type": "QuantitativeValue",
+      minValue: 0,
+      maxValue: 0,
+      unitCode: "DAY",
+    },
+    transitTime: {
+      "@type": "QuantitativeValue",
+      minValue: 1,
+      maxValue: 2,
+      unitCode: "DAY",
+    },
+  },
+};
+
 export function buildProductJsonLd(producto: ProductoCompleto) {
+  // Imagen principal: intentar imagen del producto, luego primera variación con imagen
+  const imagenPrincipal =
+    producto.imagen_principal_url ??
+    producto.variaciones.find((v) => v.imagen_url)?.imagen_url ??
+    null;
+
   const offers = producto.variaciones.map((v) => ({
     "@type": "Offer",
     sku: v.sku,
@@ -80,25 +129,44 @@ export function buildProductJsonLd(producto: ProductoCompleto) {
         ? "https://schema.org/InStock"
         : "https://schema.org/OutOfStock",
     url: `${BASE_URL}/productos/${slugifyCategoria(producto.categoria)}/${slugifyCategoria(producto.subcategoria ?? "general")}/${producto.slug}?variacion=${encodeURIComponent(v.sku)}`,
-    image: v.imagen_url ?? producto.imagen_principal_url,
+    image: v.imagen_url ?? imagenPrincipal,
     seller: { "@type": "Organization", name: SITE_NAME },
+    hasMerchantReturnPolicy: RETURN_POLICY,
+    shippingDetails: SHIPPING_DETAILS,
   }));
 
-  return {
+  const rawDescription = stripHtml(producto.descripcion_general ?? "");
+  // Google recomienda descripciones entre 50 y 5000 caracteres
+  const description = rawDescription.slice(0, 5000) || producto.nombre;
+
+  const marcaNombre = producto.marca?.nombre;
+
+  const jsonLd: Record<string, unknown> = {
     "@context": "https://schema.org/",
     "@type": "Product",
     name: producto.nombre,
-    description: stripHtml(producto.descripcion_general ?? ""),
-    image: producto.imagen_principal_url,
-    brand: {
-      "@type": "Brand",
-      name: producto.marca?.nombre ?? "",
-    },
-    offers:
-      offers.length === 1
-        ? offers[0]
-        : { "@type": "AggregateOffer", offers, priceCurrency: "EUR" },
+    description,
+    ...(imagenPrincipal ? { image: imagenPrincipal } : {}),
+    ...(marcaNombre ? { brand: { "@type": "Brand", name: marcaNombre } } : {}),
+    offers: (() => {
+      if (offers.length === 1) return offers[0];
+      const precios = producto.variaciones.map((v) => v.precio_b2c);
+      const lowPrice = Math.min(...precios).toFixed(2);
+      const highPrice = Math.max(...precios).toFixed(2);
+      return {
+        "@type": "AggregateOffer",
+        offerCount: offers.length,
+        lowPrice,
+        highPrice,
+        priceCurrency: "EUR",
+        hasMerchantReturnPolicy: RETURN_POLICY,
+        shippingDetails: SHIPPING_DETAILS,
+        offers,
+      };
+    })(),
   };
+
+  return jsonLd;
 }
 
 export function buildBreadcrumbJsonLd(
