@@ -39,7 +39,25 @@ export interface ProductoVariacion {
   updated_at: string;
 }
 
-// ─── Marca ────────────────────────────────────────────────────────────────────
+// ─── Reseña de producto ───────────────────────────────────────────────────────
+export interface Resena {
+  id: string;
+  producto_id: string;
+  user_id: string | null;
+  autor_nombre: string;
+  valoracion: 1 | 2 | 3 | 4 | 5;
+  titulo: string | null;
+  cuerpo: string;
+  aprobada: boolean;
+  created_at: string;
+}
+
+export interface ResenaAggregate {
+  producto_id: string;
+  total_resenas: number;
+  valoracion_media: number;
+}
+
 export interface Marca {
   id: string;
   nombre: string;

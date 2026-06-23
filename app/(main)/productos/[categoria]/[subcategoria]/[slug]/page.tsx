@@ -10,7 +10,10 @@ import {
   slugifyCategoria,
   formatPrice,
 } from "@/lib/seo";
+import { getResenas, getResenaAggregate } from "@/actions/resenas";
 import { AnadirAlCarritoBtn } from "@/components/producto/AnadirAlCarritoBtn";
+import { FormularioResena } from "@/components/producto/FormularioResena";
+import { ListaResenas } from "@/components/producto/ListaResenas";
 import { Breadcrumb } from "@/components/layout/Breadcrumb";
 import { BotonesCompartir } from "@/components/layout/BotonesCompartir";
 import type { ProductoCompleto } from "@/types/producto";
@@ -100,6 +103,12 @@ export default async function ProductoPage({ params, searchParams }: PageProps) 
 
   const p = producto as ProductoCompleto;
 
+  // Reseñas
+  const [resenas, aggregate] = await Promise.all([
+    getResenas(p.id),
+    getResenaAggregate(p.id),
+  ]);
+
   // Variación activa por query param o primera disponible
   const variacionActiva =
     (tono
@@ -112,7 +121,7 @@ export default async function ProductoPage({ params, searchParams }: PageProps) 
   const canonicalUrl = `https://esenciadebelleza.es/productos/${slugifyCategoria(categoria)}/${slugifyCategoria(subcategoria)}/${slug}`;
 
   // JSON-LD schemas
-  const productJsonLd = buildProductJsonLd(p);
+  const productJsonLd = buildProductJsonLd(p, aggregate ?? undefined);
   const breadcrumbJsonLd = buildBreadcrumbJsonLd(
     p.categoria,
     p.subcategoria,
@@ -286,6 +295,25 @@ export default async function ProductoPage({ params, searchParams }: PageProps) 
             </div>
           </div>
         </div>
+
+        {/* ── Reseñas ── */}
+        <section className="mt-16 border-t border-neutral-100 pt-12">
+          <h2
+            className="text-2xl font-light text-neutral-900 mb-8"
+            style={{ fontFamily: "var(--font-cormorant)" }}
+          >
+            Opiniones de clientes
+          </h2>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
+            <ListaResenas resenas={resenas} aggregate={aggregate} />
+            <div>
+              <h3 className="text-base font-medium text-neutral-900 mb-4">
+                Escribe tu reseña
+              </h3>
+              <FormularioResena productoId={p.id} user={user} />
+            </div>
+          </div>
+        </section>
       </div>
     </>
   );

@@ -1,4 +1,4 @@
-import type { ProductoCompleto, ProductoVariacion } from "@/types/producto";
+import type { ProductoCompleto, ProductoVariacion, ResenaAggregate } from "@/types/producto";
 
 // ─── Helpers para generateMetadata de Next.js ─────────────────────────────────
 
@@ -111,7 +111,10 @@ const SHIPPING_DETAILS = {
   },
 };
 
-export function buildProductJsonLd(producto: ProductoCompleto) {
+export function buildProductJsonLd(
+  producto: ProductoCompleto,
+  aggregate?: ResenaAggregate
+) {
   // Imagen principal: intentar imagen del producto, luego primera variación con imagen
   const imagenPrincipal =
     producto.imagen_principal_url ??
@@ -148,6 +151,17 @@ export function buildProductJsonLd(producto: ProductoCompleto) {
     description,
     ...(imagenPrincipal ? { image: imagenPrincipal } : {}),
     ...(marcaNombre ? { brand: { "@type": "Brand", name: marcaNombre } } : {}),
+    ...(aggregate && aggregate.total_resenas > 0
+      ? {
+          aggregateRating: {
+            "@type": "AggregateRating",
+            ratingValue: aggregate.valoracion_media.toFixed(1),
+            reviewCount: aggregate.total_resenas,
+            bestRating: "5",
+            worstRating: "1",
+          },
+        }
+      : {}),
     offers: (() => {
       if (offers.length === 1) return offers[0];
       const precios = producto.variaciones.map((v) => v.precio_b2c);
