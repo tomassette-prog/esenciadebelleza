@@ -136,6 +136,12 @@ export default async function AdminLayout({ children }: { children: ReactNode })
               Categorías
             </Link>
             <Link
+              href="/admin/marcas"
+              className="text-xs tracking-widest uppercase text-neutral-300 hover:text-white transition-colors"
+            >
+              Marcas
+            </Link>
+            <Link
               href="/admin/resenas"
               className="text-xs tracking-widest uppercase text-neutral-300 hover:text-white transition-colors"
             >
