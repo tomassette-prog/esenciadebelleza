@@ -141,6 +141,27 @@ export const NAV_ITEMS: NavItem[] = [
     ],
   },
   {
+    label: "Perfumería",
+    href: "/productos/perfumeria",
+    columnas: [
+      {
+        titulo: "Perfumes",
+        links: [
+          { label: "Eau de Parfum", href: "/productos/perfumeria/eau-de-parfum" },
+          { label: "Eau de Toilette", href: "/productos/perfumeria/eau-de-toilette" },
+          { label: "Colonias", href: "/productos/perfumeria/colonias" },
+        ],
+      },
+      {
+        titulo: "Ambientación",
+        links: [
+          { label: "Ambientadores", href: "/productos/perfumeria/ambientadores" },
+          { label: "Brumas y Velas", href: "/productos/perfumeria/brumas-y-velas" },
+        ],
+      },
+    ],
+  },
+  {
     label: "Marcas",
     href: "/marcas",
   },
@@ -162,6 +183,27 @@ export const NAV_ITEMS: NavItem[] = [
 //   4. Si sigue sin estar → fallback por raíz (Peluquería / Estética)
 
 export const WOO_CAT_MAP: Record<number, { categoria: string; subcategoria: string }> = {
+
+  // ── PERFUMERÍA ─────────────────────────────────────────────────────────────
+  1018: { categoria: "perfumeria", subcategoria: "eau-de-parfum" },   // PERFUMES (padre)
+  1019: { categoria: "perfumeria", subcategoria: "eau-de-parfum" },   // Perfumes LATTAFA
+  1027: { categoria: "perfumeria", subcategoria: "eau-de-parfum" },   // DON ALGODON
+  1030: { categoria: "perfumeria", subcategoria: "eau-de-parfum" },   // AMBAR
+  1031: { categoria: "perfumeria", subcategoria: "eau-de-parfum" },   // AL HARAMAIN
+  1032: { categoria: "perfumeria", subcategoria: "eau-de-parfum" },   // ARMAF
+  1033: { categoria: "perfumeria", subcategoria: "eau-de-parfum" },   // MAISON ALHAMBRA
+  1034: { categoria: "perfumeria", subcategoria: "eau-de-parfum" },   // RAVE
+  1035: { categoria: "perfumeria", subcategoria: "eau-de-parfum" },   // RIIFFS
+  1036: { categoria: "perfumeria", subcategoria: "ambientadores" },   // NUSUK
+  1037: { categoria: "perfumeria", subcategoria: "eau-de-parfum" },   // THURAYA
+  1038: { categoria: "perfumeria", subcategoria: "eau-de-parfum" },   // ADYAN
+  1039: { categoria: "perfumeria", subcategoria: "eau-de-parfum" },   // MELINA
+  1040: { categoria: "perfumeria", subcategoria: "eau-de-parfum" },   // FRENCH AVENUE
+  1041: { categoria: "perfumeria", subcategoria: "eau-de-parfum" },   // AFNAN
+  1042: { categoria: "perfumeria", subcategoria: "eau-de-parfum" },   // PARIS CORNER
+  1010: { categoria: "perfumeria", subcategoria: "ambientadores" },   // AMBIENTADORES
+  1011: { categoria: "perfumeria", subcategoria: "ambientadores" },   // Ambientador NUSUK
+  576:  { categoria: "perfumeria", subcategoria: "brumas-y-velas" },  // Bruma aromática
 
   // ── PELUQUERÍA · Coloración ───────────────────────────────────────────────
   99:  { categoria: "peluqueria", subcategoria: "tintes" },
@@ -242,7 +284,6 @@ export const WOO_CAT_MAP: Record<number, { categoria: string; subcategoria: stri
   56:  { categoria: "estetica", subcategoria: "leche-corporal" },
   547: { categoria: "estetica", subcategoria: "peeling" },
   59:  { categoria: "estetica", subcategoria: "cremas-corporales" }, // Bronceador / Solar
-  576: { categoria: "estetica", subcategoria: "cremas-corporales" }, // Bruma aromática
   426: { categoria: "estetica", subcategoria: "gel-corporal" },      // Gel de ducha
 
   // ── ESTÉTICA · Depilación ─────────────────────────────────────────────────
@@ -318,7 +359,6 @@ export const WOO_CAT_MAP: Record<number, { categoria: string; subcategoria: stri
   66:   { categoria: "estetica", subcategoria: "cremas-corporales" }, // Corporales de Estética
 
   // ── BARBERÍA / Caballero · marcas completas ───────────────────────────────
-  1027: { categoria: "barberia", subcategoria: "cuidado-caballero" }, // DON ALGODON
   1013: { categoria: "barberia", subcategoria: "cuidado-caballero" }, // COIFFER
   1012: { categoria: "barberia", subcategoria: "cuidado-caballero" }, // CANDELAHN
   1026: { categoria: "barberia", subcategoria: "cuidado-caballero" }, // CANTU

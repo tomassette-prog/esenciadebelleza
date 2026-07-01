@@ -227,7 +227,7 @@ export async function aplicarCambios(slugsConId: Array<{ slug: string; wooId: nu
         imagen_principal_url: p.images[0]?.src ?? null,
         seo_title: `${nombreTruncado}${suffix}`,
         seo_description: `Compra ${p.name.trim()} al mejor precio. Envío 24-48h a toda España.`,
-        activo:    ex?.activo    ?? true,
+        activo:    ex?.activo    ?? false,  // nuevos entran como borrador (activo=false)
         destacado: ex?.destacado ?? false,
         nuevo:     ex?.nuevo     ?? false,
       };
