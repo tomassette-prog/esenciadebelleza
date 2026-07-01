@@ -4,6 +4,7 @@ import { cookies } from "next/headers";
 import { createClient } from "@supabase/supabase-js";
 import { WOO_CAT_MAP } from "@/lib/categorias";
 import { slugifyCategoria } from "@/lib/seo";
+import { suggestCategory } from "@/lib/category-suggester";
 
 const ADMIN_EMAILS = ["ziarresamot@gmail.com"];
 const WOO_URL  = process.env.WOO_URL!;
@@ -64,24 +65,108 @@ function resolverCategoria(cats: { id: number }[]) {
   return { categoria: "peluqueria", subcategoria: "peluqueria-general" };
 }
 
+// ─── Brand extraction helpers ─────────────────────────────────────────────────
+
+const DESCRIPTOR_BLOCKLIST = new Set([
+  "de", "del", "para", "con", "y", "e", "el", "la", "los", "las",
+  "un", "una", "por", "en", "a",
+]);
+
+function extractBrandName(productName: string): string {
+  const words = productName.trim().replace(/\s+/g, " ").split(" ");
+  if (words.length === 0) return productName.trim();
+  const first = words[0];
+  if (words.length >= 2) {
+    const second = words[1];
+    if (
+      !DESCRIPTOR_BLOCKLIST.has(second.toLowerCase()) &&
+      second.length <= 12 &&
+      /^[A-ZÁÉÍÓÚÑÜ'"]/.test(second)
+    ) {
+      return `${first} ${second}`;
+    }
+  }
+  return first;
+}
+
+function detectNewBrands(
+  nuevos: ProductoDiff[],
+  wooMap: Map<number, { name: string }>,
+  existingMarcaSlugs: Set<string>
+): string[] {
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const nuevo of nuevos) {
+    const woo = wooMap.get(nuevo.wooId);
+    if (!woo) continue;
+    const brandName = extractBrandName(woo.name);
+    const brandSlug = slugify(brandName);
+    if (!existingMarcaSlugs.has(brandSlug) && !seen.has(brandSlug)) {
+      seen.add(brandSlug);
+      result.push(brandName);
+    }
+  }
+  return result;
+}
+
 export interface ProductoDiff {
   slug: string;
   nombre: string;
   tipo: "nuevo" | "modificado";
   wooId: number;
+  wooCategories: number[];
   cambios?: Record<string, { woo: string | null; actual: string | null }>;
+}
+
+export interface UnmappedCategory {
+  wooCatId: number;
+  wooCatName: string;
+  suggestedCategoria: string;
+  suggestedSubcategoria: string;
+  confidence: "high" | "medium" | "low";
+}
+
+export interface DiffGaps {
+  newBrands: string[];
+  unmappedCategories: UnmappedCategory[];
+}
+
+export interface ReviewGroup {
+  groupKey: string;
+  suggestedCategoria: string;
+  suggestedSubcategoria: string;
+  confidence: "high" | "medium" | "low";
+  products: Array<{ slug: string; nombre: string; wooId: number; brandName: string }>;
+  sourceWooCatIds: number[];
+}
+
+export interface ReviewPayload {
+  approvedGroups: Array<{
+    slugsConId: Array<{ slug: string; wooId: number }>;
+    categoria: string;
+    subcategoria: string;
+  }>;
+}
+
+export interface SmartApplyResult {
+  ok: number;
+  brandsCreated: string[];
+  seoTriggered: string[];
+  notFound: string[];
+  error?: string;
 }
 
 export async function calcularDiff(): Promise<{
   nuevos: ProductoDiff[];
   modificados: ProductoDiff[];
   iguales: number;
+  gaps: DiffGaps;
   error?: string;
 }> {
   try {
     await verificarAdmin();
   } catch {
-    return { nuevos: [], modificados: [], iguales: 0, error: "No autorizado" };
+    return { nuevos: [], modificados: [], iguales: 0, gaps: { newBrands: [], unmappedCategories: [] }, error: "No autorizado" };
   }
 
   try {
@@ -90,7 +175,7 @@ export async function calcularDiff(): Promise<{
       id: number; name: string; slug: string; type: string;
       description: string; short_description: string;
       images: { src: string }[];
-      categories: { id: number }[];
+      categories: { id: number; name: string }[];
     }[] = [];
     let page = 1;
     while (true) {
@@ -130,7 +215,7 @@ export async function calcularDiff(): Promise<{
       const { categoria, subcategoria } = resolverCategoria(p.categories);
 
       if (!existing) {
-        nuevos.push({ slug, nombre: p.name, tipo: "nuevo", wooId: p.id });
+        nuevos.push({ slug, nombre: p.name, tipo: "nuevo", wooId: p.id, wooCategories: p.categories.map(c => c.id) });
         continue;
       }
 
@@ -146,15 +231,43 @@ export async function calcularDiff(): Promise<{
         cambios["imagen"] = { woo: imgWoo, actual: existing.imagen_principal_url };
 
       if (Object.keys(cambios).length > 0) {
-        modificados.push({ slug, nombre: p.name, tipo: "modificado", wooId: p.id, cambios });
+        modificados.push({ slug, nombre: p.name, tipo: "modificado", wooId: p.id, wooCategories: p.categories.map(c => c.id), cambios });
       } else {
         iguales++;
       }
     }
 
-    return { nuevos, modificados, iguales };
+    // 4. Detectar gaps: marcas nuevas y categorías sin mapear
+    const { data: marcasRows } = await supa.from("marcas").select("slug");
+    const existingMarcaSlugs = new Set<string>((marcasRows ?? []).map((r: { slug: string }) => r.slug));
+    const wooMap = new Map(wooProductos.map(p => [p.id, { name: p.name }]));
+    const newBrands = detectNewBrands(nuevos, wooMap, existingMarcaSlugs);
+
+    const seenCatIds = new Set<number>();
+    const unmappedCategories: UnmappedCategory[] = [];
+    for (const nuevo of nuevos) {
+      for (const catId of nuevo.wooCategories) {
+        if (WOO_CAT_MAP[catId] || seenCatIds.has(catId)) continue;
+        seenCatIds.add(catId);
+        const wooP = wooProductos.find(p => p.id === nuevo.wooId);
+        const cat = wooP?.categories.find(c => c.id === catId);
+        const wooCatName = cat?.name ?? String(catId);
+        const suggestion = suggestCategory(wooCatName, nuevo.nombre);
+        unmappedCategories.push({
+          wooCatId: catId,
+          wooCatName,
+          suggestedCategoria: suggestion.categoria,
+          suggestedSubcategoria: suggestion.subcategoria,
+          confidence: suggestion.confidence,
+        });
+      }
+    }
+
+    const gaps: DiffGaps = { newBrands, unmappedCategories };
+
+    return { nuevos, modificados, iguales, gaps };
   } catch (e) {
-    return { nuevos: [], modificados: [], iguales: 0, error: String(e) };
+    return { nuevos: [], modificados: [], iguales: 0, gaps: { newBrands: [], unmappedCategories: [] }, error: String(e) };
   }
 }
 
@@ -257,5 +370,180 @@ export async function aplicarCambios(slugsConId: Array<{ slug: string; wooId: nu
     return { ok: rows.length, noEncontrados };
   } catch (e) {
     return { ok: 0, noEncontrados: [], error: String(e) };
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// publicarAprobados — Smart Import review apply
+// ─────────────────────────────────────────────────────────────────────────────
+
+export async function publicarAprobados(payload: ReviewPayload): Promise<SmartApplyResult> {
+  const empty: SmartApplyResult = { ok: 0, brandsCreated: [], seoTriggered: [], notFound: [] };
+  try {
+    await verificarAdmin();
+  } catch {
+    return { ...empty, error: "No autorizado" };
+  }
+
+  if (!payload.approvedGroups.length) return empty;
+
+  try {
+    const supa = adminClient();
+
+    // Step B — fetch products from WooCommerce by ID
+    type WooProducto = {
+      id: number; name: string; slug: string; type: string;
+      description: string; short_description: string; sku: string;
+      price: string; regular_price: string;
+      stock_quantity: number | null; stock_status: string;
+      images: { src: string }[];
+      categories: { id: number; name: string }[];
+    };
+
+    const allSlugsConId = payload.approvedGroups.flatMap(g => g.slugsConId);
+    const PARALELO = 20;
+    const fetched: WooProducto[] = [];
+    const notFound: string[] = [];
+
+    for (let i = 0; i < allSlugsConId.length; i += PARALELO) {
+      const lote = allSlugsConId.slice(i, i + PARALELO);
+      const results = await Promise.all(
+        lote.map(({ slug, wooId }) =>
+          (fetchWoo(`/products/${wooId}`) as Promise<WooProducto>)
+            .then(p => ({ ok: true as const, p }))
+            .catch(() => ({ ok: false as const, slug }))
+        )
+      );
+      for (const r of results) {
+        if (r.ok) fetched.push(r.p);
+        else notFound.push(r.slug);
+      }
+    }
+
+    // Step C — auto-create new brands
+    const { data: marcasExisting } = await supa.from("marcas").select("id, slug, nombre");
+    const marcaSlugToId = new Map<string, number>(
+      (marcasExisting ?? []).map((m: { id: number; slug: string }) => [m.slug, m.id])
+    );
+
+    const brandsToInsert: Array<{ nombre: string; slug: string; logo_url: null }> = [];
+    for (const p of fetched) {
+      const brandName = extractBrandName(p.name);
+      const brandSlug = slugify(brandName);
+      if (!marcaSlugToId.has(brandSlug)) {
+        brandsToInsert.push({ nombre: brandName, slug: brandSlug, logo_url: null });
+        marcaSlugToId.set(brandSlug, -1); // placeholder to avoid duplicates in loop
+      }
+    }
+
+    const uniqueBrands = brandsToInsert.filter(
+      (b, i, arr) => arr.findIndex(x => x.slug === b.slug) === i
+    );
+    const brandsCreated: string[] = [];
+    if (uniqueBrands.length > 0) {
+      const { data: inserted } = await supa.from("marcas")
+        .upsert(uniqueBrands, { onConflict: "slug", ignoreDuplicates: true })
+        .select("id, slug, nombre");
+      // Re-fetch to get actual IDs
+      const { data: marcasRefreshed } = await supa.from("marcas").select("id, slug");
+      for (const m of marcasRefreshed ?? []) marcaSlugToId.set(m.slug, m.id);
+      if (inserted) brandsCreated.push(...inserted.map((m: { nombre: string }) => m.nombre));
+    }
+
+    // Step D — build category override map and upsert rows
+    const slugToCat = new Map<string, { categoria: string; subcategoria: string }>();
+    for (const group of payload.approvedGroups) {
+      for (const { slug } of group.slugsConId) {
+        slugToCat.set(slug, { categoria: group.categoria, subcategoria: group.subcategoria });
+      }
+    }
+
+    const publishedSlugs = fetched.map(p => p.slug || slugify(p.name));
+    const { data: existentes } = await supa.from("productos_padre")
+      .select("slug, destacado, nuevo")
+      .in("slug", publishedSlugs);
+    const existMap = new Map((existentes ?? []).map(e => [e.slug, e]));
+
+    const suffix = " | Esencia de Belleza";
+    const maxNombre = 60 - suffix.length;
+
+    const rows = fetched.map(p => {
+      const slug = p.slug || slugify(p.name);
+      const cat = slugToCat.get(slug) ?? resolverCategoria(p.categories);
+      const ex = existMap.get(slug);
+      const brandSlug = slugify(extractBrandName(p.name));
+      const marcaId = marcaSlugToId.get(brandSlug) ?? null;
+      const nombreTruncado = p.name.trim().slice(0, maxNombre);
+      return {
+        nombre: p.name.trim(),
+        slug,
+        categoria: cat.categoria,
+        subcategoria: cat.subcategoria,
+        descripcion_general: p.description || p.short_description || null,
+        imagen_principal_url: p.images[0]?.src ?? null,
+        seo_title: `${nombreTruncado}${suffix}`,
+        seo_description: `Compra ${p.name.trim()} al mejor precio. Envío 24-48h a toda España.`,
+        activo: true,
+        destacado: ex?.destacado ?? false,
+        nuevo: ex?.nuevo ?? false,
+        marca_id: marcaId ?? null,
+      };
+    });
+
+    const { error: upsertError } = await supa.from("productos_padre")
+      .upsert(rows, { onConflict: "slug" });
+    if (upsertError) return { ...empty, notFound, error: upsertError.message };
+
+    // Step E — upsert variaciones for simple products
+    for (const p of fetched) {
+      if (p.type !== "simple" || !p.sku) continue;
+      const { data: padre } = await supa.from("productos_padre")
+        .select("id").eq("slug", p.slug || slugify(p.name)).single();
+      if (!padre) continue;
+      const precio = parseFloat(p.price || p.regular_price) || 0;
+      const stock = p.stock_quantity ?? (p.stock_status === "instock" ? 1 : 0);
+      await supa.from("productos_variaciones").upsert({
+        producto_id: padre.id,
+        sku: p.sku,
+        nombre_variacion: "Unidad",
+        precio_b2c: precio,
+        precio_b2b: precio,
+        stock,
+        activa: true,
+      }, { onConflict: "sku" });
+    }
+
+    // Step F — trigger SEO for products without texto_enriquecido_seo
+    const { generarSeoProducto } = await import("@/lib/seo-generator");
+    const { data: needsSeo } = await supa.from("productos_padre")
+      .select("slug, nombre, categoria, subcategoria")
+      .in("slug", publishedSlugs)
+      .or("texto_enriquecido_seo.is.null,texto_enriquecido_seo.eq.");
+
+    const seoResults = await Promise.allSettled(
+      (needsSeo ?? []).map(async (row: { slug: string; nombre: string; categoria: string; subcategoria: string }) => {
+        const seoOutput = generarSeoProducto({
+          nombre: row.nombre,
+          marca: null,
+          categoria: row.categoria,
+          subcategoria: row.subcategoria,
+          descripcion: null,
+        });
+        await supa.from("productos_padre").update({
+          seo_title: seoOutput.seo_title,
+          seo_description: seoOutput.seo_description,
+          texto_enriquecido_seo: seoOutput.texto_enriquecido_seo,
+        }).eq("slug", row.slug);
+        return row.slug;
+      })
+    );
+
+    const seoTriggered = seoResults
+      .filter((r): r is PromiseFulfilledResult<string> => r.status === "fulfilled")
+      .map(r => r.value);
+
+    return { ok: rows.length, brandsCreated, seoTriggered, notFound };
+  } catch (e) {
+    return { ...empty, error: String(e) };
   }
 }

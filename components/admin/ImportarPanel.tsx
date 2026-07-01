@@ -1,23 +1,87 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { calcularDiff, aplicarCambios, type ProductoDiff } from "@/actions/importar";
+import {
+  calcularDiff,
+  aplicarCambios,
+  publicarAprobados,
+  type ProductoDiff,
+  type DiffGaps,
+  type ReviewGroup,
+  type SmartApplyResult,
+} from "@/actions/importar";
+import { getAllCategoriaPairs, type CategoriaPair } from "@/lib/category-suggester";
+
+// ─── Types ─────────────────────────────────────────────────────────────────────
+
+type Fase = "idle" | "diff" | "listo" | "revisando" | "publicando" | "aplicando";
+
+type GroupState = {
+  approved: boolean;
+  overrideCategoria?: string;
+  overrideSubcategoria?: string;
+};
+
+// ─── Pure helpers (outside component) ─────────────────────────────────────────
+
+function buildReviewGroups(nuevos: ProductoDiff[], gaps: DiffGaps): ReviewGroup[] {
+  const unmappedMap = new Map(gaps.unmappedCategories.map(u => [u.wooCatId, u]));
+  const groupMap = new Map<string, ReviewGroup>();
+
+  for (const nuevo of nuevos) {
+    const unmappedCat = nuevo.wooCategories.map(id => unmappedMap.get(id)).find(Boolean);
+    if (!unmappedCat) continue;
+    const key = `${unmappedCat.suggestedCategoria}/${unmappedCat.suggestedSubcategoria}`;
+    if (!groupMap.has(key)) {
+      groupMap.set(key, {
+        groupKey: key,
+        suggestedCategoria: unmappedCat.suggestedCategoria,
+        suggestedSubcategoria: unmappedCat.suggestedSubcategoria,
+        confidence: unmappedCat.confidence,
+        products: [],
+        sourceWooCatIds: [],
+      });
+    }
+    const group = groupMap.get(key)!;
+    group.products.push({ slug: nuevo.slug, nombre: nuevo.nombre, wooId: nuevo.wooId, brandName: "" });
+    for (const id of nuevo.wooCategories) {
+      if (unmappedMap.has(id) && !group.sourceWooCatIds.includes(id)) {
+        group.sourceWooCatIds.push(id);
+      }
+    }
+  }
+
+  const order: Record<string, number> = { low: 0, medium: 1, high: 2 };
+  return [...groupMap.values()].sort((a, b) => order[a.confidence] - order[b.confidence]);
+}
+
+// ─── Component ────────────────────────────────────────────────────────────────
 
 export function ImportarPanel() {
   const [isPending, startTransition] = useTransition();
-  const [nuevos, setNuevos]       = useState<ProductoDiff[]>([]);
+  const [nuevos, setNuevos]         = useState<ProductoDiff[]>([]);
   const [modificados, setModificados] = useState<ProductoDiff[]>([]);
-  const [iguales, setIguales]     = useState<number | null>(null);
+  const [iguales, setIguales]       = useState<number | null>(null);
   const [seleccionados, setSeleccionados] = useState<Set<string>>(new Set());
-  const [resultado, setResultado] = useState<string | null>(null);
-  const [error, setError]         = useState<string | null>(null);
-  const [fase, setFase]           = useState<"idle" | "diff" | "listo" | "aplicando">("idle");
-  const [progreso, setProgreso]   = useState<{ ok: number; total: number } | null>(null);
-  const [resumen, setResumen]     = useState<{ ok: number; noEncontrados: string[] } | null>(null);
+  const [error, setError]           = useState<string | null>(null);
+  const [fase, setFase]             = useState<Fase>("idle");
+  const [progreso, setProgreso]     = useState<{ ok: number; total: number } | null>(null);
+  const [resumen, setResumen]       = useState<{ ok: number; noEncontrados: string[] } | null>(null);
+
+  // Smart import state
+  const [gaps, setGaps]             = useState<DiffGaps>({ newBrands: [], unmappedCategories: [] });
+  const [reviewGroups, setReviewGroups] = useState<ReviewGroup[]>([]);
+  const [groupApprovals, setGroupApprovals] = useState<Map<string, GroupState>>(new Map());
+  const [allPairs]                  = useState<CategoriaPair[]>(() => getAllCategoriaPairs());
+  const [smartResult, setSmartResult] = useState<SmartApplyResult | null>(null);
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+
+  // ── Handlers ────────────────────────────────────────────────────────────────
 
   function handleDiff() {
     setError(null);
-    setResultado(null);
+    setResumen(null);
+    setSmartResult(null);
     setFase("diff");
     startTransition(async () => {
       const res = await calcularDiff();
@@ -25,8 +89,44 @@ export function ImportarPanel() {
       setNuevos(res.nuevos);
       setModificados(res.modificados);
       setIguales(res.iguales);
-      // Pre-seleccionar todos los nuevos
+      setGaps(res.gaps);
       setSeleccionados(new Set(res.nuevos.map(p => p.slug)));
+      setFase("listo");
+    });
+  }
+
+  function handleRevisar() {
+    const groups = buildReviewGroups(nuevos, gaps);
+    setReviewGroups(groups);
+    const initialApprovals = new Map<string, GroupState>(
+      groups.map(g => [g.groupKey, { approved: g.confidence === "high" }])
+    );
+    setGroupApprovals(initialApprovals);
+    // Auto-expand low/medium confidence groups
+    setExpandedGroups(new Set(groups.filter(g => g.confidence !== "high").map(g => g.groupKey)));
+    setFase("revisando");
+  }
+
+  function handlePublicarAprobados() {
+    const approvedGroups = [...groupApprovals.entries()]
+      .filter(([, state]) => state.approved)
+      .map(([groupKey, state]) => {
+        const group = reviewGroups.find(g => g.groupKey === groupKey)!;
+        return {
+          slugsConId: group.products.map(p => ({ slug: p.slug, wooId: p.wooId })),
+          categoria: state.overrideCategoria ?? group.suggestedCategoria,
+          subcategoria: state.overrideSubcategoria ?? group.suggestedSubcategoria,
+        };
+      });
+    if (!approvedGroups.length) return;
+    const total = approvedGroups.reduce((s, g) => s + g.slugsConId.length, 0);
+    setProgreso({ ok: 0, total });
+    setFase("publicando");
+    startTransition(async () => {
+      const result = await publicarAprobados({ approvedGroups });
+      setSmartResult(result);
+      if (result.error) setError(result.error);
+      setProgreso(null);
       setFase("listo");
     });
   }
@@ -55,11 +155,9 @@ export function ImportarPanel() {
     setResumen(null);
     setProgreso({ ok: 0, total: seleccionados.size });
     startTransition(async () => {
-      // Construir lista {slug, wooId} para los seleccionados
       const todosDiff = [...nuevos, ...modificados];
       const slugToWooId = new Map(todosDiff.map(p => [p.slug, p.wooId]));
       const todos = [...seleccionados].map(slug => ({ slug, wooId: slugToWooId.get(slug) ?? 0 }));
-
       const LOTE = 100;
       let totalOk = 0;
       const totalNoEncontrados: string[] = [];
@@ -77,9 +175,22 @@ export function ImportarPanel() {
     });
   }
 
+  // ── Derived ─────────────────────────────────────────────────────────────────
+
+  const approvedCount = [...groupApprovals.values()].filter(s => s.approved)
+    .reduce((n, state) => {
+      const group = reviewGroups.find(g => groupApprovals.get(g.groupKey) === state);
+      return n + (group?.products.length ?? 0);
+    }, 0);
+
+  const hasGaps = gaps.newBrands.length > 0 || gaps.unmappedCategories.length > 0;
+  const uniqueCategorias = [...new Set(allPairs.map(p => p.categoria))];
+
+  // ── Render ──────────────────────────────────────────────────────────────────
+
   return (
     <div className="space-y-8">
-      {/* Cabecera + botón calcular */}
+      {/* Header */}
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-light text-neutral-900" style={{ fontFamily: "var(--font-cormorant)" }}>
@@ -98,43 +209,62 @@ export function ImportarPanel() {
         </button>
       </div>
 
+      {/* Alerts */}
       {error && (
         <div className="p-3 bg-red-50 border border-red-200 text-red-700 text-sm">{error}</div>
       )}
-      {resumen && (
-        <div className="space-y-3">
-          <div className="p-3 bg-green-50 border border-green-200 text-green-700 text-sm">
-            ✅ {resumen.ok} productos actualizados correctamente.
-            {resumen.noEncontrados.length > 0 && (
-              <span className="ml-2 text-amber-700">
-                {resumen.noEncontrados.length} no encontrados en WooCommerce.
-              </span>
-            )}
-          </div>
-          {resumen.noEncontrados.length > 0 && (
-            <details className="text-xs border border-amber-200 bg-amber-50">
-              <summary className="px-3 py-2 cursor-pointer text-amber-700 font-medium">
-                Ver slugs no encontrados ({resumen.noEncontrados.length})
-              </summary>
-              <div className="px-3 pb-3 pt-1 space-y-0.5 max-h-48 overflow-y-auto">
-                {resumen.noEncontrados.map(s => (
-                  <div key={s} className="font-mono text-amber-800">{s}</div>
-                ))}
-              </div>
-            </details>
-          )}
-        </div>
-      )}
 
+      {/* Calculating */}
       {fase === "diff" && (
         <div className="text-center py-16 text-neutral-400 text-sm animate-pulse">
           Descargando y comparando {">"}3000 productos… esto tarda ~30 segundos
         </div>
       )}
 
-      {(fase === "listo" || fase === "aplicando") && iguales !== null && (
+      {/* ── FASE: LISTO (diff result) ── */}
+      {(fase === "listo" || fase === "aplicando" || fase === "publicando") && iguales !== null && (
         <>
-          {/* Resumen */}
+          {/* SmartApplyResult */}
+          {smartResult && (
+            <div className="border border-green-200 bg-green-50 p-3 text-sm space-y-1">
+              <p className="font-medium text-green-800">✅ {smartResult.ok} productos publicados</p>
+              {smartResult.brandsCreated.length > 0 && (
+                <p className="text-green-700">Marcas creadas: {smartResult.brandsCreated.join(", ")}</p>
+              )}
+              {smartResult.seoTriggered.length > 0 && (
+                <p className="text-green-700">SEO generado: {smartResult.seoTriggered.length} productos</p>
+              )}
+              {smartResult.notFound.length > 0 && (
+                <p className="text-amber-700">{smartResult.notFound.length} no encontrados en WooCommerce</p>
+              )}
+            </div>
+          )}
+
+          {/* Classic resumen */}
+          {resumen && !smartResult && (
+            <div className="space-y-2">
+              <div className="p-3 bg-green-50 border border-green-200 text-green-700 text-sm">
+                ✅ {resumen.ok} productos actualizados.
+                {resumen.noEncontrados.length > 0 && (
+                  <span className="ml-2 text-amber-700">{resumen.noEncontrados.length} no encontrados.</span>
+                )}
+              </div>
+              {resumen.noEncontrados.length > 0 && (
+                <details className="text-xs border border-amber-200 bg-amber-50">
+                  <summary className="px-3 py-2 cursor-pointer text-amber-700 font-medium">
+                    Ver slugs no encontrados ({resumen.noEncontrados.length})
+                  </summary>
+                  <div className="px-3 pb-3 pt-1 space-y-0.5 max-h-48 overflow-y-auto">
+                    {resumen.noEncontrados.map(s => (
+                      <div key={s} className="font-mono text-amber-800">{s}</div>
+                    ))}
+                  </div>
+                </details>
+              )}
+            </div>
+          )}
+
+          {/* Summary cards */}
           <div className="grid grid-cols-3 gap-4">
             <div className="border border-neutral-200 p-4 text-center">
               <p className="text-3xl font-light text-green-700">{nuevos.length}</p>
@@ -150,25 +280,46 @@ export function ImportarPanel() {
             </div>
           </div>
 
-          {/* Barra de acción */}
+          {/* Gaps banner */}
+          {hasGaps && nuevos.length > 0 && (
+            <div className="border border-amber-200 bg-amber-50 p-4 flex items-start justify-between gap-4">
+              <div className="text-sm text-amber-800 space-y-1">
+                <p className="font-medium">Se detectaron elementos que requieren revisión:</p>
+                {gaps.newBrands.length > 0 && (
+                  <p>• {gaps.newBrands.length} marca{gaps.newBrands.length > 1 ? "s" : ""} nueva{gaps.newBrands.length > 1 ? "s" : ""}: {gaps.newBrands.slice(0, 3).join(", ")}{gaps.newBrands.length > 3 ? "…" : ""}</p>
+                )}
+                {gaps.unmappedCategories.length > 0 && (
+                  <p>• {gaps.unmappedCategories.length} categoría{gaps.unmappedCategories.length > 1 ? "s" : ""} de WooCommerce sin mapear</p>
+                )}
+              </div>
+              <button
+                onClick={handleRevisar}
+                className="shrink-0 px-4 py-2 bg-amber-700 text-white text-xs tracking-widest uppercase hover:bg-amber-800 transition-colors"
+              >
+                Revisar y publicar
+              </button>
+            </div>
+          )}
+
+          {/* Action bar (fast path for mapped products) */}
           <div className="flex items-center justify-between gap-4 bg-neutral-50 border border-neutral-200 px-4 py-3">
             <p className="text-sm text-neutral-600">
-              <span className="font-medium text-neutral-900">{seleccionados.size}</span> seleccionados
+              <span className="font-medium text-neutral-900">{seleccionados.size}</span> seleccionados para aplicar
             </p>
             <button
               onClick={handleAplicar}
-              disabled={!seleccionados.size || fase === "aplicando"}
+              disabled={!seleccionados.size || fase === "aplicando" || fase === "publicando"}
               className="px-6 py-2 bg-neutral-900 text-white text-xs tracking-widest uppercase hover:bg-neutral-700 disabled:opacity-40 transition-colors"
             >
               {fase === "aplicando" ? "Aplicando…" : `Aplicar ${seleccionados.size} cambios`}
             </button>
           </div>
 
-          {/* Barra de progreso */}
-          {fase === "aplicando" && progreso && (
+          {/* Progress bar */}
+          {(fase === "aplicando" || fase === "publicando") && progreso && (
             <div className="space-y-1.5">
               <div className="flex justify-between text-xs text-neutral-500">
-                <span>Aplicando cambios…</span>
+                <span>{fase === "publicando" ? "Publicando…" : "Aplicando cambios…"}</span>
                 <span>{progreso.ok} / {progreso.total}</span>
               </div>
               <div className="w-full h-1.5 bg-neutral-200 rounded-full overflow-hidden">
@@ -180,7 +331,7 @@ export function ImportarPanel() {
             </div>
           )}
 
-          {/* ── Tabla: NUEVOS ── */}
+          {/* Nuevos list */}
           {nuevos.length > 0 && (
             <section>
               <div className="flex items-center justify-between mb-3">
@@ -188,7 +339,7 @@ export function ImportarPanel() {
                   Nuevos ({nuevos.length})
                 </h2>
                 <div className="flex gap-3">
-                  <button onClick={() => selectAll(nuevos)}   className="text-xs text-neutral-500 hover:text-neutral-900 underline underline-offset-2">Todos</button>
+                  <button onClick={() => selectAll(nuevos)} className="text-xs text-neutral-500 hover:text-neutral-900 underline underline-offset-2">Todos</button>
                   <button onClick={() => deselectAll(nuevos)} className="text-xs text-neutral-500 hover:text-neutral-900 underline underline-offset-2">Ninguno</button>
                 </div>
               </div>
@@ -210,7 +361,7 @@ export function ImportarPanel() {
             </section>
           )}
 
-          {/* ── Tabla: MODIFICADOS ── */}
+          {/* Modificados list */}
           {modificados.length > 0 && (
             <section>
               <div className="flex items-center justify-between mb-3">
@@ -218,7 +369,7 @@ export function ImportarPanel() {
                   Con cambios ({modificados.length})
                 </h2>
                 <div className="flex gap-3">
-                  <button onClick={() => selectAll(modificados)}   className="text-xs text-neutral-500 hover:text-neutral-900 underline underline-offset-2">Todos</button>
+                  <button onClick={() => selectAll(modificados)} className="text-xs text-neutral-500 hover:text-neutral-900 underline underline-offset-2">Todos</button>
                   <button onClick={() => deselectAll(modificados)} className="text-xs text-neutral-500 hover:text-neutral-900 underline underline-offset-2">Ninguno</button>
                 </div>
               </div>
@@ -240,16 +391,13 @@ export function ImportarPanel() {
                       <span className="text-xs px-2 py-0.5 bg-amber-50 text-amber-700 border border-amber-200">
                         {Object.keys(p.cambios ?? {}).length} cambio{Object.keys(p.cambios ?? {}).length > 1 ? "s" : ""}
                       </span>
-                      <svg className="w-4 h-4 text-neutral-400 group-open:rotate-180 transition-transform shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 9l-7 7-7-7" />
-                      </svg>
                     </summary>
                     <div className="px-11 pb-3 pt-1 space-y-1">
                       {Object.entries(p.cambios ?? {}).map(([campo, vals]) => (
                         <div key={campo} className="grid grid-cols-[80px_1fr_1fr] gap-2 text-xs">
                           <span className="text-neutral-500 font-medium uppercase tracking-wide">{campo}</span>
-                          <span className="text-red-600 bg-red-50 px-2 py-0.5 truncate" title={vals.actual ?? "—"}>{vals.actual ?? "—"}</span>
-                          <span className="text-green-700 bg-green-50 px-2 py-0.5 truncate" title={vals.woo ?? "—"}>→ {vals.woo ?? "—"}</span>
+                          <span className="text-red-600 bg-red-50 px-2 py-0.5 truncate">{vals.actual ?? "—"}</span>
+                          <span className="text-green-700 bg-green-50 px-2 py-0.5 truncate">→ {vals.woo ?? "—"}</span>
                         </div>
                       ))}
                     </div>
@@ -260,6 +408,165 @@ export function ImportarPanel() {
           )}
         </>
       )}
+
+      {/* ── FASE: REVISANDO ── */}
+      {fase === "revisando" && (
+        <div className="space-y-6">
+          {/* Summary */}
+          <div className="border border-neutral-200 bg-neutral-50 px-4 py-3 text-sm text-neutral-600 flex gap-4">
+            <span><strong className="text-neutral-900">{nuevos.length}</strong> nuevos</span>
+            <span><strong className="text-amber-700">{gaps.newBrands.length}</strong> marcas nuevas</span>
+            <span><strong className="text-amber-700">{gaps.unmappedCategories.length}</strong> categorías sin mapear</span>
+          </div>
+
+          {/* New brands */}
+          {gaps.newBrands.length > 0 && (
+            <div className="border border-neutral-200 p-4 space-y-2">
+              <p className="text-xs font-medium tracking-widest uppercase text-neutral-500">Nuevas marcas detectadas</p>
+              <div className="flex flex-wrap gap-2">
+                {gaps.newBrands.map(brand => (
+                  <span key={brand} className="inline-flex items-center gap-1.5 px-2.5 py-1 border border-amber-200 bg-amber-50 text-amber-800 text-xs">
+                    {brand}
+                    <span className="text-amber-500 font-medium">· sin logo</span>
+                  </span>
+                ))}
+              </div>
+              <p className="text-xs text-neutral-400">Se crearán automáticamente al publicar. Podrás añadir el logo después.</p>
+            </div>
+          )}
+
+          {/* Review groups */}
+          <div className="space-y-3">
+            <h2 className="text-sm font-medium text-neutral-900 uppercase tracking-widest">
+              Grupos por categoría sugerida ({reviewGroups.length})
+            </h2>
+            {reviewGroups.length === 0 && (
+              <p className="text-sm text-neutral-400 py-4">No hay grupos con categoría desconocida.</p>
+            )}
+            {reviewGroups.map(group => {
+              const state = groupApprovals.get(group.groupKey) ?? { approved: false };
+              const isExpanded = expandedGroups.has(group.groupKey);
+              const confidenceColor = group.confidence === "high"
+                ? "border-green-200 bg-green-50 text-green-700"
+                : group.confidence === "medium"
+                  ? "border-amber-200 bg-amber-50 text-amber-700"
+                  : "border-red-200 bg-red-50 text-red-700";
+              const pairLabel = allPairs.find(
+                p => p.categoria === (state.overrideCategoria ?? group.suggestedCategoria) &&
+                     p.subcategoria === (state.overrideSubcategoria ?? group.suggestedSubcategoria)
+              )?.label ?? `${state.overrideCategoria ?? group.suggestedCategoria} › ${state.overrideSubcategoria ?? group.suggestedSubcategoria}`;
+
+              return (
+                <div key={group.groupKey} className={`border ${state.approved ? "border-neutral-300" : "border-neutral-200"} transition-colors`}>
+                  {/* Group header */}
+                  <div className="flex items-center gap-3 px-4 py-3">
+                    <input
+                      type="checkbox"
+                      checked={state.approved}
+                      onChange={e => setGroupApprovals(prev => {
+                        const next = new Map(prev);
+                        next.set(group.groupKey, { ...state, approved: e.target.checked });
+                        return next;
+                      })}
+                      className="w-4 h-4 accent-neutral-900 shrink-0"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <span className="text-sm text-neutral-800">{pairLabel}</span>
+                    </div>
+                    <span className={`text-xs px-2 py-0.5 border ${confidenceColor}`}>
+                      {group.confidence === "high" ? "ALTA" : group.confidence === "medium" ? "MEDIA" : "BAJA"}
+                    </span>
+                    <span className="text-xs text-neutral-400">{group.products.length} productos</span>
+                    <button
+                      onClick={() => setExpandedGroups(prev => {
+                        const next = new Set(prev);
+                        if (next.has(group.groupKey)) next.delete(group.groupKey);
+                        else next.add(group.groupKey);
+                        return next;
+                      })}
+                      className="text-neutral-400 hover:text-neutral-600"
+                    >
+                      {isExpanded ? "▲" : "▼"}
+                    </button>
+                  </div>
+
+                  {/* Expanded: override + products */}
+                  {isExpanded && (
+                    <div className="border-t border-neutral-100 px-4 py-3 space-y-3">
+                      {/* Category override */}
+                      <div className="flex gap-3 items-center">
+                        <span className="text-xs text-neutral-500 w-28 shrink-0">Cambiar categoría:</span>
+                        <select
+                          value={state.overrideCategoria ?? group.suggestedCategoria}
+                          onChange={e => {
+                            const newCat = e.target.value;
+                            const firstSub = allPairs.find(p => p.categoria === newCat)?.subcategoria ?? "";
+                            setGroupApprovals(prev => {
+                              const next = new Map(prev);
+                              next.set(group.groupKey, { ...state, overrideCategoria: newCat, overrideSubcategoria: firstSub });
+                              return next;
+                            });
+                          }}
+                          className="text-xs border border-neutral-200 px-2 py-1 bg-white"
+                        >
+                          {uniqueCategorias.map(cat => (
+                            <option key={cat} value={cat}>{cat}</option>
+                          ))}
+                        </select>
+                        <select
+                          value={state.overrideSubcategoria ?? group.suggestedSubcategoria}
+                          onChange={e => {
+                            setGroupApprovals(prev => {
+                              const next = new Map(prev);
+                              next.set(group.groupKey, { ...state, overrideSubcategoria: e.target.value });
+                              return next;
+                            });
+                          }}
+                          className="text-xs border border-neutral-200 px-2 py-1 bg-white"
+                        >
+                          {allPairs
+                            .filter(p => p.categoria === (state.overrideCategoria ?? group.suggestedCategoria))
+                            .map(p => (
+                              <option key={p.subcategoria} value={p.subcategoria}>{p.label.split(" › ")[1]}</option>
+                            ))}
+                        </select>
+                      </div>
+
+                      {/* Product list */}
+                      <div className="space-y-1 max-h-48 overflow-y-auto">
+                        {group.products.slice(0, 10).map(p => (
+                          <div key={p.slug} className="text-xs text-neutral-600 py-0.5">{p.nombre}</div>
+                        ))}
+                        {group.products.length > 10 && (
+                          <p className="text-xs text-neutral-400">+ {group.products.length - 10} más</p>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Bottom action bar */}
+          <div className="flex items-center justify-between gap-4 border-t border-neutral-200 pt-4">
+            <button
+              onClick={() => setFase("listo")}
+              className="text-sm text-neutral-500 underline underline-offset-2"
+            >
+              Volver al diff
+            </button>
+            <button
+              disabled={approvedCount === 0 || isPending}
+              onClick={handlePublicarAprobados}
+              className="px-6 py-2.5 bg-[#3D2018] text-white text-xs tracking-widest uppercase hover:bg-neutral-900 disabled:opacity-40 transition-colors"
+            >
+              Publicar {approvedCount > 0 ? `${approvedCount} productos` : "aprobados"}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
+
