@@ -167,8 +167,7 @@ export async function aplicarCambios(slugs: string[]): Promise<{ ok: number; err
   if (!slugs.length) return { ok: 0 };
 
   try {
-    // Descargar solo los productos seleccionados usando el parámetro slug de WooCommerce
-    // (evita descargar los 3000+ productos completos)
+    // Buscar cada slug en WooCommerce en paralelo (el parámetro slug solo acepta uno a la vez)
     type WooProducto = {
       id: number; name: string; slug: string; type: string; variations: number[];
       description: string; short_description: string; sku: string;
@@ -177,14 +176,18 @@ export async function aplicarCambios(slugs: string[]): Promise<{ ok: number; err
       images: { src: string }[];
       categories: { id: number }[];
     };
-    const seleccionados: WooProducto[] = [];
 
-    // WooCommerce acepta hasta ~10 slugs por request con ?slug=a,b,c
-    const CHUNK = 10;
-    for (let i = 0; i < slugs.length; i += CHUNK) {
-      const chunk = slugs.slice(i, i + CHUNK);
-      const batch = await fetchWoo(`/products?status=publish&per_page=${CHUNK}&slug=${chunk.join(",")}`);
-      if (Array.isArray(batch)) seleccionados.push(...batch);
+    // Lotes de 20 en paralelo para no saturar WooCommerce
+    const PARALELO = 20;
+    const seleccionados: WooProducto[] = [];
+    for (let i = 0; i < slugs.length; i += PARALELO) {
+      const lote = slugs.slice(i, i + PARALELO);
+      const resultados = await Promise.all(
+        lote.map(slug =>
+          fetchWoo(`/products?status=publish&slug=${slug}`).catch(() => []) as Promise<WooProducto[]>
+        )
+      );
+      seleccionados.push(...resultados.flat());
     }
     const supa = adminClient();
 
