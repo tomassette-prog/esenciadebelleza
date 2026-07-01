@@ -122,16 +122,22 @@ async function asegurarBucket() {
 async function migrarPadres() {
   console.log("\n▶ Procesando imágenes de productos padre...");
 
-  // Obtener todos los productos con imagen externa
-  const { data, error } = await supabase
-    .from("productos_padre")
-    .select("id, slug, imagen_principal_url")
-    .not("imagen_principal_url", "is", null);
-
-  if (error || !data) {
-    console.error("[ERROR]", error?.message);
-    return;
+  // Obtener todos los productos con imagen externa (paginado, Supabase límite 1000/página)
+  const allData: Array<{ id: string; slug: string; imagen_principal_url: string | null }> = [];
+  let offset = 0;
+  while (true) {
+    const { data: page, error } = await supabase
+      .from("productos_padre")
+      .select("id, slug, imagen_principal_url")
+      .not("imagen_principal_url", "is", null)
+      .range(offset, offset + 999);
+    if (error || !page || page.length === 0) break;
+    allData.push(...page);
+    if (page.length < 1000) break;
+    offset += 1000;
   }
+  const data = allData;
+  const error = null;
 
   const conUrlExterna = data.filter((p) => esUrlExterna(p.imagen_principal_url));
   console.log(`  Total con imagen externa: ${conUrlExterna.length} de ${data.length}`);
@@ -182,22 +188,22 @@ async function migrarVariaciones() {
 
   const { data, error } = await supabase
     .from("productos_variaciones")
-    .select("id, producto_id, nombre_variacion, imagen_url, productos_padre(slug)")
+    .select("id, producto_padre_id, nombre_variacion, imagen_url, productos_padre(slug)")
     .not("imagen_url", "is", null);
 
   if (error || !data) {
-    console.error("[ERROR]", error?.message);
+    console.error("[ERROR] cargando productos");
     return;
   }
 
-  const conUrlExterna = data.filter((v) => esUrlExterna(v.imagen_url));
+  const conUrlExterna = data.filter((p) => esUrlExterna(p.imagen_url));
   console.log(`  Total variaciones con imagen externa: ${conUrlExterna.length} de ${data.length}`);
 
   let ok = 0, fail = 0;
 
   for (const vari of conUrlExterna) {
     const urlOrigen = vari.imagen_url!;
-    const padreSlug = (vari.productos_padre as any)?.slug ?? `prod-${vari.producto_id}`;
+    const padreSlug = (vari.productos_padre as any)?.slug ?? `prod-${vari.producto_padre_id}`;
     // Nombre SEO-friendly: slug-padre--nombre-variacion
     const slugVariacion = vari.nombre_variacion
       .toLowerCase()

@@ -480,3 +480,39 @@ export async function generarSeoBulk(opciones?: {
   return { ok };
 }
 
+export async function actualizarCategoriaBulk(
+  ids: string[],
+  categoria: string,
+  subcategoria: string
+): Promise<{ ok: number; error?: string }> {
+  await verificarAdmin();
+  if (!ids.length) return { ok: 0 };
+  const supabase = createAdminClient();
+  const { error, data } = await supabase
+    .from("productos_padre")
+    .update({ categoria, subcategoria })
+    .in("id", ids)
+    .select("id");
+  if (error) return { ok: 0, error: error.message };
+  revalidatePath("/admin/productos");
+  revalidatePath("/productos");
+  return { ok: data?.length ?? ids.length };
+}
+
+export async function toggleActivoBulk(
+  ids: string[],
+  activo: boolean
+): Promise<{ ok: number; error?: string }> {
+  await verificarAdmin();
+  if (!ids.length) return { ok: 0 };
+  const supabase = createAdminClient();
+  const { error, data } = await supabase
+    .from("productos_padre")
+    .update({ activo })
+    .in("id", ids)
+    .select("id");
+  if (error) return { ok: 0, error: error.message };
+  revalidatePath("/admin/productos");
+  return { ok: data?.length ?? ids.length };
+}
+
