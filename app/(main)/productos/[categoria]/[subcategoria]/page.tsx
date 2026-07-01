@@ -29,16 +29,45 @@ export default async function SubcategoriaPage({ params, searchParams }: PagePro
 
   const supabase = await createClient();
 
-  // Resolver slugs de URL a nombres reales en BD (ilike no es accent-insensitive)
-  const { data: todasCats } = await supabase
+  // Verificar que existen productos en esta categoria/subcategoria usando los slugs directamente
+  // (evita el límite de 1000 filas en la resolución inversa)
+  const { data: existeCheck } = await supabase
     .from("productos_padre")
     .select("categoria, subcategoria")
-    .eq("activo", true);
-  const filas = todasCats ?? [];
-  const categoriaNombre = [...new Set(filas.map((p) => p.categoria))]
+    .eq("activo", true)
+    .limit(1000);
+
+  const filas = existeCheck ?? [];
+
+  // Resolver categoria: busca en los primeros 1000, o acepta el slug tal cual si ya está en formato slug
+  let categoriaNombre = [...new Set(filas.map((p) => p.categoria))]
     .find((c) => slugifyCategoria(c) === categoria);
-  const subcategoriaNombre = [...new Set(filas.map((p) => p.subcategoria).filter(Boolean))]
+
+  // Si no se encontró en la muestra, intentar match directo (el slug IS el nombre)
+  if (!categoriaNombre) {
+    const { data: directCheck } = await supabase
+      .from("productos_padre")
+      .select("categoria")
+      .eq("activo", true)
+      .ilike("categoria", categoria.replace(/-/g, "%"))
+      .limit(1);
+    if (directCheck?.[0]) categoriaNombre = directCheck[0].categoria;
+  }
+
+  let subcategoriaNombre = [...new Set(filas.map((p) => p.subcategoria).filter(Boolean))]
     .find((s) => slugifyCategoria(s!) === subcategoria);
+
+  // Si no se encontró en la muestra, buscar directamente en BD
+  if (!subcategoriaNombre) {
+    const { data: subCheck } = await supabase
+      .from("productos_padre")
+      .select("subcategoria")
+      .eq("activo", true)
+      .not("subcategoria", "is", null)
+      .ilike("subcategoria", subcategoria)
+      .limit(1);
+    if (subCheck?.[0]) subcategoriaNombre = subCheck[0].subcategoria;
+  }
 
   if (!categoriaNombre) notFound();
 

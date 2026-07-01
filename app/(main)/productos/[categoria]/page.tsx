@@ -50,13 +50,20 @@ export default async function CategoriaPage({ params, searchParams }: PageProps)
 
   const supabase = await createClient();
 
-  // Resolver el slug de la URL al nombre real de categoría en BD (ilike no es accent-insensitive)
+  // Resolver slug → nombre real. Primero intenta con la muestra inicial, luego busca directamente.
   const { data: todasCats } = await supabase
     .from("productos_padre")
     .select("categoria")
-    .eq("activo", true);
-  const categoriaNombre = [...new Set((todasCats ?? []).map((p) => p.categoria))]
+    .eq("activo", true)
+    .limit(1000);
+  let categoriaNombre = [...new Set((todasCats ?? []).map((p) => p.categoria))]
     .find((c) => slugifyCategoria(c) === categoria);
+  if (!categoriaNombre) {
+    const { data: directCheck } = await supabase
+      .from("productos_padre").select("categoria").eq("activo", true)
+      .ilike("categoria", categoria).limit(1);
+    if (directCheck?.[0]) categoriaNombre = directCheck[0].categoria;
+  }
 
   if (!categoriaNombre) notFound();
 
