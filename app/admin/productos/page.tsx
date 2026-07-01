@@ -5,6 +5,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { slugifyCategoria } from "@/lib/seo";
 import { FiltrosProductos } from "./FiltrosProductos";
 import { GenerarSeoBtn } from "./GenerarSeoBtn";
+import { GenerarSeoBulkBtn } from "./GenerarSeoBulkBtn";
 
 export const dynamic = "force-dynamic";
 
@@ -100,6 +101,7 @@ export default async function AdminProductosPage({
         <Link href="/admin/productos/nuevo" className="btn-primary px-6 py-2.5 text-sm tracking-widest uppercase">
           + Nuevo producto
         </Link>
+        <GenerarSeoBulkBtn categoria={cat} />
       </div>
 
       <Suspense>

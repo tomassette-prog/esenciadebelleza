@@ -432,3 +432,51 @@ export async function generarSeoProducto(productoId: string): Promise<{ ok?: boo
   return { ok: true };
 }
 
+export async function generarSeoBulk(opciones?: {
+  soloSinSeo?: boolean;
+  categoria?: string;
+}): Promise<{ ok: number; error?: string }> {
+  await verificarAdmin();
+  const supabase = createAdminClient();
+
+  let query = supabase
+    .from("productos_padre")
+    .select("id, nombre, categoria, subcategoria, slug")
+    .eq("activo", true);
+
+  if (opciones?.soloSinSeo !== false) {
+    // Por defecto, solo los que no tienen SEO
+    query = query.or("texto_enriquecido_seo.is.null,texto_enriquecido_seo.eq.");
+  }
+  if (opciones?.categoria) {
+    query = query.eq("categoria", opciones.categoria);
+  }
+
+  const { data, error: fetchErr } = await query.order("nombre").limit(500);
+  if (fetchErr) return { ok: 0, error: fetchErr.message };
+  if (!data?.length) return { ok: 0 };
+
+  const { generarSeoProducto: genSeo } = await import("@/lib/seo-generator");
+
+  const results = await Promise.allSettled(
+    data.map(async (p: { id: string; nombre: string; categoria: string; subcategoria: string; slug: string }) => {
+      const seoOutput = genSeo({
+        nombre: p.nombre,
+        marca: null,
+        categoria: p.categoria,
+        subcategoria: p.subcategoria,
+        descripcion: null,
+      });
+      await supabase.from("productos_padre").update({
+        seo_title: seoOutput.seo_title,
+        seo_description: seoOutput.seo_description,
+        texto_enriquecido_seo: seoOutput.texto_enriquecido_seo,
+      }).eq("id", p.id);
+    })
+  );
+
+  const ok = results.filter(r => r.status === "fulfilled").length;
+  revalidatePath("/admin/productos");
+  return { ok };
+}
+
