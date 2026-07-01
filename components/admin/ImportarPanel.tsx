@@ -13,6 +13,7 @@ export function ImportarPanel() {
   const [error, setError]         = useState<string | null>(null);
   const [fase, setFase]           = useState<"idle" | "diff" | "listo" | "aplicando">("idle");
   const [progreso, setProgreso]   = useState<{ ok: number; total: number } | null>(null);
+  const [resumen, setResumen]     = useState<{ ok: number; noEncontrados: string[] } | null>(null);
 
   function handleDiff() {
     setError(null);
@@ -51,20 +52,22 @@ export function ImportarPanel() {
     if (!seleccionados.size) return;
     setFase("aplicando");
     setError(null);
+    setResumen(null);
     setProgreso({ ok: 0, total: seleccionados.size });
     startTransition(async () => {
-      // Procesar en lotes de 100 para no superar el límite de cuerpo de Server Actions
       const todos = [...seleccionados];
       const LOTE = 100;
       let totalOk = 0;
+      const totalNoEncontrados: string[] = [];
       for (let i = 0; i < todos.length; i += LOTE) {
         const lote = todos.slice(i, i + LOTE);
         const res = await aplicarCambios(lote);
         if (res.error) { setError(res.error); setFase("listo"); setProgreso(null); return; }
         totalOk += res.ok;
+        totalNoEncontrados.push(...res.noEncontrados);
         setProgreso({ ok: totalOk, total: seleccionados.size });
       }
-      setResultado(`✅ ${totalOk} productos actualizados correctamente.`);
+      setResumen({ ok: totalOk, noEncontrados: totalNoEncontrados });
       setFase("listo");
       setProgreso(null);
     });
@@ -94,8 +97,29 @@ export function ImportarPanel() {
       {error && (
         <div className="p-3 bg-red-50 border border-red-200 text-red-700 text-sm">{error}</div>
       )}
-      {resultado && (
-        <div className="p-3 bg-green-50 border border-green-200 text-green-700 text-sm">{resultado}</div>
+      {resumen && (
+        <div className="space-y-3">
+          <div className="p-3 bg-green-50 border border-green-200 text-green-700 text-sm">
+            ✅ {resumen.ok} productos actualizados correctamente.
+            {resumen.noEncontrados.length > 0 && (
+              <span className="ml-2 text-amber-700">
+                {resumen.noEncontrados.length} no encontrados en WooCommerce.
+              </span>
+            )}
+          </div>
+          {resumen.noEncontrados.length > 0 && (
+            <details className="text-xs border border-amber-200 bg-amber-50">
+              <summary className="px-3 py-2 cursor-pointer text-amber-700 font-medium">
+                Ver slugs no encontrados ({resumen.noEncontrados.length})
+              </summary>
+              <div className="px-3 pb-3 pt-1 space-y-0.5 max-h-48 overflow-y-auto">
+                {resumen.noEncontrados.map(s => (
+                  <div key={s} className="font-mono text-amber-800">{s}</div>
+                ))}
+              </div>
+            </details>
+          )}
+        </div>
       )}
 
       {fase === "diff" && (

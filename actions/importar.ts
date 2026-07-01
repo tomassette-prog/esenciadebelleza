@@ -157,14 +157,18 @@ export async function calcularDiff(): Promise<{
   }
 }
 
-export async function aplicarCambios(slugs: string[]): Promise<{ ok: number; error?: string }> {
+export async function aplicarCambios(slugs: string[]): Promise<{
+  ok: number;
+  noEncontrados: string[];
+  error?: string;
+}> {
   try {
     await verificarAdmin();
   } catch {
-    return { ok: 0, error: "No autorizado" };
+    return { ok: 0, noEncontrados: [], error: "No autorizado" };
   }
 
-  if (!slugs.length) return { ok: 0 };
+  if (!slugs.length) return { ok: 0, noEncontrados: [] };
 
   try {
     // Buscar cada slug en WooCommerce en paralelo (el parámetro slug solo acepta uno a la vez)
@@ -189,6 +193,11 @@ export async function aplicarCambios(slugs: string[]): Promise<{ ok: number; err
       );
       seleccionados.push(...resultados.flat());
     }
+
+    // Detectar slugs que WooCommerce no devolvió
+    const encontradosSet = new Set(seleccionados.map(p => p.slug || slugify(p.name)));
+    const noEncontrados = slugs.filter(s => !encontradosSet.has(s));
+
     const supa = adminClient();
 
     // Obtener slugs existentes para preservar flags
@@ -204,7 +213,6 @@ export async function aplicarCambios(slugs: string[]): Promise<{ ok: number; err
       const slug = p.slug || slugify(p.name);
       const { categoria, subcategoria } = resolverCategoria(p.categories);
       const ex = existMap.get(slug);
-      const precioB2c = parseFloat(p.price || p.regular_price) || 0;
       const suffix = " | Esencia de Belleza";
       const maxNombre = 60 - suffix.length; // 60 es el límite del CHECK constraint
       const nombreTruncado = p.name.trim().slice(0, maxNombre);
@@ -224,7 +232,7 @@ export async function aplicarCambios(slugs: string[]): Promise<{ ok: number; err
     });
 
     const { error } = await supa.from("productos_padre").upsert(rows, { onConflict: "slug" });
-    if (error) return { ok: 0, error: error.message };
+    if (error) return { ok: 0, noEncontrados, error: error.message };
 
     // Upsert variaciones para productos simples (precio/stock)
     for (const p of seleccionados) {
@@ -244,8 +252,8 @@ export async function aplicarCambios(slugs: string[]): Promise<{ ok: number; err
       }, { onConflict: "sku" });
     }
 
-    return { ok: rows.length };
+    return { ok: rows.length, noEncontrados };
   } catch (e) {
-    return { ok: 0, error: String(e) };
+    return { ok: 0, noEncontrados: [], error: String(e) };
   }
 }
