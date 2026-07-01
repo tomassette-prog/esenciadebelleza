@@ -167,26 +167,25 @@ export async function aplicarCambios(slugs: string[]): Promise<{ ok: number; err
   if (!slugs.length) return { ok: 0 };
 
   try {
-    // Descargar todos los productos de WooCommerce y filtrar los seleccionados
-    const wooProductos: {
+    // Descargar solo los productos seleccionados usando el parámetro slug de WooCommerce
+    // (evita descargar los 3000+ productos completos)
+    type WooProducto = {
       id: number; name: string; slug: string; type: string; variations: number[];
       description: string; short_description: string; sku: string;
       price: string; regular_price: string; sale_price: string;
       stock_quantity: number | null; stock_status: string;
       images: { src: string }[];
       categories: { id: number }[];
-    }[] = [];
-    let page = 1;
-    while (true) {
-      const batch = await fetchWoo(`/products?status=publish&per_page=100&page=${page}`);
-      if (!Array.isArray(batch) || batch.length === 0) break;
-      wooProductos.push(...batch);
-      if (batch.length < 100) break;
-      page++;
-    }
+    };
+    const seleccionados: WooProducto[] = [];
 
-    const slugSet = new Set(slugs);
-    const seleccionados = wooProductos.filter(p => slugSet.has(p.slug || slugify(p.name)));
+    // WooCommerce acepta hasta ~10 slugs por request con ?slug=a,b,c
+    const CHUNK = 10;
+    for (let i = 0; i < slugs.length; i += CHUNK) {
+      const chunk = slugs.slice(i, i + CHUNK);
+      const batch = await fetchWoo(`/products?status=publish&per_page=${CHUNK}&slug=${chunk.join(",")}`);
+      if (Array.isArray(batch)) seleccionados.push(...batch);
+    }
     const supa = adminClient();
 
     // Obtener slugs existentes para preservar flags
