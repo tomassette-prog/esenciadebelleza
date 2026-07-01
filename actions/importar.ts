@@ -11,6 +11,23 @@ const WOO_URL  = process.env.WOO_URL!;
 const CK       = process.env.WOO_CONSUMER_KEY!;
 const CS       = process.env.WOO_CONSUMER_SECRET!;
 
+// Cache DB mappings for the duration of a single server action execution
+let _dbCatMap: Map<number, { categoria: string; subcategoria: string }> | null = null;
+
+async function getDbCatMap(supa: ReturnType<typeof adminClient>): Promise<Map<number, { categoria: string; subcategoria: string }>> {
+  if (_dbCatMap) return _dbCatMap;
+  try {
+    const { data } = await supa.from("woo_cat_mappings").select("woo_cat_id, categoria, subcategoria");
+    if (data && data.length > 0) {
+      _dbCatMap = new Map(data.map((r: { woo_cat_id: number; categoria: string; subcategoria: string }) => [r.woo_cat_id, { categoria: r.categoria, subcategoria: r.subcategoria }]));
+      return _dbCatMap;
+    }
+  } catch { /* fallback to hardcoded */ }
+  _dbCatMap = new Map(Object.entries(WOO_CAT_MAP).map(([k, v]) => [Number(k), v]));
+  return _dbCatMap;
+}
+
+
 function adminClient() {
   return createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -57,9 +74,9 @@ function slugify(text: string): string {
     .replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
 }
 
-function resolverCategoria(cats: { id: number }[]) {
+function resolverCategoria(cats: { id: number }[], catMap: Map<number, { categoria: string; subcategoria: string }>) {
   for (const cat of cats) {
-    const mapped = WOO_CAT_MAP[cat.id];
+    const mapped = catMap.get(cat.id);
     if (mapped) return mapped;
   }
   return { categoria: "peluqueria", subcategoria: "peluqueria-general" };
@@ -204,7 +221,8 @@ export async function calcularDiff(): Promise<{
       offset += 1000;
     }
 
-    // 3. Comparar
+    // 3. Comparar (cargar mapa de categorías desde BD con fallback a hardcoded)
+    const catMap = await getDbCatMap(supa);
     const nuevos: ProductoDiff[] = [];
     const modificados: ProductoDiff[] = [];
     let iguales = 0;
@@ -212,7 +230,7 @@ export async function calcularDiff(): Promise<{
     for (const p of wooProductos) {
       const slug = p.slug || slugify(p.name);
       const existing = supaMap.get(slug);
-      const { categoria, subcategoria } = resolverCategoria(p.categories);
+      const { categoria, subcategoria } = resolverCategoria(p.categories, catMap);
 
       if (!existing) {
         nuevos.push({ slug, nombre: p.name, tipo: "nuevo", wooId: p.id, wooCategories: p.categories.map(c => c.id) });
@@ -243,11 +261,12 @@ export async function calcularDiff(): Promise<{
     const wooMap = new Map(wooProductos.map(p => [p.id, { name: p.name }]));
     const newBrands = detectNewBrands(nuevos, wooMap, existingMarcaSlugs);
 
+    // Detect unmapped using the same catMap
     const seenCatIds = new Set<number>();
     const unmappedCategories: UnmappedCategory[] = [];
     for (const nuevo of nuevos) {
       for (const catId of nuevo.wooCategories) {
-        if (WOO_CAT_MAP[catId] || seenCatIds.has(catId)) continue;
+        if (catMap.has(catId) || seenCatIds.has(catId)) continue;
         seenCatIds.add(catId);
         const wooP = wooProductos.find(p => p.id === nuevo.wooId);
         const cat = wooP?.categories.find(c => c.id === catId);
@@ -314,6 +333,7 @@ export async function aplicarCambios(slugsConId: Array<{ slug: string; wooId: nu
     }
 
     const supa = adminClient();
+    const catMap = await getDbCatMap(supa);
 
     // Obtener slugs existentes para preservar flags
     const slugsExistentes = seleccionados.map(p => p.slug || slugify(p.name));
@@ -326,7 +346,7 @@ export async function aplicarCambios(slugsConId: Array<{ slug: string; wooId: nu
     // Preparar upsert
     const rows = seleccionados.map(p => {
       const slug = p.slug || slugify(p.name);
-      const { categoria, subcategoria } = resolverCategoria(p.categories);
+      const { categoria, subcategoria } = resolverCategoria(p.categories, catMap);
       const ex = existMap.get(slug);
       const suffix = " | Esencia de Belleza";
       const maxNombre = 60 - suffix.length; // 60 es el límite del CHECK constraint
@@ -450,11 +470,37 @@ export async function publicarAprobados(payload: ReviewPayload): Promise<SmartAp
       if (inserted) brandsCreated.push(...inserted.map((m: { nombre: string }) => m.nombre));
     }
 
-    // Step D — build category override map and upsert rows
+    // Step D — build category override map, save to DB, and upsert rows
     const slugToCat = new Map<string, { categoria: string; subcategoria: string }>();
     for (const group of payload.approvedGroups) {
       for (const { slug } of group.slugsConId) {
         slugToCat.set(slug, { categoria: group.categoria, subcategoria: group.subcategoria });
+      }
+    }
+
+    // Persist approved WooCommerce category mappings to DB for future imports
+    if (payload.approvedGroups.length > 0) {
+      const newMappings: Array<{ woo_cat_id: number; woo_cat_name: string; categoria: string; subcategoria: string }> = [];
+      for (const group of payload.approvedGroups) {
+        for (const wooCatId of group.slugsConId
+          .flatMap(s => fetched.find(p => (p.slug || slugify(p.name)) === s.slug)?.categories ?? [])
+          .map(c => c.id)
+          .filter((id, i, arr) => arr.indexOf(id) === i)) {
+          newMappings.push({
+            woo_cat_id: wooCatId,
+            woo_cat_name: fetched.find(p =>
+              p.categories.some(c => c.id === wooCatId)
+            )?.categories.find(c => c.id === wooCatId)?.name ?? String(wooCatId),
+            categoria: group.categoria,
+            subcategoria: group.subcategoria,
+          });
+        }
+      }
+      if (newMappings.length > 0) {
+        await supa.from("woo_cat_mappings")
+          .upsert(newMappings, { onConflict: "woo_cat_id" });
+        // Reset cache so next calcularDiff sees new mappings
+        _dbCatMap = null;
       }
     }
 
@@ -469,7 +515,7 @@ export async function publicarAprobados(payload: ReviewPayload): Promise<SmartAp
 
     const rows = fetched.map(p => {
       const slug = p.slug || slugify(p.name);
-      const cat = slugToCat.get(slug) ?? resolverCategoria(p.categories);
+      const cat = slugToCat.get(slug) ?? resolverCategoria(p.categories, new Map(Object.entries(WOO_CAT_MAP).map(([k,v]) => [Number(k),v])));
       const ex = existMap.get(slug);
       const brandSlug = slugify(extractBrandName(p.name));
       const marcaId = marcaSlugToId.get(brandSlug) ?? null;

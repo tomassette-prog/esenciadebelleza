@@ -130,6 +130,12 @@ export default async function AdminLayout({ children }: { children: ReactNode })
               Importar
             </Link>
             <Link
+              href="/admin/categorias"
+              className="text-xs tracking-widest uppercase text-neutral-300 hover:text-white transition-colors"
+            >
+              Categorías
+            </Link>
+            <Link
               href="/admin/resenas"
               className="text-xs tracking-widest uppercase text-neutral-300 hover:text-white transition-colors"
             >
