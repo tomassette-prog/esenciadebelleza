@@ -396,3 +396,39 @@ export async function eliminarVariacion(variacionId: string): Promise<{ error?: 
   if (error) return { error: error.message };
   return {};
 }
+
+export async function generarSeoProducto(productoId: string): Promise<{ ok?: boolean; error?: string }> {
+  await verificarAdmin();
+  const supabase = createAdminClient();
+
+  const { data: p, error: fetchErr } = await supabase
+    .from("productos_padre")
+    .select("id, nombre, categoria, subcategoria, slug")
+    .eq("id", productoId)
+    .single();
+
+  if (fetchErr || !p) return { error: fetchErr?.message ?? "Producto no encontrado" };
+
+  const { generarSeoProducto: genSeo } = await import("@/lib/seo-generator");
+  const seoOutput = genSeo({
+    nombre: p.nombre,
+    marca: null,
+    categoria: p.categoria,
+    subcategoria: p.subcategoria,
+    descripcion: null,
+  });
+
+  const { error: updateErr } = await supabase
+    .from("productos_padre")
+    .update({
+      seo_title: seoOutput.seo_title,
+      seo_description: seoOutput.seo_description,
+      texto_enriquecido_seo: seoOutput.texto_enriquecido_seo,
+    })
+    .eq("id", productoId);
+
+  if (updateErr) return { error: updateErr.message };
+  revalidatePath("/admin/productos");
+  return { ok: true };
+}
+

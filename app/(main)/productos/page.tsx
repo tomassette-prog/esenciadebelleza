@@ -67,7 +67,7 @@ export default async function ProductosPage() {
       `id, nombre, slug, categoria, subcategoria,
        imagen_principal_url, destacado, nuevo,
        marca:marcas(nombre),
-       variaciones:productos_variaciones!inner(precio_b2c, activa, stock)`
+       variaciones:productos_variaciones(precio_b2c, activa, stock)`
     )
     .eq("activo", true)
     .eq("destacado", true)

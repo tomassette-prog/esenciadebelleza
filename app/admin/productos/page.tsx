@@ -4,6 +4,7 @@ import { Suspense } from "react";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { slugifyCategoria } from "@/lib/seo";
 import { FiltrosProductos } from "./FiltrosProductos";
+import { GenerarSeoBtn } from "./GenerarSeoBtn";
 
 export const dynamic = "force-dynamic";
 
@@ -180,6 +181,7 @@ export default async function AdminProductosPage({
                     <td className="px-4 py-3 text-right">
                       <div className="flex items-center justify-end gap-3">
                         <Link href={urlPath} target="_blank" className="text-xs text-neutral-400 hover:text-neutral-700 transition-colors" title="Ver en tienda">&#x2197;</Link>
+                        <GenerarSeoBtn productoId={p.id} />
                         <Link href={`/admin/productos/${p.id}`} className="text-xs text-neutral-600 hover:text-neutral-900 underline underline-offset-2 transition-colors">Editar</Link>
                       </div>
                     </td>

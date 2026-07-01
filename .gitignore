@@ -36,3 +36,5 @@ next-env.d.ts
 # logs
 woo_import_log.txt
 scrape_log.txt
+# Local AI runtime state
+.atl/
