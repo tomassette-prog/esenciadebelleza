@@ -141,7 +141,7 @@ export default async function SubcategoriaPage({ params, searchParams }: PagePro
         <Breadcrumb
           items={[
             { label: categoria.replace(/-/g, " "), href: `/productos/${slugifyCategoria(categoria)}` },
-            { label: subcategoria.replace(/-/g, " ") },
+            { label: (subcategoriaNombre ?? subcategoria).replace(/-/g, " ") },
           ]}
           className="mb-4"
         />
@@ -149,7 +149,7 @@ export default async function SubcategoriaPage({ params, searchParams }: PagePro
           className="text-3xl lg:text-4xl font-light text-neutral-900 capitalize"
           style={{ fontFamily: "var(--font-cormorant)" }}
         >
-          {subcategoriaNombre ?? subcategoria.replace(/-/g, " ")}
+          {(subcategoriaNombre ?? subcategoria).replace(/-/g, " ")}
         </h1>
         <p className="text-sm text-neutral-400 mt-2">
           {count ?? 0} productos{marca && marcas.find(m => m.id === marca) ? ` · ${marcas.find(m => m.id === marca)!.nombre}` : ""}
