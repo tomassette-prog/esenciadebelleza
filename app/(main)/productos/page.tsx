@@ -6,7 +6,7 @@ import { Breadcrumb } from "@/components/layout/Breadcrumb";
 import { slugifyCategoria, formatCategoryName } from "@/lib/seo";
 import type { ProductoCatalogo } from "@/types/producto";
 
-export const revalidate = 3600;
+export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: "Productos Profesionales de Peluquería y Estética",
