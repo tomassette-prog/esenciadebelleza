@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { BulkEditBar } from "./BulkEditBar";
 import { GenerarSeoBtn } from "./GenerarSeoBtn";
+import { slugifyCategoria } from "@/lib/seo";
 
 interface ProductoRow {
   id: string;
@@ -22,10 +23,9 @@ interface ProductoRow {
 
 interface Props {
   productos: ProductoRow[];
-  slugifyCategoria: (s: string) => string;
 }
 
-export function ProductosTableClient({ productos, slugifyCategoria }: Props) {
+export function ProductosTableClient({ productos }: Props) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
   function toggleOne(id: string) {

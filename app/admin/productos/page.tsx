@@ -120,7 +120,6 @@ export default async function AdminProductosPage({
 
       <ProductosTableClient
         productos={(productos ?? []) as Parameters<typeof ProductosTableClient>[0]["productos"]}
-        slugifyCategoria={slugifyCategoria}
       />
 
       {totalPages > 1 && (
