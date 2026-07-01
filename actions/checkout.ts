@@ -114,7 +114,7 @@ export async function iniciarPagoCeca(
 // ── Marcar pedido como pagado y crear en WooCommerce ─────────────────────────
 export async function confirmarPedidoCeca(
   numOper: string
-): Promise<{ ok: boolean; wc_order_id?: number }> {
+): Promise<{ ok: boolean; wc_order_id?: number; email?: string; pedidoId?: string }> {
   const supabase = createAdminClient();
 
   const { data: pedido } = await supabase
@@ -174,7 +174,7 @@ export async function confirmarPedidoCeca(
     gasto_envio:   pedido.gastos_envio,
   });
 
-  return { ok: true, wc_order_id: wc_order_id ?? undefined };
+  return { ok: true, wc_order_id: wc_order_id ?? undefined, email: pedido.email_cliente, pedidoId: pedido.id };
 }
 
 // ── Crear pedido en WooCommerce ───────────────────────────────────────────────

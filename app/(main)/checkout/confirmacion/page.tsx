@@ -3,15 +3,22 @@
 import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
+import Script from "next/script";
 import { useCarrito } from "@/context/CarritoContext";
 import { confirmarPedidoCeca } from "@/actions/checkout";
 
 type Estado = "cargando" | "exito" | "error";
 
+interface OrderData {
+  orderId: string;
+  email: string;
+}
+
 function ConfirmacionInner() {
   const searchParams = useSearchParams();
   const { vaciar }   = useCarrito();
   const [estado, setEstado] = useState<Estado>("cargando");
+  const [orderData, setOrderData] = useState<OrderData | null>(null);
 
   useEffect(() => {
     const numOper   = searchParams.get("num_oper")    ?? "";
@@ -26,7 +33,6 @@ function ConfirmacionInner() {
 
     // ── Flujo Stripe ────────────────────────────────────────────────────────
     if (sessionId) {
-      // Stripe ya confirmó el pago — vaciamos carrito y mostramos éxito
       vaciar();
       setEstado("exito");
       return;
@@ -38,9 +44,12 @@ function ConfirmacionInner() {
       return;
     }
 
-    confirmarPedidoCeca(numOper).then(({ ok }) => {
+    confirmarPedidoCeca(numOper).then(({ ok, email, pedidoId }) => {
       if (ok) {
         vaciar();
+        if (email && pedidoId) {
+          setOrderData({ orderId: pedidoId, email });
+        }
         setEstado("exito");
       } else {
         setEstado("error");
@@ -60,6 +69,27 @@ function ConfirmacionInner() {
 
         {estado === "exito" && (
           <>
+            {/* Google Customer Reviews opt-in */}
+            {orderData && (
+              <>
+                <Script src="https://apis.google.com/js/platform.js?onload=renderOptIn" strategy="afterInteractive" />
+                <Script id="gcr-optin" strategy="afterInteractive" dangerouslySetInnerHTML={{
+                  __html: `
+                    window.renderOptIn = function() {
+                      window.gapi.load('surveyoptin', function() {
+                        window.gapi.surveyoptin.render({
+                          "merchant_id": 5816732573,
+                          "order_id": "${orderData.orderId}",
+                          "email": "${orderData.email}",
+                          "delivery_country": "ES",
+                          "estimated_delivery_date": "${new Date(Date.now() + 4 * 86400000).toISOString().split('T')[0]}"
+                        });
+                      });
+                    }
+                  `
+                }} />
+              </>
+            )}
             <div className="w-16 h-16 bg-green-50 border border-green-200 rounded-full flex items-center justify-center mx-auto mb-6">
               <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4.5 12.75l6 6 9-13.5" />
