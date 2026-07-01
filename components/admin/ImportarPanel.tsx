@@ -55,7 +55,11 @@ export function ImportarPanel() {
     setResumen(null);
     setProgreso({ ok: 0, total: seleccionados.size });
     startTransition(async () => {
-      const todos = [...seleccionados];
+      // Construir lista {slug, wooId} para los seleccionados
+      const todosDiff = [...nuevos, ...modificados];
+      const slugToWooId = new Map(todosDiff.map(p => [p.slug, p.wooId]));
+      const todos = [...seleccionados].map(slug => ({ slug, wooId: slugToWooId.get(slug) ?? 0 }));
+
       const LOTE = 100;
       let totalOk = 0;
       const totalNoEncontrados: string[] = [];

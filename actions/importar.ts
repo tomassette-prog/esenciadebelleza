@@ -68,6 +68,7 @@ export interface ProductoDiff {
   slug: string;
   nombre: string;
   tipo: "nuevo" | "modificado";
+  wooId: number;
   cambios?: Record<string, { woo: string | null; actual: string | null }>;
 }
 
@@ -129,7 +130,7 @@ export async function calcularDiff(): Promise<{
       const { categoria, subcategoria } = resolverCategoria(p.categories);
 
       if (!existing) {
-        nuevos.push({ slug, nombre: p.name, tipo: "nuevo" });
+        nuevos.push({ slug, nombre: p.name, tipo: "nuevo", wooId: p.id });
         continue;
       }
 
@@ -145,7 +146,7 @@ export async function calcularDiff(): Promise<{
         cambios["imagen"] = { woo: imgWoo, actual: existing.imagen_principal_url };
 
       if (Object.keys(cambios).length > 0) {
-        modificados.push({ slug, nombre: p.name, tipo: "modificado", cambios });
+        modificados.push({ slug, nombre: p.name, tipo: "modificado", wooId: p.id, cambios });
       } else {
         iguales++;
       }
@@ -157,7 +158,7 @@ export async function calcularDiff(): Promise<{
   }
 }
 
-export async function aplicarCambios(slugs: string[]): Promise<{
+export async function aplicarCambios(slugsConId: Array<{ slug: string; wooId: number }>): Promise<{
   ok: number;
   noEncontrados: string[];
   error?: string;
@@ -168,10 +169,9 @@ export async function aplicarCambios(slugs: string[]): Promise<{
     return { ok: 0, noEncontrados: [], error: "No autorizado" };
   }
 
-  if (!slugs.length) return { ok: 0, noEncontrados: [] };
+  if (!slugsConId.length) return { ok: 0, noEncontrados: [] };
 
   try {
-    // Buscar cada slug en WooCommerce en paralelo (el parámetro slug solo acepta uno a la vez)
     type WooProducto = {
       id: number; name: string; slug: string; type: string; variations: number[];
       description: string; short_description: string; sku: string;
@@ -181,22 +181,24 @@ export async function aplicarCambios(slugs: string[]): Promise<{
       categories: { id: number }[];
     };
 
-    // Lotes de 20 en paralelo para no saturar WooCommerce
+    // Buscar por ID de WooCommerce (lookup directo, siempre fiable)
     const PARALELO = 20;
     const seleccionados: WooProducto[] = [];
-    for (let i = 0; i < slugs.length; i += PARALELO) {
-      const lote = slugs.slice(i, i + PARALELO);
+    const noEncontrados: string[] = [];
+    for (let i = 0; i < slugsConId.length; i += PARALELO) {
+      const lote = slugsConId.slice(i, i + PARALELO);
       const resultados = await Promise.all(
-        lote.map(slug =>
-          fetchWoo(`/products?status=publish&slug=${slug}`).catch(() => []) as Promise<WooProducto[]>
+        lote.map(({ slug, wooId }) =>
+          (fetchWoo(`/products/${wooId}`) as Promise<WooProducto>)
+            .then(p => ({ ok: true as const, p }))
+            .catch(() => ({ ok: false as const, slug }))
         )
       );
-      seleccionados.push(...resultados.flat());
+      for (const r of resultados) {
+        if (r.ok) seleccionados.push(r.p);
+        else noEncontrados.push(r.slug);
+      }
     }
-
-    // Detectar slugs que WooCommerce no devolvió
-    const encontradosSet = new Set(seleccionados.map(p => p.slug || slugify(p.name)));
-    const noEncontrados = slugs.filter(s => !encontradosSet.has(s));
 
     const supa = adminClient();
 
