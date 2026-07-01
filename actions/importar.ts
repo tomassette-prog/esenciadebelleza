@@ -205,6 +205,9 @@ export async function aplicarCambios(slugs: string[]): Promise<{ ok: number; err
       const { categoria, subcategoria } = resolverCategoria(p.categories);
       const ex = existMap.get(slug);
       const precioB2c = parseFloat(p.price || p.regular_price) || 0;
+      const suffix = " | Esencia de Belleza";
+      const maxNombre = 60 - suffix.length; // 60 es el límite del CHECK constraint
+      const nombreTruncado = p.name.trim().slice(0, maxNombre);
       return {
         nombre: p.name.trim(),
         slug,
@@ -212,7 +215,7 @@ export async function aplicarCambios(slugs: string[]): Promise<{ ok: number; err
         subcategoria,
         descripcion_general: p.description || p.short_description || null,
         imagen_principal_url: p.images[0]?.src ?? null,
-        seo_title: `${p.name.trim()} | Esencia de Belleza`,
+        seo_title: `${nombreTruncado}${suffix}`,
         seo_description: `Compra ${p.name.trim()} al mejor precio. Envío 24-48h a toda España.`,
         activo:    ex?.activo    ?? true,
         destacado: ex?.destacado ?? false,
