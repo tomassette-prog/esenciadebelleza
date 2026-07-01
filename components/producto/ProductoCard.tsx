@@ -23,6 +23,7 @@ export function ProductoCard({ producto, priority = false }: Props) {
             sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
             className="object-contain transition-transform duration-500 group-hover:scale-105"
             priority={priority}
+            unoptimized
           />
         ) : (
           <div className="w-full h-full flex items-center justify-center">

@@ -170,6 +170,7 @@ export default async function ProductoPage({ params, searchParams }: PageProps) 
                 sizes="(max-width: 1024px) 100vw, 50vw"
                 className="object-contain"
                 priority
+                unoptimized
               />
             </div>
           </div>
