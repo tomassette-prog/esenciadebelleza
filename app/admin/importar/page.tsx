@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { ImportarPanel } from "@/components/admin/ImportarPanel";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 300;
 
 export const metadata: Metadata = {
   title: "Importar catálogo | Admin",

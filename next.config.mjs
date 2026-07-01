@@ -17,8 +17,29 @@ const nextConfig = {
         hostname: "depeluqueriaproductos.com",
       },
       {
+        protocol: "http",
+        hostname: "depeluqueriaproductos.com",
+      },
+      {
         protocol: "https",
         hostname: "**.depeluqueriaproductos.com",
+      },
+      {
+        protocol: "http",
+        hostname: "**.depeluqueriaproductos.com",
+      },
+      // WordPress Jetpack / wp.com CDN
+      {
+        protocol: "https",
+        hostname: "i0.wp.com",
+      },
+      {
+        protocol: "https",
+        hostname: "i1.wp.com",
+      },
+      {
+        protocol: "https",
+        hostname: "i2.wp.com",
       },
       // Supabase Storage
       {
