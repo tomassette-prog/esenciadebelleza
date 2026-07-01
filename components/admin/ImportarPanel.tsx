@@ -12,6 +12,7 @@ export function ImportarPanel() {
   const [resultado, setResultado] = useState<string | null>(null);
   const [error, setError]         = useState<string | null>(null);
   const [fase, setFase]           = useState<"idle" | "diff" | "listo" | "aplicando">("idle");
+  const [progreso, setProgreso]   = useState<{ ok: number; total: number } | null>(null);
 
   function handleDiff() {
     setError(null);
@@ -50,6 +51,7 @@ export function ImportarPanel() {
     if (!seleccionados.size) return;
     setFase("aplicando");
     setError(null);
+    setProgreso({ ok: 0, total: seleccionados.size });
     startTransition(async () => {
       // Procesar en lotes de 100 para no superar el límite de cuerpo de Server Actions
       const todos = [...seleccionados];
@@ -58,11 +60,13 @@ export function ImportarPanel() {
       for (let i = 0; i < todos.length; i += LOTE) {
         const lote = todos.slice(i, i + LOTE);
         const res = await aplicarCambios(lote);
-        if (res.error) { setError(res.error); setFase("listo"); return; }
+        if (res.error) { setError(res.error); setFase("listo"); setProgreso(null); return; }
         totalOk += res.ok;
+        setProgreso({ ok: totalOk, total: seleccionados.size });
       }
       setResultado(`✅ ${totalOk} productos actualizados correctamente.`);
       setFase("listo");
+      setProgreso(null);
     });
   }
 
@@ -131,6 +135,22 @@ export function ImportarPanel() {
               {fase === "aplicando" ? "Aplicando…" : `Aplicar ${seleccionados.size} cambios`}
             </button>
           </div>
+
+          {/* Barra de progreso */}
+          {fase === "aplicando" && progreso && (
+            <div className="space-y-1.5">
+              <div className="flex justify-between text-xs text-neutral-500">
+                <span>Aplicando cambios…</span>
+                <span>{progreso.ok} / {progreso.total}</span>
+              </div>
+              <div className="w-full h-1.5 bg-neutral-200 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-neutral-900 transition-all duration-300"
+                  style={{ width: `${Math.round((progreso.ok / progreso.total) * 100)}%` }}
+                />
+              </div>
+            </div>
+          )}
 
           {/* ── Tabla: NUEVOS ── */}
           {nuevos.length > 0 && (
