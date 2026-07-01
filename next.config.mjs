@@ -3,6 +3,9 @@ const nextConfig = {
   // ISR / SSR por defecto — sin generación estática innecesaria
   experimental: {
     ppr: false,
+    serverActions: {
+      bodySizeLimit: "10mb",
+    },
   },
 
   images: {

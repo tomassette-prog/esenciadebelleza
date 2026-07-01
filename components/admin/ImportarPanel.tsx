@@ -51,9 +51,17 @@ export function ImportarPanel() {
     setFase("aplicando");
     setError(null);
     startTransition(async () => {
-      const res = await aplicarCambios([...seleccionados]);
-      if (res.error) { setError(res.error); setFase("listo"); return; }
-      setResultado(`✅ ${res.ok} productos actualizados correctamente.`);
+      // Procesar en lotes de 100 para no superar el límite de cuerpo de Server Actions
+      const todos = [...seleccionados];
+      const LOTE = 100;
+      let totalOk = 0;
+      for (let i = 0; i < todos.length; i += LOTE) {
+        const lote = todos.slice(i, i + LOTE);
+        const res = await aplicarCambios(lote);
+        if (res.error) { setError(res.error); setFase("listo"); return; }
+        totalOk += res.ok;
+      }
+      setResultado(`✅ ${totalOk} productos actualizados correctamente.`);
       setFase("listo");
     });
   }
