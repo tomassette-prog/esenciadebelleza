@@ -12,7 +12,7 @@ export async function GET(req: NextRequest) {
   const orProducto = words.map((w) => `nombre.ilike.%${w}%`).join(",");
   const orSku = words.map((w) => `sku.ilike.%${w}%`).join(",");
 
-  // Buscar por SKU directo
+  // Buscar por SKU directo (sin filtrar activa — contexto admin)
   const { data: porSku } = await supabase
     .from("productos_variaciones")
     .select(`
@@ -20,16 +20,14 @@ export async function GET(req: NextRequest) {
       producto_padre:productos_padre(id, nombre, slug, categoria, subcategoria)
     `)
     .or(orSku)
-    .eq("activa", true)
     .limit(10);
 
-  // Buscar por nombre del producto padre
+  // Buscar por nombre del producto padre (sin límite bajo, activos e inactivos)
   const { data: padres } = await supabase
     .from("productos_padre")
     .select("id")
     .or(orProducto)
-    .eq("activo", true)
-    .limit(20);
+    .limit(50);
 
   const padreIds = (padres ?? []).map((p: { id: string }) => p.id);
   const { data: porNombre } = padreIds.length
@@ -40,8 +38,7 @@ export async function GET(req: NextRequest) {
           producto_padre:productos_padre(id, nombre, slug, categoria, subcategoria)
         `)
         .in("producto_padre_id", padreIds)
-        .eq("activa", true)
-        .limit(20)
+        .limit(50)
     : { data: [] };
 
   // Deduplicar por id
@@ -52,5 +49,5 @@ export async function GET(req: NextRequest) {
     return true;
   });
 
-  return NextResponse.json(combined.slice(0, 20));
+  return NextResponse.json(combined.slice(0, 30));
 }

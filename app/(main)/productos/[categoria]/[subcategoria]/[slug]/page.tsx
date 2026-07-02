@@ -12,6 +12,7 @@ import {
 } from "@/lib/seo";
 import { getResenas, getResenaAggregate } from "@/actions/resenas";
 import { AnadirAlCarritoBtn } from "@/components/producto/AnadirAlCarritoBtn";
+import { AnadirAPackBtn } from "@/components/producto/AnadirAPackBtn";
 import { FormularioResena } from "@/components/producto/FormularioResena";
 import { ListaResenas } from "@/components/producto/ListaResenas";
 import { Breadcrumb } from "@/components/layout/Breadcrumb";
@@ -100,6 +101,9 @@ export default async function ProductoPage({ params, searchParams }: PageProps) 
       .single();
     b2bAprobado = perfil?.tipo_cliente === "b2b" && perfil?.b2b_aprobado === true;
   }
+
+  const ADMIN_EMAILS = ["ziarresamot@gmail.com"];
+  const esAdmin = user ? ADMIN_EMAILS.includes(user.email ?? "") : false;
 
   const p = producto as ProductoCompleto;
 
@@ -266,6 +270,14 @@ export default async function ProductoPage({ params, searchParams }: PageProps) 
                 imagenUrl={variacionActiva.imagen_url ?? p.imagen_principal_url ?? null}
                 precio={b2bAprobado && variacionActiva.precio_b2b && variacionActiva.precio_b2b > 0 ? variacionActiva.precio_b2b : variacionActiva.precio_b2c}
                 sku={variacionActiva.sku}
+              />
+            )}
+
+            {/* Añadir a pack — solo visible para admin */}
+            {esAdmin && variacionActiva && (
+              <AnadirAPackBtn
+                variacionId={variacionActiva.id}
+                nombreProducto={`${p.nombre}${variacionActiva.nombre_variacion !== "Único" ? ` — ${variacionActiva.nombre_variacion}` : ""}`}
               />
             )}
 
