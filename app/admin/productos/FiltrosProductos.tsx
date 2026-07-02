@@ -13,6 +13,7 @@ interface Props {
   currentMarca?: string;
   currentEstado?: string;
   currentFlag?: string;
+  currentExtra?: string;
 }
 
 export function FiltrosProductos({
@@ -25,6 +26,7 @@ export function FiltrosProductos({
   currentMarca = "",
   currentEstado = "",
   currentFlag = "",
+  currentExtra = "",
 }: Props) {
   const router = useRouter();
   const pathname = usePathname();
@@ -69,9 +71,9 @@ export function FiltrosProductos({
     navigate({ [key]: e.target.value });
   };
 
-  const reset = () => navigate({ q: "", cat: "", subcat: "", marca: "", estado: "", flag: "" });
+  const reset = () => navigate({ q: "", cat: "", subcat: "", marca: "", estado: "", flag: "", extra: "" });
 
-  const hasFilters = currentQ || currentCat || currentSubcat || currentMarca || currentEstado || currentFlag;
+  const hasFilters = currentQ || currentCat || currentSubcat || currentMarca || currentEstado || currentFlag || currentExtra;
 
   return (
     <div className={`bg-white border border-neutral-200 p-4 space-y-3 transition-opacity ${isPending ? "opacity-60 pointer-events-none" : ""}`}>
@@ -150,6 +152,18 @@ export function FiltrosProductos({
           <option value="nuevo">Novedades</option>
           <option value="destacado">Destacados</option>
         </select>
+
+        {/* Filtros especiales */}
+        <select
+          value={currentExtra}
+          onChange={handleSelect("extra")}
+          className="input-clean text-sm min-w-40"
+        >
+          <option value="">Filtros especiales…</option>
+          <option value="sin_marca">Sin marca asignada</option>
+          <option value="sin_precio">Sin precio</option>
+          <option value="general">Categoría general</option>
+        </select>
       </div>
 
       {/* Chips de filtros activos + reset */}
@@ -162,6 +176,7 @@ export function FiltrosProductos({
           {currentSubcat && <Chip label={currentSubcat} onRemove={() => navigate({ subcat: "" })} />}
           {currentEstado && <Chip label={currentEstado} onRemove={() => navigate({ estado: "" })} />}
           {currentFlag && <Chip label={currentFlag} onRemove={() => navigate({ flag: "" })} />}
+          {currentExtra && <Chip label={{ sin_marca: "Sin marca", sin_precio: "Sin precio", general: "Categoría general" }[currentExtra] ?? currentExtra} onRemove={() => navigate({ extra: "" })} />}
           <button onClick={reset} className="text-xs text-neutral-400 hover:text-red-500 underline underline-offset-2 transition-colors ml-1">
             Limpiar todo
           </button>

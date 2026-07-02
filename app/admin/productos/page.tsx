@@ -21,6 +21,7 @@ interface SearchParams {
   marca?: string;
   estado?: string;
   flag?: string;
+  extra?: string;
   page?: string;
 }
 
@@ -31,7 +32,7 @@ export default async function AdminProductosPage({
 }: {
   searchParams: Promise<SearchParams>;
 }) {
-  const { q, cat, subcat, marca, estado, flag, page: pageParam } = await searchParams;
+  const { q, cat, subcat, marca, estado, flag, extra, page: pageParam } = await searchParams;
   const page = Math.max(1, parseInt(pageParam ?? "1", 10));
   const from = (page - 1) * PAGE_SIZE;
   const to = from + PAGE_SIZE - 1;
@@ -72,11 +73,23 @@ export default async function AdminProductosPage({
   if (flag === "oferta") query = query.eq("oferta", true);
   else if (flag === "nuevo") query = query.eq("nuevo", true);
   else if (flag === "destacado") query = query.eq("destacado", true);
+  if (extra === "sin_marca") query = query.is("marca_id", null);
+  else if (extra === "sin_precio") {
+    const supabaseAdmin = createAdminClient();
+    const { data: varData } = await supabaseAdmin
+      .from("productos_variaciones")
+      .select("producto_padre_id")
+      .or("precio_b2c.is.null,precio_b2c.eq.0");
+    const sinPrecioIds = [...new Set((varData ?? []).map((v: { producto_padre_id: string }) => v.producto_padre_id))];
+    if (sinPrecioIds.length > 0) query = query.in("id", sinPrecioIds);
+    else query = query.eq("id", "00000000-0000-0000-0000-000000000000"); // sin resultados
+  }
+  else if (extra === "general") query = query.eq("categoria", "general");
 
   const { data: productos, count: totalCount } = await query;
   const totalPages = Math.ceil((totalCount ?? 0) / PAGE_SIZE);
 
-  const paginaParams = (extra: Record<string, string>) =>
+  const paginaParams = (overrides: Record<string, string>) =>
     new URLSearchParams({
       ...(q ? { q } : {}),
       ...(cat ? { cat } : {}),
@@ -84,7 +97,8 @@ export default async function AdminProductosPage({
       ...(marca ? { marca } : {}),
       ...(estado ? { estado } : {}),
       ...(flag ? { flag } : {}),
-      ...extra,
+      ...(extra ? { extra } : {}),
+      ...overrides,
     }).toString();
 
   return (
@@ -115,6 +129,7 @@ export default async function AdminProductosPage({
           currentMarca={marca}
           currentEstado={estado}
           currentFlag={flag}
+          currentExtra={extra}
         />
       </Suspense>
 
