@@ -23,13 +23,13 @@ const PAGE_SIZE = 24;
 
 type CatCount = { categoria: string; subcategoria: string | null; count: number };
 
+type SupabaseQuery = ReturnType<ReturnType<typeof import("@supabase/supabase-js").createClient>["from"]>;
+
 function buildSearchQuery(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  baseQuery: any,
+  baseQuery: SupabaseQuery,
   words: string[]
 ) {
   if (words.length === 0) return baseQuery;
-  // OR across all words: any word match is a hit
   const orClause = words.map((w) => `nombre.ilike.%${w}%`).join(",");
   return baseQuery.or(orClause);
 }
