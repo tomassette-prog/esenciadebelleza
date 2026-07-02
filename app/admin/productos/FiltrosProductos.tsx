@@ -163,6 +163,7 @@ export function FiltrosProductos({
           <option value="sin_marca">Sin marca asignada</option>
           <option value="sin_precio">Sin precio</option>
           <option value="general">Categoría general</option>
+          <option value="es_pack">Marcados como pack</option>
         </select>
       </div>
 

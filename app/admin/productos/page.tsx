@@ -85,6 +85,7 @@ export default async function AdminProductosPage({
     else query = query.eq("id", "00000000-0000-0000-0000-000000000000"); // sin resultados
   }
   else if (extra === "general") query = query.eq("categoria", "general");
+  else if (extra === "es_pack") query = query.eq("es_pack", true);
 
   const { data: productos, count: totalCount } = await query;
   const totalPages = Math.ceil((totalCount ?? 0) / PAGE_SIZE);

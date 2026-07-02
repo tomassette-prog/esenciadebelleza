@@ -113,6 +113,7 @@ export default async function EditarProductoPage({ params, searchParams }: { par
           destacado: producto.destacado,
           nuevo: producto.nuevo,
           oferta: (producto as Record<string, unknown>).oferta as boolean ?? false,
+          es_pack: (producto as Record<string, unknown>).es_pack as boolean ?? false,
           activo: producto.activo,
         }}
       />

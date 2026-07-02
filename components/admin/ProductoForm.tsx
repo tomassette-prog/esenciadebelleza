@@ -22,6 +22,7 @@ interface Props {
     destacado?: boolean;
     nuevo?: boolean;
     oferta?: boolean;
+    es_pack?: boolean;
     activo?: boolean;
     // Para variación única (solo en crear)
     sku?: string;
@@ -156,6 +157,15 @@ export function ProductoForm({ action, marcas, categoriasExistentes, subcategori
               className="w-4 h-4 accent-red-600"
             />
             <span className="text-sm text-neutral-700">🔖 Oferta destacada</span>
+          </label>
+          <label className="flex items-center gap-2 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              name="es_pack"
+              defaultChecked={defaultValues.es_pack ?? false}
+              className="w-4 h-4 accent-[#C4857A]"
+            />
+            <span className="text-sm text-neutral-700">🎁 Es pack de producto</span>
           </label>
           {modo === "editar" && (
             <label className="flex items-center gap-2 cursor-pointer select-none">

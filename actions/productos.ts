@@ -170,6 +170,7 @@ export async function actualizarProducto(
   const destacado = formData.get("destacado") === "on";
   const nuevo_flag = formData.get("nuevo") === "on";
   const oferta_flag = formData.get("oferta") === "on";
+  const es_pack = formData.get("es_pack") === "on";
   const activo = formData.get("activo") !== "off";
 
   if (!nombre || !categoria) return { error: "Nombre y categoría son obligatorios." };
@@ -201,6 +202,7 @@ export async function actualizarProducto(
       destacado,
       nuevo: nuevo_flag,
       oferta: oferta_flag,
+      es_pack,
       activo,
     })
     .eq("id", id);
