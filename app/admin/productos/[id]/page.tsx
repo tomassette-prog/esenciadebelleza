@@ -5,6 +5,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { ProductoForm } from "@/components/admin/ProductoForm";
 import { VariacionesManager } from "@/components/admin/VariacionesManager";
 import { EliminarProductoBtn } from "@/components/admin/EliminarProductoBtn";
+import { AnadirAPackBtn } from "@/components/producto/AnadirAPackBtn";
 import { actualizarProducto } from "@/actions/productos";
 import { slugifyCategoria } from "@/lib/seo";
 
@@ -121,6 +122,27 @@ export default async function EditarProductoPage({ params, searchParams }: { par
         productoId={id}
         variacionesIniciales={producto.variaciones ?? []}
       />
+
+      {/* Añadir variaciones a packs */}
+      {(producto.variaciones ?? []).length > 0 && (
+        <div className="bg-white border border-neutral-200 p-6 space-y-4">
+          <h2 className="text-sm font-medium uppercase tracking-widest text-neutral-500">Packs de regalo</h2>
+          <p className="text-xs text-neutral-400">Añade o quita variaciones de este producto en tus packs.</p>
+          <div className="space-y-3">
+            {(producto.variaciones ?? []).map((v: { id: string; nombre_variacion: string }) => (
+              <div key={v.id} className="flex items-center gap-4">
+                <span className="text-sm text-neutral-700 min-w-0 flex-1">{v.nombre_variacion}</span>
+                <div className="w-64 shrink-0">
+                  <AnadirAPackBtn
+                    variacionId={v.id}
+                    nombreProducto={`${producto.nombre}${v.nombre_variacion !== "Único" ? ` — ${v.nombre_variacion}` : ""}`}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
