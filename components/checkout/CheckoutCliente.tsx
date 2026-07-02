@@ -37,7 +37,7 @@ export function CheckoutCliente({
 }: {
   emailInicial?: string;
 }) {
-  const { lineas, totalPrecio } = useCarrito();
+  const { lineas, packs, totalPrecio } = useCarrito();
   const [paso, setPaso]               = useState<Paso>("direccion");
   const [cecaCampos, setCecaCampos]   = useState<Record<string, string> | null>(null);
   const [cecaUrl, setCecaUrl]         = useState<string>("");
@@ -80,7 +80,7 @@ export function CheckoutCliente({
     setError(null);
 
     const { gatewayUrl, campos, gastoEnvio: ge, error: err } =
-      await iniciarPagoCeca(lineas, datos);
+      await iniciarPagoCeca(lineas, packs, datos);
 
     if (err || !campos || !gatewayUrl) {
       setError(err ?? "Error al preparar el pago");

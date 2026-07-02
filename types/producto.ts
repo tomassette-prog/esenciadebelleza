@@ -94,6 +94,50 @@ export interface PerfilUsuario {
   created_at: string;
 }
 
+// ─── Packs de regalo ──────────────────────────────────────────────────────────
+export interface PackRegalo {
+  id: string;
+  slug: string;
+  nombre: string;
+  descripcion: string | null;
+  imagen_url: string | null;
+  precio_pack: number;
+  precio_original: number | null;
+  activo: boolean;
+  destacado: boolean;
+  orden: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PackRegaloItem {
+  id: string;
+  pack_id: string;
+  variacion_id: string;
+  cantidad: number;
+  // joins
+  variacion?: {
+    id: string;
+    sku: string;
+    nombre_variacion: string;
+    precio_b2c: number;
+    stock: number;
+    imagen_url: string | null;
+    producto_padre: {
+      id: string;
+      nombre: string;
+      slug: string;
+      categoria: string;
+      subcategoria: string | null;
+    } | null;
+  };
+}
+
+export interface PackRegaloCompleto extends PackRegalo {
+  items: PackRegaloItem[];
+  stock_disponible: number; // MIN(stock/cantidad) de todos los items
+}
+
 // ─── Pedido ───────────────────────────────────────────────────────────────────
 export type EstadoPedido =
   | "pendiente"

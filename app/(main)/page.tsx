@@ -1,5 +1,6 @@
 ﻿import type { Metadata } from "next";
 import Link from "next/link";
+import Image from "next/image";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { ProductoCard } from "@/components/producto/ProductoCard";
@@ -8,6 +9,7 @@ import { BlogStrip } from "@/components/layout/BlogStrip";
 import { slugifyCategoria, formatCategoryName } from "@/lib/seo";
 import type { ProductoCatalogo } from "@/types/producto";
 import MarcasCarrusel from "@/components/layout/MarcasCarrusel";
+import { getPacksDestacados } from "@/actions/packs";
 
 export const revalidate = 3600;
 
@@ -21,6 +23,9 @@ export const metadata: Metadata = {
 export default async function HomePage() {
   const supabase = await createClient();
   const adminClient = createAdminClient();
+
+  // Packs destacados para la home
+  const packsDestacados = await getPacksDestacados();
 
   // Posts destacados para la sección del blog en home
   const { data: postsDestacados } = await adminClient
@@ -345,6 +350,58 @@ export default async function HomePage() {
 
       {/* ── Blog strip horizontal ── */}
       <BlogStrip posts={posts} />
+
+      {/* ── Packs de regalo ── */}
+      {packsDestacados.length > 0 && (
+        <section className="py-16 px-6 bg-[#fdf6f4]">
+          <div className="container-main">
+            <div className="flex items-end justify-between mb-8">
+              <div>
+                <p className="text-xs tracking-[0.3em] uppercase mb-2 text-[#C4857A]">Especiales</p>
+                <h2 className="text-3xl font-light text-neutral-900" style={{ fontFamily: "var(--font-cormorant)" }}>
+                  Packs de regalo
+                </h2>
+              </div>
+              <Link href="/packs" className="text-xs tracking-widest uppercase text-neutral-500 hover:text-neutral-900 transition-colors hidden sm:block">
+                Ver todos →
+              </Link>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              {packsDestacados.map((pack) => {
+                const ahorro = pack.precio_original ? pack.precio_original - pack.precio_pack : null;
+                const pct = ahorro && pack.precio_original ? Math.round((ahorro / pack.precio_original) * 100) : null;
+                return (
+                  <Link key={pack.id} href={`/packs/${pack.slug}`}
+                    className="group flex gap-4 bg-white border border-neutral-200 hover:border-[#C4857A] transition-colors p-4">
+                    <div className="relative w-20 h-20 shrink-0 bg-neutral-50 border border-neutral-100">
+                      {pack.imagen_url ? (
+                        <Image src={pack.imagen_url} alt={pack.nombre} fill sizes="80px" className="object-contain p-1" />
+                      ) : (
+                        <div className="flex items-center justify-center h-full text-3xl">🎁</div>
+                      )}
+                    </div>
+                    <div className="flex flex-col justify-center min-w-0">
+                      <p className="text-sm font-medium text-neutral-900 line-clamp-2 mb-1">{pack.nombre}</p>
+                      <div className="flex items-baseline gap-2">
+                        <span className="text-base font-semibold text-[#3D2018]">{pack.precio_pack.toFixed(2)} €</span>
+                        {pack.precio_original && (
+                          <span className="text-xs text-neutral-400 line-through">{pack.precio_original.toFixed(2)} €</span>
+                        )}
+                      </div>
+                      {pct && <span className="text-xs text-[#C4857A] mt-0.5">-{pct}% de descuento</span>}
+                    </div>
+                  </Link>
+                );
+              })}
+            </div>
+            <div className="mt-6 text-center sm:hidden">
+              <Link href="/packs" className="text-xs tracking-widest uppercase text-neutral-500 hover:text-neutral-900 transition-colors">
+                Ver todos los packs →
+              </Link>
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* ── Banner profesionales ── */}
       <section className="py-16 px-6 bg-neutral-900">

@@ -4,14 +4,48 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { generarNumOper, generarCamposCeca } from "@/lib/cecabank";
 import { stripe } from "@/lib/stripe";
-import type { LineaCarrito } from "@/context/CarritoContext";
+import type { LineaCarrito, LineaPack } from "@/context/CarritoContext";
 
 import { calcularGastoEnvio } from "@/lib/envio";
 import { enviarNotificacionPedido } from "@/lib/email";
 
+// ── Convertir packs a líneas de pedido (explota cada pack en sus componentes) ─
+function explotarPacks(packs: LineaPack[]): {
+  lineasPedido: { pack_id: string; nombre: string; sku: string; variacion_id: string; cantidad: number; precio_unitario: number; subtotal: number; nombre_variacion: string; imagen_url: string | null }[];
+  lineasWoo:    { sku: string; cantidad: number }[];
+} {
+  const lineasPedido: { pack_id: string; nombre: string; sku: string; variacion_id: string; cantidad: number; precio_unitario: number; subtotal: number; nombre_variacion: string; imagen_url: string | null }[] = [];
+  const wooMap = new Map<string, number>();
+
+  for (const pack of packs) {
+    // Una línea por pack completo en pedidos_lineas
+    lineasPedido.push({
+      pack_id:          pack.pack_id,
+      nombre:           pack.nombre,
+      sku:              `PACK-${pack.pack_id.slice(0, 8)}`,
+      variacion_id:     pack.items[0]?.variacion_id ?? "",  // referencia al primer item
+      cantidad:         pack.cantidad,
+      precio_unitario:  pack.precio,
+      subtotal:         pack.precio * pack.cantidad,
+      nombre_variacion: "Pack de regalo",
+      imagen_url:       pack.imagen_url,
+    });
+
+    // Para WooCommerce: cada componente × cantidad del pack
+    for (const item of pack.items) {
+      const totalUnidades = item.cantidad * pack.cantidad;
+      wooMap.set(item.sku, (wooMap.get(item.sku) ?? 0) + totalUnidades);
+    }
+  }
+
+  const lineasWoo = [...wooMap.entries()].map(([sku, cantidad]) => ({ sku, cantidad }));
+  return { lineasPedido, lineasWoo };
+}
+
 // ── Iniciar pago con Cecabank ─────────────────────────────────────────────────
 export async function iniciarPagoCeca(
   lineas: LineaCarrito[],
+  packs: LineaPack[],
   datosEnvio: {
     email: string; nombre: string; apellidos: string; telefono: string;
     direccion: string; ciudad: string; provincia: string; codigo_postal: string;
@@ -23,7 +57,7 @@ export async function iniciarPagoCeca(
   gastoEnvio: number;
   error:      string | null;
 }> {
-  if (!lineas.length) return { gatewayUrl: null, campos: null, gastoEnvio: 0, error: "El carrito está vacío" };
+  if (!lineas.length && !packs.length) return { gatewayUrl: null, campos: null, gastoEnvio: 0, error: "El carrito está vacío" };
 
   const supabase   = createAdminClient();
   const authClient = await createClient();
@@ -42,7 +76,8 @@ export async function iniciarPagoCeca(
     }
   }
 
-  const totalProductos = lineas.reduce((acc, l) => acc + l.precio * l.cantidad, 0);
+  const totalProductos = lineas.reduce((acc, l) => acc + l.precio * l.cantidad, 0)
+                       + packs.reduce((acc, p) => acc + p.precio * p.cantidad, 0);
   const gastoEnvio     = calcularGastoEnvio(totalProductos, datosEnvio.provincia);
 
   if (gastoEnvio === -1) {
@@ -64,7 +99,7 @@ export async function iniciarPagoCeca(
       total:            totalFinal,
       tipo_precio:      tipoPrecio,
       metodo_pago:      "cecabank",
-      stripe_payment_id: numOper,          // reutilizamos campo como payment_ref
+      stripe_payment_id: numOper,
       email_cliente:    datosEnvio.email,
       notas:            datosEnvio.notas ?? "",
       direccion_envio:  {
@@ -85,7 +120,7 @@ export async function iniciarPagoCeca(
     return { gatewayUrl: null, campos: null, gastoEnvio, error: "Error al preparar el pedido" };
   }
 
-  // Guardar líneas del pedido
+  // Guardar líneas de productos individuales
   await supabase.from("pedidos_lineas").insert(
     lineas.map((l) => ({
       pedido_id:        pedido.id,
@@ -99,6 +134,24 @@ export async function iniciarPagoCeca(
       subtotal:         l.precio * l.cantidad,
     }))
   );
+
+  // Guardar líneas de packs (una línea por pack completo)
+  if (packs.length) {
+    const { lineasPedido: packLineas } = explotarPacks(packs);
+    await supabase.from("pedidos_lineas").insert(
+      packLineas.map((p) => ({
+        pedido_id:        pedido.id,
+        variacion_id:     p.variacion_id || null,
+        sku:              p.sku,
+        nombre_producto:  p.nombre,
+        nombre_variacion: p.nombre_variacion,
+        imagen_url:       p.imagen_url,
+        precio_unitario:  p.precio_unitario,
+        cantidad:         p.cantidad,
+        subtotal:         p.subtotal,
+      }))
+    );
+  }
 
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://esenciadebelleza.es";
   const { gatewayUrl, campos } = generarCamposCeca({
@@ -132,13 +185,50 @@ export async function confirmarPedidoCeca(
     .update({ estado: "pagado" })
     .eq("stripe_payment_id", numOper);
 
-  // Obtener líneas para crear pedido en WooCommerce
+  // Obtener líneas para email y WooCommerce
   const { data: lineas } = await supabase
     .from("pedidos_lineas")
     .select("sku, cantidad, precio_unitario, nombre_producto, nombre_variacion")
     .eq("pedido_id", pedido.id);
 
   const dir = pedido.direccion_envio as Record<string, string>;
+
+  // Para WooCommerce: separar líneas normales de packs (SKU empieza con PACK-)
+  const lineasNormales = (lineas ?? []).filter((l) => !l.sku.startsWith("PACK-"));
+  const lineasPack     = (lineas ?? []).filter((l) => l.sku.startsWith("PACK-"));
+
+  // Resolver componentes de packs → SKUs individuales para WooCommerce
+  type WooLinea = { sku: string; cantidad: number };
+  const lineasWooExtra: WooLinea[] = [];
+  if (lineasPack.length) {
+    // Obtener los pack_ids de las líneas de pack (SKU = PACK-{pack_id.slice(0,8)})
+    // Los guardamos con variacion_id nulo y sku PACK-xxx → buscamos por sku pattern
+    // Alternativa: buscar todos los packs_regalo_items cuyos pack_id aparecen
+    for (const lp of lineasPack) {
+      const packIdPrefix = lp.sku.replace("PACK-", "");
+      const { data: packItems } = await supabase
+        .from("packs_regalo")
+        .select(`id, packs_regalo_items(variacion_id, cantidad, variacion:productos_variaciones(sku))`)
+        .ilike("id", `${packIdPrefix}%`)
+        .single();
+      if (packItems) {
+        // Supabase devuelve la relación como array; extraemos el primer item
+        const rows = ((packItems as unknown as { packs_regalo_items: { cantidad: number; variacion: unknown }[] }).packs_regalo_items) ?? [];
+        for (const item of rows) {
+          const varArr = item.variacion as { sku: string }[] | null;
+          const sku = Array.isArray(varArr) ? varArr[0]?.sku : (varArr as unknown as { sku: string } | null)?.sku;
+          if (sku) {
+            lineasWooExtra.push({ sku, cantidad: item.cantidad * lp.cantidad });
+          }
+        }
+      }
+    }
+  }
+
+  const todasLineasWoo: WooLinea[] = [
+    ...lineasNormales.map((l) => ({ sku: l.sku, cantidad: l.cantidad })),
+    ...lineasWooExtra,
+  ];
 
   // Enviar notificación por email al admin
   void enviarNotificacionPedido({
@@ -169,7 +259,7 @@ export async function confirmarPedidoCeca(
     ciudad:        dir.ciudad        ?? "",
     provincia:     dir.provincia     ?? "",
     codigo_postal: dir.codigo_postal ?? "",
-    lineas:        (lineas ?? []) as unknown as LineaCarrito[],
+    lineas:        todasLineasWoo as unknown as LineaCarrito[],
     ceca_num_oper: numOper,
     gasto_envio:   pedido.gastos_envio,
   });
@@ -258,19 +348,21 @@ export async function crearPedidoWooCommerce(params: {
 // ── Iniciar pago con Stripe Checkout ─────────────────────────────────────────
 export async function iniciarPagoStripe(
   lineas: LineaCarrito[],
+  packs: LineaPack[],
   datosEnvio: {
     email: string; nombre: string; apellidos: string; telefono: string;
     direccion: string; ciudad: string; provincia: string; codigo_postal: string;
     notas?: string;
   }
 ): Promise<{ url: string | null; error: string | null }> {
-  if (!lineas.length) return { url: null, error: "El carrito está vacío" };
+  if (!lineas.length && !packs.length) return { url: null, error: "El carrito está vacío" };
 
   const supabase   = createAdminClient();
   const authClient = await createClient();
   const { data: { user } } = await authClient.auth.getUser();
 
-  const totalProductos = lineas.reduce((acc, l) => acc + l.precio * l.cantidad, 0);
+  const totalProductos = lineas.reduce((acc, l) => acc + l.precio * l.cantidad, 0)
+                       + packs.reduce((acc, p) => acc + p.precio * p.cantidad, 0);
   const gastoEnvio     = calcularGastoEnvio(totalProductos, datosEnvio.provincia);
   if (gastoEnvio === -1) return { url: null, error: "No realizamos envíos a esa provincia." };
 

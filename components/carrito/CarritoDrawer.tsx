@@ -6,7 +6,7 @@ import Link from "next/link";
 import { useCarrito } from "@/context/CarritoContext";
 
 export function CarritoDrawer() {
-  const { lineas, abierto, totalPrecio, totalUnidades, quitar, cambiarCantidad, cerrarDrawer } =
+  const { lineas, packs, abierto, totalPrecio, totalUnidades, quitar, cambiarCantidad, quitarPack, cambiarCantidadPack, cerrarDrawer } =
     useCarrito();
 
   // Cerrar con Escape
@@ -69,7 +69,7 @@ export function CarritoDrawer() {
         </div>
 
         {/* Líneas */}
-        {lineas.length === 0 ? (
+        {lineas.length === 0 && packs.length === 0 ? (
           <div className="flex-1 flex flex-col items-center justify-center px-6 text-center">
             <svg className="w-16 h-16 text-neutral-200 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1}
@@ -86,6 +86,7 @@ export function CarritoDrawer() {
         ) : (
           <>
             <ul className="flex-1 overflow-y-auto divide-y divide-neutral-100 px-6">
+              {/* Productos individuales */}
               {lineas.map((linea) => (
                 <li key={linea.variacion_id} className="py-5 flex gap-4">
                   {/* Imagen */}
@@ -160,6 +161,50 @@ export function CarritoDrawer() {
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
                               d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
+                          </svg>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </li>
+              ))}
+
+              {/* Packs de regalo */}
+              {packs.map((pack) => (
+                <li key={pack.pack_id} className="py-5 flex gap-4">
+                  <div className="w-20 h-20 bg-neutral-50 border border-neutral-100 shrink-0 relative overflow-hidden flex items-center justify-center">
+                    {pack.imagen_url ? (
+                      <Image src={pack.imagen_url} alt={pack.nombre} fill sizes="80px" className="object-contain p-1" />
+                    ) : (
+                      <span className="text-3xl">🎁</span>
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <Link href={`/packs/${pack.slug}`} onClick={cerrarDrawer}
+                      className="text-sm text-neutral-900 hover:underline line-clamp-2 leading-snug">
+                      {pack.nombre}
+                    </Link>
+                    <p className="text-xs text-[#C4857A] mt-0.5">Pack de regalo</p>
+                    <div className="flex items-center justify-between mt-3">
+                      <div className="flex items-center border border-neutral-200">
+                        <button onClick={() => cambiarCantidadPack(pack.pack_id, pack.cantidad - 1)}
+                          className="w-8 h-8 flex items-center justify-center text-neutral-400 hover:text-neutral-900 hover:bg-neutral-50 transition-colors" aria-label="Reducir">
+                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" /></svg>
+                        </button>
+                        <span className="w-8 text-center text-sm tabular-nums">{pack.cantidad}</span>
+                        <button onClick={() => cambiarCantidadPack(pack.pack_id, pack.cantidad + 1)}
+                          className="w-8 h-8 flex items-center justify-center text-neutral-400 hover:text-neutral-900 hover:bg-neutral-50 transition-colors" aria-label="Aumentar">
+                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+                        </button>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span className="text-sm font-medium tabular-nums">
+                          {(pack.precio * pack.cantidad).toLocaleString("es-ES", { style: "currency", currency: "EUR" })}
+                        </span>
+                        <button onClick={() => quitarPack(pack.pack_id)}
+                          className="text-neutral-300 hover:text-red-500 transition-colors" aria-label={`Eliminar ${pack.nombre}`}>
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
                           </svg>
                         </button>
                       </div>
