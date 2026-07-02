@@ -244,9 +244,8 @@ export async function calcularDiff(): Promise<{
         cambios["categoria"] = { woo: categoria, actual: existing.categoria };
       if (subcategoria !== (existing.subcategoria ?? ""))
         cambios["subcategoria"] = { woo: subcategoria, actual: existing.subcategoria ?? "" };
-      const imgWoo = p.images[0]?.src ?? null;
-      if (imgWoo !== existing.imagen_principal_url)
-        cambios["imagen"] = { woo: imgWoo, actual: existing.imagen_principal_url };
+      // Nota: imagen_principal_url NO se compara porque puede haber sido migrada
+      // a Supabase Storage intencionalmente (distinta URL que WooCommerce).
 
       if (Object.keys(cambios).length > 0) {
         modificados.push({ slug, nombre: p.name, tipo: "modificado", wooId: p.id, wooCategories: p.categories.map(c => c.id), cambios });
