@@ -39,7 +39,7 @@ export default async function PackPage({ params }: { params: Promise<{ slug: str
         <div className="relative aspect-square bg-neutral-50 border border-neutral-100">
           {pack.imagen_url ? (
             <Image src={pack.imagen_url} alt={pack.nombre} fill sizes="(max-width:1024px) 100vw, 50vw"
-              className="object-contain p-6" priority />
+              className="object-contain p-6" priority unoptimized />
           ) : (
             <div className="flex items-center justify-center h-full text-8xl">🎁</div>
           )}

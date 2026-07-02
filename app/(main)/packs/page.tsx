@@ -74,7 +74,8 @@ export default async function PacksPage() {
                 <div className="relative aspect-square bg-neutral-50 overflow-hidden">
                   {pack.imagen_url ? (
                     <Image src={pack.imagen_url} alt={pack.nombre} fill sizes="(max-width:640px) 100vw, (max-width:1024px) 50vw, 33vw"
-                      className="object-contain p-4 group-hover:scale-105 transition-transform duration-300" />
+                      className="object-contain p-4 group-hover:scale-105 transition-transform duration-300"
+                      unoptimized />
                   ) : (
                     <div className="flex items-center justify-center h-full text-6xl">🎁</div>
                   )}
@@ -104,8 +105,10 @@ export default async function PacksPage() {
               className="group block border border-neutral-200 hover:border-[#C4857A] transition-colors">
               <div className="relative aspect-square bg-neutral-50 overflow-hidden">
                 {p.imagen_principal_url ? (
-                  <Image src={p.imagen_principal_url} alt={p.nombre} fill sizes="(max-width:640px) 100vw, (max-width:1024px) 50vw, 33vw"
-                    className="object-contain p-4 group-hover:scale-105 transition-transform duration-300" />
+                  <Image src={p.imagen_principal_url} alt={p.nombre} fill
+                    sizes="(max-width:640px) 100vw, (max-width:1024px) 50vw, 33vw"
+                    className="object-contain p-4 group-hover:scale-105 transition-transform duration-300"
+                    unoptimized />
                 ) : (
                   <div className="flex items-center justify-center h-full text-6xl">🎁</div>
                 )}
