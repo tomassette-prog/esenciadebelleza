@@ -499,6 +499,24 @@ export async function actualizarCategoriaBulk(
   return { ok: data?.length ?? ids.length };
 }
 
+export async function asignarMarcaBulk(
+  ids: string[],
+  marcaId: string
+): Promise<{ ok: number; error?: string }> {
+  await verificarAdmin();
+  if (!ids.length) return { ok: 0 };
+  const supabase = createAdminClient();
+  const { error, data } = await supabase
+    .from("productos_padre")
+    .update({ marca_id: marcaId })
+    .in("id", ids)
+    .select("id");
+  if (error) return { ok: 0, error: error.message };
+  revalidatePath("/admin/productos");
+  revalidatePath("/marcas");
+  return { ok: data?.length ?? ids.length };
+}
+
 export async function toggleActivoBulk(
   ids: string[],
   activo: boolean

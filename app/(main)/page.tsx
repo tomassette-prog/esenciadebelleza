@@ -267,7 +267,7 @@ export default async function HomePage() {
           titulo={carruselTitulo}
           subtitulo={carruselSubtitulo}
           verTodosHref="/productos"
-          autoScrollMs={4500}
+          autoScrollMs={45000}
         />
       )}
 
@@ -279,7 +279,7 @@ export default async function HomePage() {
           titulo={c.nombre}
           subtitulo={c.subtitulo ?? undefined}
           verTodosHref="/productos"
-          autoScrollMs={5000}
+          autoScrollMs={50000}
         />
       ))}
 

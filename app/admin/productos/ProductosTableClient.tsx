@@ -23,9 +23,10 @@ interface ProductoRow {
 
 interface Props {
   productos: ProductoRow[];
+  backUrl?: string;
 }
 
-export function ProductosTableClient({ productos }: Props) {
+export function ProductosTableClient({ productos, backUrl = "/admin/productos" }: Props) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
   function toggleOne(id: string) {
@@ -128,7 +129,7 @@ export function ProductosTableClient({ productos }: Props) {
                       <div className="flex items-center justify-end gap-3">
                         <Link href={urlPath} target="_blank" className="text-xs text-neutral-400 hover:text-neutral-700 transition-colors" title="Ver en tienda">↗</Link>
                         <GenerarSeoBtn productoId={p.id} />
-                        <Link href={`/admin/productos/${p.id}`} className="text-xs text-neutral-600 hover:text-neutral-900 underline underline-offset-2 transition-colors">Editar</Link>
+                        <Link href={`/admin/productos/${p.id}?back=${encodeURIComponent(backUrl)}`} className="text-xs text-neutral-600 hover:text-neutral-900 underline underline-offset-2 transition-colors">Editar</Link>
                       </div>
                     </td>
                   </tr>

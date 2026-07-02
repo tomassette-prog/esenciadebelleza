@@ -120,6 +120,7 @@ export default async function AdminProductosPage({
 
       <ProductosTableClient
         productos={(productos ?? []) as Parameters<typeof ProductosTableClient>[0]["productos"]}
+        backUrl={`/admin/productos${paginaParams({}) ? `?${paginaParams({})}` : ""}`}
       />
 
       {totalPages > 1 && (

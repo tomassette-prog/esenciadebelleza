@@ -20,8 +20,10 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   };
 }
 
-export default async function EditarProductoPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function EditarProductoPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ back?: string }> }) {
   const { id } = await params;
+  const { back } = await searchParams;
+  const backUrl = back ? decodeURIComponent(back) : "/admin/productos";
   const supabase = createAdminClient();
 
   const [{ data: producto }, { data: marcas }, { data: catData }] = await Promise.all([
@@ -58,7 +60,7 @@ export default async function EditarProductoPage({ params }: { params: Promise<{
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <Link
-            href="/admin/productos"
+            href={backUrl}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs border border-neutral-300 text-neutral-600 hover:border-neutral-600 hover:text-neutral-900 transition-colors"
           >
             ← Volver al listado

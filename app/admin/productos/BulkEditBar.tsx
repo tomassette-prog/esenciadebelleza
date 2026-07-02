@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useTransition } from "react";
-import { actualizarCategoriaBulk, toggleActivoBulk } from "@/actions/productos";
+import { useState, useTransition, useEffect } from "react";
+import { actualizarCategoriaBulk, toggleActivoBulk, asignarMarcaBulk } from "@/actions/productos";
 import { getAllCategoriaPairs, type CategoriaPair } from "@/lib/category-suggester";
 import { useRouter } from "next/navigation";
 
@@ -10,16 +10,35 @@ interface Props {
   onClear: () => void;
 }
 
+interface MarcaOption {
+  id: string;
+  nombre: string;
+}
+
 export function BulkEditBar({ productoIds, onClear }: Props) {
   const [isPending, startTransition] = useTransition();
-  const [accion, setAccion] = useState<"categoria" | "activar" | "desactivar" | null>(null);
+  const [accion, setAccion] = useState<"categoria" | "marca" | "activar" | "desactivar" | null>(null);
   const [categoria, setCategoria] = useState("peluqueria");
   const [subcategoria, setSubcategoria] = useState("peluqueria-general");
+  const [marcaId, setMarcaId] = useState("");
+  const [marcas, setMarcas] = useState<MarcaOption[]>([]);
   const [msg, setMsg] = useState<string | null>(null);
   const router = useRouter();
 
   const allPairs: CategoriaPair[] = getAllCategoriaPairs();
   const categorias = [...new Set(allPairs.map(p => p.categoria))];
+
+  useEffect(() => {
+    if (accion !== "marca" || marcas.length > 0) return;
+    fetch("/api/marcas")
+      .then(r => r.json())
+      .then((data: MarcaOption[]) => {
+        const sorted = [...data].sort((a, b) => a.nombre.localeCompare(b.nombre));
+        setMarcas(sorted);
+        if (sorted.length > 0) setMarcaId(sorted[0].id);
+      })
+      .catch(() => {});
+  }, [accion, marcas.length]);
 
   if (productoIds.length === 0) return null;
 
@@ -30,6 +49,8 @@ export function BulkEditBar({ productoIds, onClear }: Props) {
       let res: { ok: number; error?: string };
       if (accion === "categoria") {
         res = await actualizarCategoriaBulk(productoIds, categoria, subcategoria);
+      } else if (accion === "marca") {
+        res = await asignarMarcaBulk(productoIds, marcaId);
       } else {
         res = await toggleActivoBulk(productoIds, accion === "activar");
       }
@@ -53,6 +74,7 @@ export function BulkEditBar({ productoIds, onClear }: Props) {
       >
         <option value="">Acción…</option>
         <option value="categoria">Cambiar categoría</option>
+        <option value="marca">Asignar marca</option>
         <option value="activar">Activar</option>
         <option value="desactivar">Desactivar</option>
       </select>
@@ -81,6 +103,19 @@ export function BulkEditBar({ productoIds, onClear }: Props) {
             ))}
           </select>
         </>
+      )}
+
+      {accion === "marca" && (
+        <select
+          value={marcaId}
+          onChange={e => setMarcaId(e.target.value)}
+          className="text-sm border border-neutral-300 px-2 py-1.5 bg-white min-w-[160px]"
+        >
+          {marcas.length === 0 && <option value="">Cargando…</option>}
+          {marcas.map(m => (
+            <option key={m.id} value={m.id}>{m.nombre}</option>
+          ))}
+        </select>
       )}
 
       <button
