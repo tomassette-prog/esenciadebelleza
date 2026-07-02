@@ -154,16 +154,26 @@ export function MarcasAdmin({ marcas: inicial }: { marcas: Marca[] }) {
             {marcas.map(m => (
               <tr key={m.id} className="hover:bg-neutral-50">
                 <td className="px-4 py-2">
-                  <div className="w-12 h-8 flex items-center justify-center">
+                  <label className="block w-12 h-10 flex items-center justify-center cursor-pointer group" title="Subir logo">
                     {m.logo_url ? (
                       // eslint-disable-next-line @next/next/no-img-element
-                      <img src={m.logo_url} alt={m.nombre} className="max-h-8 max-w-12 object-contain" />
+                      <img src={m.logo_url} alt={m.nombre} className="max-h-8 max-w-12 object-contain group-hover:opacity-60 transition-opacity" />
                     ) : (
-                      <div className="w-10 h-7 bg-neutral-100 border border-dashed border-neutral-300 flex items-center justify-center text-[9px] text-neutral-400">
-                        sin logo
+                      <div className="w-12 h-10 bg-neutral-100 border border-dashed border-neutral-300 group-hover:border-[#C4857A] group-hover:bg-[#fdf6f4] flex items-center justify-center text-[9px] text-neutral-400 group-hover:text-[#C4857A] transition-colors">
+                        + logo
                       </div>
                     )}
-                  </div>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      ref={el => { fileRefs.current[m.id] = el; }}
+                      onChange={e => {
+                        const file = e.target.files?.[0];
+                        if (file) handleSubirLogo(m.id, m.slug, file);
+                      }}
+                    />
+                  </label>
                 </td>
                 <td className="px-4 py-2">
                   {editando === m.id ? (
@@ -189,12 +199,6 @@ export function MarcasAdmin({ marcas: inicial }: { marcas: Marca[] }) {
                 <td className="px-4 py-2 text-right">
                   {editando === m.id ? (
                     <div className="flex items-center gap-2 justify-end">
-                      <input
-                        value={editLogo}
-                        onChange={e => setEditLogo(e.target.value)}
-                        placeholder="URL logo"
-                        className="border border-neutral-300 px-2 py-1 text-xs w-48"
-                      />
                       <button
                         onClick={() => handleGuardar(m.id)}
                         disabled={isPending}
@@ -208,20 +212,6 @@ export function MarcasAdmin({ marcas: inicial }: { marcas: Marca[] }) {
                     </div>
                   ) : (
                     <div className="flex items-center gap-3 justify-end">
-                      {/* Subir logo desde archivo */}
-                      <label className="text-xs text-neutral-400 hover:text-neutral-700 cursor-pointer" title="Subir logo desde archivo">
-                        📁
-                        <input
-                          type="file"
-                          accept="image/*"
-                          className="hidden"
-                          ref={el => { fileRefs.current[m.id] = el; }}
-                          onChange={e => {
-                            const file = e.target.files?.[0];
-                            if (file) handleSubirLogo(m.id, m.slug, file);
-                          }}
-                        />
-                      </label>
                       <button
                         onClick={() => { setEditando(m.id); setEditNombre(m.nombre); setEditLogo(m.logo_url ?? ""); }}
                         className="text-xs text-neutral-500 hover:text-neutral-900 underline underline-offset-2"
