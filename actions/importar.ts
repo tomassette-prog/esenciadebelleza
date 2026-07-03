@@ -133,6 +133,7 @@ export interface ProductoDiff {
   wooId: number;
   wooCategories: number[];
   cambios?: Record<string, { woo: string | null; actual: string | null }>;
+  precioCambio?: { woo: number; actual: number };
 }
 
 export interface UnmappedCategory {
@@ -191,6 +192,8 @@ export async function calcularDiff(): Promise<{
     const wooProductos: {
       id: number; name: string; slug: string; type: string;
       description: string; short_description: string;
+      sku: string;
+      price: string; regular_price: string; sale_price: string;
       images: { src: string }[];
       categories: { id: number; name: string }[];
     }[] = [];
@@ -203,12 +206,14 @@ export async function calcularDiff(): Promise<{
       page++;
     }
 
-    // 2. Cargar Supabase
+    // 2. Cargar Supabase (productos + variaciones)
     const supa = adminClient();
     const supaMap = new Map<string, {
       nombre: string; categoria: string; subcategoria: string | null;
       imagen_principal_url: string | null; descripcion_general: string | null;
     }>();
+    const supaPrecios = new Map<string, number>();  // SKU -> precio_b2c actual
+    
     let offset = 0;
     while (true) {
       const { data } = await supa
@@ -221,7 +226,20 @@ export async function calcularDiff(): Promise<{
       offset += 1000;
     }
 
-    // 3. Comparar (cargar mapa de categorías desde BD con fallback a hardcoded)
+    // Cargar precios actuales de variaciones
+    offset = 0;
+    while (true) {
+      const { data } = await supa
+        .from("productos_variaciones")
+        .select("sku, precio_b2c")
+        .range(offset, offset + 999);
+      if (!data || data.length === 0) break;
+      for (const r of data) supaPrecios.set(r.sku, r.precio_b2c);
+      if (data.length < 1000) break;
+      offset += 1000;
+    }
+
+    // 3. Comparar SOLO precios (ignorar nombre, categoría, stock, etc.)
     const catMap = await getDbCatMap(supa);
     const nuevos: ProductoDiff[] = [];
     const modificados: ProductoDiff[] = [];
@@ -230,26 +248,30 @@ export async function calcularDiff(): Promise<{
     for (const p of wooProductos) {
       const slug = p.slug || slugify(p.name);
       const existing = supaMap.get(slug);
-      const { categoria, subcategoria } = resolverCategoria(p.categories, catMap);
 
       if (!existing) {
+        // Producto nuevo en WooCommerce
         nuevos.push({ slug, nombre: p.name, tipo: "nuevo", wooId: p.id, wooCategories: p.categories.map(c => c.id) });
         continue;
       }
 
-      const cambios: ProductoDiff["cambios"] = {};
-      if (p.name.trim() !== existing.nombre)
-        cambios["nombre"] = { woo: p.name.trim(), actual: existing.nombre };
-      if (categoria !== existing.categoria)
-        cambios["categoria"] = { woo: categoria, actual: existing.categoria };
-      if (subcategoria !== (existing.subcategoria ?? ""))
-        cambios["subcategoria"] = { woo: subcategoria, actual: existing.subcategoria ?? "" };
-      // Nota: imagen_principal_url NO se compara porque puede haber sido migrada
-      // a Supabase Storage intencionalmente (distinta URL que WooCommerce).
+      // Producto existente — solo comparar PRECIO
+      const wooPrice = parseFloat(p.price || p.regular_price) || 0;
+      const sku = p.sku || slug;  // Fallback al slug si no hay SKU
+      const precioActual = supaPrecios.get(sku) ?? 0;
 
-      if (Object.keys(cambios).length > 0) {
-        modificados.push({ slug, nombre: p.name, tipo: "modificado", wooId: p.id, wooCategories: p.categories.map(c => c.id), cambios });
+      if (wooPrice !== precioActual && wooPrice > 0) {
+        // Precio cambió
+        modificados.push({
+          slug,
+          nombre: p.name,
+          tipo: "modificado",
+          wooId: p.id,
+          wooCategories: p.categories.map(c => c.id),
+          precioCambio: { woo: wooPrice, actual: precioActual }
+        });
       } else {
+        // Precio igual (ignora cualquier otro cambio)
         iguales++;
       }
     }
@@ -334,59 +356,62 @@ export async function aplicarCambios(slugsConId: Array<{ slug: string; wooId: nu
     const supa = adminClient();
     const catMap = await getDbCatMap(supa);
 
-    // Obtener slugs existentes para preservar flags
+    // Obtener slugs existentes para preservar flags y obtener producto_id
     const slugsExistentes = seleccionados.map(p => p.slug || slugify(p.name));
     const { data: existentes } = await supa
       .from("productos_padre")
-      .select("slug, activo, destacado, nuevo")
+      .select("id, slug, activo, destacado, nuevo")
       .in("slug", slugsExistentes);
     const existMap = new Map((existentes ?? []).map(e => [e.slug, e]));
 
-    // Preparar upsert
-    const rows = seleccionados.map(p => {
-      const slug = p.slug || slugify(p.name);
-      const { categoria, subcategoria } = resolverCategoria(p.categories, catMap);
-      const ex = existMap.get(slug);
-      const suffix = " | Esencia de Belleza";
-      const maxNombre = 60 - suffix.length; // 60 es el límite del CHECK constraint
-      const nombreTruncado = p.name.trim().slice(0, maxNombre);
-      return {
-        nombre: p.name.trim(),
-        slug,
-        categoria,
-        subcategoria,
-        descripcion_general: p.description || p.short_description || null,
-        imagen_principal_url: p.images[0]?.src ?? null,
-        seo_title: `${nombreTruncado}${suffix}`,
-        seo_description: `Compra ${p.name.trim()} al mejor precio. Envío 24-48h a toda España.`,
-        activo:    ex?.activo    ?? false,  // nuevos entran como borrador (activo=false)
-        destacado: ex?.destacado ?? false,
-        nuevo:     ex?.nuevo     ?? false,
-      };
-    });
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // IMPORTANTE: Solo actualizar PRECIOS, no tocar otros campos del producto
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-    const { error } = await supa.from("productos_padre").upsert(rows, { onConflict: "slug" });
-    if (error) return { ok: 0, noEncontrados, error: error.message };
+    let actualizados = 0;
 
-    // Upsert variaciones para productos simples (precio/stock)
+    // Actualizar variaciones para productos simples (SOLO actualizar precio)
     for (const p of seleccionados) {
       if (p.type !== "simple" || !p.sku) continue;
       const { data: padre } = await supa.from("productos_padre").select("id").eq("slug", p.slug || slugify(p.name)).single();
       if (!padre) continue;
       const precio = parseFloat(p.price || p.regular_price) || 0;
-      const stock = p.stock_quantity ?? (p.stock_status === "instock" ? 1 : 0);
-      await supa.from("productos_variaciones").upsert({
-        producto_id: padre.id,
-        sku: p.sku,
-        nombre_variacion: "Unidad",
-        precio_b2c: precio,
-        precio_b2b: precio,
-        stock,
-        activa: true,
-      }, { onConflict: "sku" });
+      
+      // Primero intentar UPDATE (para productos existentes) — solo actualizar precio
+      const { data: existing, error: selectError } = await supa
+        .from("productos_variaciones")
+        .select("id")
+        .eq("sku", p.sku)
+        .single();
+      
+      if (existing) {
+        // Producto existente — actualizar SOLO precio
+        const { error } = await supa
+          .from("productos_variaciones")
+          .update({
+            precio_b2c: precio,
+            precio_b2b: precio,
+          })
+          .eq("sku", p.sku);
+        if (!error) actualizados++;
+      } else {
+        // Producto nuevo — insertar con todos los campos
+        const { error } = await supa
+          .from("productos_variaciones")
+          .insert({
+            producto_id: padre.id,
+            sku: p.sku,
+            nombre_variacion: "Unidad",
+            precio_b2c: precio,
+            precio_b2b: precio,
+            stock: 0,
+            activa: true,
+          });
+        if (!error) actualizados++;
+      }
     }
 
-    return { ok: rows.length, noEncontrados };
+    return { ok: actualizados, noEncontrados };
   } catch (e) {
     return { ok: 0, noEncontrados: [], error: String(e) };
   }
@@ -509,53 +534,106 @@ export async function publicarAprobados(payload: ReviewPayload): Promise<SmartAp
       .in("slug", publishedSlugs);
     const existMap = new Map((existentes ?? []).map(e => [e.slug, e]));
 
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // IMPORTANTE: Para productos ya existentes, solo actualizar PRECIOS
+    // No actualizar nombre, categoría, descripción, etc.
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
     const suffix = " | Esencia de Belleza";
     const maxNombre = 60 - suffix.length;
 
-    const rows = fetched.map(p => {
+    const rowsNuevos: any[] = [];
+    const rowsActualizar: Array<{ slug: string; marca_id: number | null }> = [];
+    
+    for (const p of fetched) {
       const slug = p.slug || slugify(p.name);
       const cat = slugToCat.get(slug) ?? resolverCategoria(p.categories, new Map(Object.entries(WOO_CAT_MAP).map(([k,v]) => [Number(k),v])));
       const ex = existMap.get(slug);
       const brandSlug = slugify(extractBrandName(p.name));
       const marcaId = marcaSlugToId.get(brandSlug) ?? null;
       const nombreTruncado = p.name.trim().slice(0, maxNombre);
-      return {
-        nombre: p.name.trim(),
-        slug,
-        categoria: cat.categoria,
-        subcategoria: cat.subcategoria,
-        descripcion_general: p.description || p.short_description || null,
-        imagen_principal_url: p.images[0]?.src ?? null,
-        seo_title: `${nombreTruncado}${suffix}`,
-        seo_description: `Compra ${p.name.trim()} al mejor precio. Envío 24-48h a toda España.`,
-        activo: true,
-        destacado: ex?.destacado ?? false,
-        nuevo: ex?.nuevo ?? false,
-        marca_id: marcaId ?? null,
-      };
-    });
+      
+      // Si es nuevo (no existe en Esencia), crear con todos los campos
+      if (!ex) {
+        rowsNuevos.push({
+          nombre: p.name.trim(),
+          slug,
+          categoria: cat.categoria,
+          subcategoria: cat.subcategoria,
+          descripcion_general: p.description || p.short_description || null,
+          imagen_principal_url: p.images[0]?.src ?? null,
+          seo_title: `${nombreTruncado}${suffix}`,
+          seo_description: `Compra ${p.name.trim()} al mejor precio. Envío 24-48h a toda España.`,
+          activo: true,
+          destacado: false,
+          nuevo: false,
+          marca_id: marcaId ?? null,
+        });
+      } else {
+        // Si ya existe, guardar solo marca_id para actualizar después
+        rowsActualizar.push({
+          slug,
+          marca_id: marcaId,
+        });
+      }
+    }
 
-    const { error: upsertError } = await supa.from("productos_padre")
-      .upsert(rows, { onConflict: "slug" });
-    if (upsertError) return { ...empty, notFound, error: upsertError.message };
+    // Insertar nuevos productos
+    if (rowsNuevos.length > 0) {
+      const { error: insertError } = await supa.from("productos_padre")
+        .insert(rowsNuevos);
+      if (insertError && insertError.code !== "23505") {  // Ignorar duplicate key errors
+        return { ...empty, notFound, error: insertError.message };
+      }
+    }
 
-    // Step E — upsert variaciones for simple products
+    // Actualizar solo marca_id en existentes
+    for (const row of rowsActualizar) {
+      if (row.marca_id) {
+        await supa.from("productos_padre")
+          .update({ marca_id: row.marca_id })
+          .eq("slug", row.slug);
+      }
+    }
+
+    // Step E — upsert variaciones for simple products (SOLO actualizar precio)
     for (const p of fetched) {
       if (p.type !== "simple" || !p.sku) continue;
       const { data: padre } = await supa.from("productos_padre")
         .select("id").eq("slug", p.slug || slugify(p.name)).single();
       if (!padre) continue;
       const precio = parseFloat(p.price || p.regular_price) || 0;
-      const stock = p.stock_quantity ?? (p.stock_status === "instock" ? 1 : 0);
-      await supa.from("productos_variaciones").upsert({
-        producto_id: padre.id,
-        sku: p.sku,
-        nombre_variacion: "Unidad",
-        precio_b2c: precio,
-        precio_b2b: precio,
-        stock,
-        activa: true,
-      }, { onConflict: "sku" });
+      
+      // Primero intentar UPDATE (para productos existentes) — solo actualizar precio
+      const { data: existing } = await supa
+        .from("productos_variaciones")
+        .select("id")
+        .eq("sku", p.sku)
+        .single();
+      
+      if (existing) {
+        // Producto existente — actualizar SOLO precio
+        await supa
+          .from("productos_variaciones")
+          .update({
+            precio_b2c: precio,
+            precio_b2b: precio,
+          })
+          .eq("sku", p.sku);
+      } else {
+        // Producto nuevo — insertar con todos los campos
+        await supa
+          .from("productos_variaciones")
+          .insert({
+            producto_id: padre.id,
+            sku: p.sku,
+            nombre_variacion: "Unidad",
+            precio_b2c: precio,
+            precio_b2b: precio,
+            stock: 0,
+            activa: true,
+          });
+      }
     }
 
     // Step F — trigger SEO for products without texto_enriquecido_seo
@@ -587,7 +665,7 @@ export async function publicarAprobados(payload: ReviewPayload): Promise<SmartAp
       .filter((r): r is PromiseFulfilledResult<string> => r.status === "fulfilled")
       .map(r => r.value);
 
-    return { ok: rows.length, brandsCreated, seoTriggered, notFound };
+    return { ok: rowsNuevos.length + rowsActualizar.length, brandsCreated, seoTriggered, notFound };
   } catch (e) {
     return { ...empty, error: String(e) };
   }
