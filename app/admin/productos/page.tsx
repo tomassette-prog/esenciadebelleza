@@ -84,7 +84,7 @@ export default async function AdminProductosPage({
     if (sinPrecioIds.length > 0) query = query.in("id", sinPrecioIds);
     else query = query.eq("id", "00000000-0000-0000-0000-000000000000"); // sin resultados
   }
-  else if (extra === "general") query = query.or("categoria.eq.sin-clasificar,categoria.eq.general,categoria.is.null");
+  else if (extra === "general") query = query.ilike("subcategoria", "%-general");
   else if (extra === "es_pack") query = query.eq("es_pack", true);
 
   const { data: productos, count: totalCount } = await query;
