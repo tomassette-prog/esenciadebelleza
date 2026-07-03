@@ -396,19 +396,26 @@ async function main() {
     const slugsLote = padresRows.map(r => r.slug);
     const { data: existentes } = await supabase
       .from("productos_padre")
-      .select("slug, activo, destacado, nuevo")
+      .select("slug, nombre, activo, destacado, nuevo, categoria, subcategoria, marca_id")
       .in("slug", slugsLote);
-    const existMap = new Map((existentes ?? []).map(e => [e.slug, e]));
+    const existMap = new Map((existentes ?? []).map(e => [e.slug, e as {
+      slug: string; nombre: string; activo: boolean; destacado: boolean; nuevo: boolean;
+      categoria: string; subcategoria: string; marca_id: string | null;
+    }]));
 
-    // 2. Para los que ya existen, mantener activo/destacado/nuevo
+    // 2. Para los que ya existen, mantener activo/destacado/nuevo/nombre/categoria/subcategoria/marca_id
     const padresRowsFinal = padresRows.map(r => {
       const ex = existMap.get(r.slug);
       if (!ex) return r; // nuevo → usar defaults del import
       return {
         ...r,
-        activo:    ex.activo,    // preservar
-        destacado: ex.destacado, // preservar
-        nuevo:     ex.nuevo,     // preservar
+        activo:      ex.activo,      // preservar
+        destacado:   ex.destacado,   // preservar
+        nuevo:       ex.nuevo,       // preservar
+        nombre:      ex.nombre,      // preservar nombre corregido manualmente
+        categoria:   ex.categoria,   // preservar clasificación manual
+        subcategoria: ex.subcategoria, // preservar clasificación manual
+        marca_id:    ex.marca_id,    // preservar marca asignada manualmente
       };
     });
 
