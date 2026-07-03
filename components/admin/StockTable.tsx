@@ -22,6 +22,7 @@ export function StockTable({ filas: filasIniciales }: Props) {
   const [filtroSubcat, setFiltroSubcat] = useState("");
   const [isPending, startTransition] = useTransition();
   const [errores, setErrores] = useState<Record<string, string>>({});
+  const [editando, setEditando] = useState<Record<string, string>>({});
   const cellRefs = useRef<Map<string, HTMLInputElement>>(new Map());
 
   // Listas únicas para los selects
@@ -62,6 +63,12 @@ export function StockTable({ filas: filasIniciales }: Props) {
       const num = parseInt(value, 10);
       if (isNaN(num) || num < 0) return;
 
+      setEditando((prev) => {
+        const next = { ...prev };
+        delete next[`${variacionId}-stock`];
+        return next;
+      });
+
       startTransition(async () => {
         const res = await actualizarStock(variacionId, num);
         if (!res.ok) {
@@ -91,6 +98,12 @@ export function StockTable({ filas: filasIniciales }: Props) {
       const num = parseFloat(value.replace(",", "."));
       if (isNaN(num) || num < 0) return;
 
+      setEditando((prev) => {
+        const next = { ...prev };
+        delete next[`${variacionId}-${campo}`];
+        return next;
+      });
+
       startTransition(async () => {
         const res = await actualizarPrecio(variacionId, campo, num);
         if (!res.ok) {
@@ -116,12 +129,12 @@ export function StockTable({ filas: filasIniciales }: Props) {
           placeholder="Buscar por SKU, producto o variación..."
           className="input-clean flex-1 min-w-48"
           value={filtro}
-          onChange={(e) => setFiltro(e.target.value)}
-        />
+          onChange={(e) => setFiltro(e.target.value)}          disabled={isPending}        />
         <select
           className="input-clean text-sm min-w-40"
           value={filtroCat}
           onChange={(e) => { setFiltroCat(e.target.value); setFiltroSubcat(""); }}
+          disabled={isPending}
         >
           <option value="">Todas las categorías</option>
           {categorias.map(c => <option key={c} value={c}>{c}</option>)}
@@ -131,6 +144,7 @@ export function StockTable({ filas: filasIniciales }: Props) {
             className="input-clean text-sm min-w-40"
             value={filtroSubcat}
             onChange={(e) => setFiltroSubcat(e.target.value)}
+            disabled={isPending}
           >
             <option value="">Todas las subcategorías</option>
             {subcategorias.map(s => <option key={s} value={s}>{s}</option>)}
@@ -223,7 +237,8 @@ export function StockTable({ filas: filasIniciales }: Props) {
                     <input
                       type="number"
                       min={0}
-                      defaultValue={fila.stock}
+                      value={editando[`${fila.id}-stock`] ?? fila.stock}
+                      onChange={(e) => setEditando((prev) => ({ ...prev, [`${fila.id}-stock`]: e.target.value }))}
                       ref={(el) => {
                         if (el) cellRefs.current.set(`${rowIdx}-stock`, el);
                         else cellRefs.current.delete(`${rowIdx}-stock`);
@@ -237,7 +252,8 @@ export function StockTable({ filas: filasIniciales }: Props) {
                           handleKeyDown(e, rowIdx, "stock");
                         }
                       }}
-                      className={`w-20 text-right px-2 py-1 border text-sm outline-none focus:border-neutral-900 transition-colors ${
+                      disabled={isPending}
+                      className={`w-20 text-right px-2 py-1 border text-sm outline-none focus:border-neutral-900 transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
                         errorId ? "border-red-400 bg-red-50" : stockBajo ? "border-amber-300" : "border-neutral-200"
                       }`}
                     />
@@ -249,14 +265,16 @@ export function StockTable({ filas: filasIniciales }: Props) {
                       type="number"
                       min={0}
                       step={0.01}
-                      defaultValue={fila.precio_b2c}
+                      value={editando[`${fila.id}-precio_b2c`] ?? fila.precio_b2c}
+                      onChange={(e) => setEditando((prev) => ({ ...prev, [`${fila.id}-precio_b2c`]: e.target.value }))}
                       ref={(el) => {
                         if (el) cellRefs.current.set(`${rowIdx}-precio_b2c`, el);
                         else cellRefs.current.delete(`${rowIdx}-precio_b2c`);
                       }}
                       onBlur={(e) => handlePrecioBlur(fila.id, "precio_b2c", e.target.value)}
                       onKeyDown={(e) => handleKeyDown(e, rowIdx, "precio_b2c")}
-                      className="w-24 text-right px-2 py-1 border border-neutral-200 text-sm outline-none focus:border-neutral-900 transition-colors"
+                      disabled={isPending}
+                      className="w-24 text-right px-2 py-1 border border-neutral-200 text-sm outline-none focus:border-neutral-900 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     />
                   </td>
 
@@ -266,14 +284,16 @@ export function StockTable({ filas: filasIniciales }: Props) {
                       type="number"
                       min={0}
                       step={0.01}
-                      defaultValue={fila.precio_b2b ?? ""}
+                      value={editando[`${fila.id}-precio_b2b`] ?? fila.precio_b2b ?? ""}
+                      onChange={(e) => setEditando((prev) => ({ ...prev, [`${fila.id}-precio_b2b`]: e.target.value }))}
                       ref={(el) => {
                         if (el) cellRefs.current.set(`${rowIdx}-precio_b2b`, el);
                         else cellRefs.current.delete(`${rowIdx}-precio_b2b`);
                       }}
                       onBlur={(e) => handlePrecioBlur(fila.id, "precio_b2b", e.target.value)}
                       onKeyDown={(e) => handleKeyDown(e, rowIdx, "precio_b2b")}
-                      className="w-24 text-right px-2 py-1 border border-neutral-200 text-sm outline-none focus:border-neutral-900 transition-colors"
+                      disabled={isPending}
+                      className="w-24 text-right px-2 py-1 border border-neutral-200 text-sm outline-none focus:border-neutral-900 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     />
                   </td>
 
@@ -355,11 +375,10 @@ function CsvImporter({
 
       startTransition(async () => {
         const res = await importarStockCsv(filas);
-        setResultado(
-          res.ok
-            ? ` ${res.actualizados} referencias actualizadas`
-            : ` ${res.errores[0]}`
-        );
+        const mensaje = res.ok
+          ? `✓ ${res.actualizados} referencias actualizadas`
+          : `✗ Error: ${res.errores[0] ?? "Desconocido"}`;
+        setResultado(mensaje);
         if (res.ok) onImportado(filas);
         setTimeout(() => setResultado(null), 4000);
       });
@@ -384,7 +403,7 @@ function CsvImporter({
       </label>
       {resultado && (
         <span
-          className={`text-xs ${resultado.startsWith("") ? "text-green-600" : "text-red-500"}`}
+          className={`text-xs ${resultado.includes("✓") ? "text-green-600" : "text-red-500"}`}
         >
           {resultado}
         </span>
