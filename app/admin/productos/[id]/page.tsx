@@ -8,7 +8,6 @@ import { EliminarProductoBtn } from "@/components/admin/EliminarProductoBtn";
 import { AnadirAPackBtn } from "@/components/producto/AnadirAPackBtn";
 import { actualizarProducto } from "@/actions/productos";
 import { slugifyCategoria } from "@/lib/seo";
-import { getAllCategoriaPairs } from "@/lib/category-suggester";
 
 export const dynamic = "force-dynamic";
 
@@ -28,26 +27,29 @@ export default async function EditarProductoPage({ params, searchParams }: { par
   const backUrl = back ? decodeURIComponent(back) : "/admin/productos";
   const supabase = createAdminClient();
 
-  const [{ data: producto }, { data: marcas }] = await Promise.all([
+  const [{ data: producto }, { data: marcas }, { data: catData }] = await Promise.all([
     supabase
       .from("productos_padre")
       .select(`*, variaciones:productos_variaciones(*)`)
       .eq("id", id)
       .single(),
     supabase.from("marcas").select("id, nombre, slug, logo_url, activa").eq("activa", true).order("nombre"),
+    supabase.from("productos_padre").select("categoria, subcategoria").eq("activo", true),
   ]);
 
   if (!producto) notFound();
 
-  // Usar la taxonomía canónica (misma fuente que BulkEditBar)
-  const allPairs = getAllCategoriaPairs();
-  const categorias = [...new Set(allPairs.map(p => p.categoria))].sort();
+  // Usar taxonomía de la BD (igual que en page.tsx)
+  const categorias = [...new Set((catData ?? []).map((p: { categoria: string }) => p.categoria))].sort();
   const subcategoriasPorCategoria: Record<string, string[]> = {};
-  for (const p of allPairs) {
-    if (!subcategoriasPorCategoria[p.categoria]) subcategoriasPorCategoria[p.categoria] = [];
-    if (!subcategoriasPorCategoria[p.categoria].includes(p.subcategoria))
-      subcategoriasPorCategoria[p.categoria].push(p.subcategoria);
+  for (const p of catData ?? []) {
+    const cat = p.categoria;
+    if (!subcategoriasPorCategoria[cat]) subcategoriasPorCategoria[cat] = [];
+    if (p.subcategoria && !subcategoriasPorCategoria[cat].includes(p.subcategoria)) {
+      subcategoriasPorCategoria[cat].push(p.subcategoria);
+    }
   }
+  Object.values(subcategoriasPorCategoria).forEach(subs => subs.sort());
 
   const urlPreview = `/productos/${slugifyCategoria(producto.categoria)}/${slugifyCategoria(producto.subcategoria ?? "general")}/${producto.slug}`;
 

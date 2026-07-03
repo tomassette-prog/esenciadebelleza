@@ -47,6 +47,19 @@ export default async function AdminProductosPage({
   const subcategorias = cat
     ? ([...new Set((catData ?? []).filter((p: { categoria: string; subcategoria: string | null }) => p.categoria === cat).map((p: { subcategoria: string | null }) => p.subcategoria).filter(Boolean))].sort() as string[])
     : [];
+  
+  // Construir mapa de subcategorías por categoría (para bulk + editar)
+  const subcategoriasPorCategoria: Record<string, string[]> = {};
+  for (const p of catData ?? []) {
+    const cat = p.categoria;
+    if (!subcategoriasPorCategoria[cat]) subcategoriasPorCategoria[cat] = [];
+    if (p.subcategoria && !subcategoriasPorCategoria[cat].includes(p.subcategoria)) {
+      subcategoriasPorCategoria[cat].push(p.subcategoria);
+    }
+  }
+  // Ordenar subcategorías
+  Object.values(subcategoriasPorCategoria).forEach(subs => subs.sort());
+  
   const marcas = (marcasData ?? []) as { id: string; nombre: string }[];
 
   let query = supabase
@@ -137,6 +150,7 @@ export default async function AdminProductosPage({
       <ProductosTableClient
         productos={(productos ?? []) as Parameters<typeof ProductosTableClient>[0]["productos"]}
         backUrl={`/admin/productos${paginaParams({}) ? `?${paginaParams({})}` : ""}`}
+        subcategoriasPorCategoria={subcategoriasPorCategoria}
       />
 
       {totalPages > 1 && (

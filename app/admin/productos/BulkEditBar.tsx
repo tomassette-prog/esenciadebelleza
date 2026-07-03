@@ -2,12 +2,12 @@
 
 import { useState, useTransition, useEffect } from "react";
 import { actualizarCategoriaBulk, toggleActivoBulk, asignarMarcaBulk } from "@/actions/productos";
-import { getAllCategoriaPairs, type CategoriaPair } from "@/lib/category-suggester";
 import { useRouter } from "next/navigation";
 
 interface Props {
   productoIds: string[];
   onClear: () => void;
+  subcategoriasPorCategoria?: Record<string, string[]>;
 }
 
 interface MarcaOption {
@@ -15,7 +15,7 @@ interface MarcaOption {
   nombre: string;
 }
 
-export function BulkEditBar({ productoIds, onClear }: Props) {
+export function BulkEditBar({ productoIds, onClear, subcategoriasPorCategoria = {} }: Props) {
   const [isPending, startTransition] = useTransition();
   const [accion, setAccion] = useState<"categoria" | "marca" | "activar" | "desactivar" | null>(null);
   const [categoria, setCategoria] = useState("peluqueria");
@@ -25,8 +25,7 @@ export function BulkEditBar({ productoIds, onClear }: Props) {
   const [msg, setMsg] = useState<string | null>(null);
   const router = useRouter();
 
-  const allPairs: CategoriaPair[] = getAllCategoriaPairs();
-  const categorias = [...new Set(allPairs.map(p => p.categoria))];
+  const categorias = Object.keys(subcategoriasPorCategoria).sort();
 
   useEffect(() => {
     if (accion !== "marca" || marcas.length > 0) return;
@@ -84,8 +83,10 @@ export function BulkEditBar({ productoIds, onClear }: Props) {
           <select
             value={categoria}
             onChange={e => {
-              setCategoria(e.target.value);
-              setSubcategoria(allPairs.find(p => p.categoria === e.target.value)?.subcategoria ?? "");
+              const cat = e.target.value;
+              setCategoria(cat);
+              const subsPosibles = subcategoriasPorCategoria[cat] ?? [];
+              setSubcategoria(subsPosibles[0] ?? "");
             }}
             className="text-sm border border-neutral-300 px-2 py-1.5 bg-white"
           >
@@ -96,10 +97,8 @@ export function BulkEditBar({ productoIds, onClear }: Props) {
             onChange={e => setSubcategoria(e.target.value)}
             className="text-sm border border-neutral-300 px-2 py-1.5 bg-white"
           >
-            {allPairs.filter(p => p.categoria === categoria).map(p => (
-              <option key={p.subcategoria} value={p.subcategoria}>
-                {p.label.split(" › ")[1]}
-              </option>
+            {(subcategoriasPorCategoria[categoria] ?? []).map(sub => (
+              <option key={sub} value={sub}>{sub}</option>
             ))}
           </select>
         </>

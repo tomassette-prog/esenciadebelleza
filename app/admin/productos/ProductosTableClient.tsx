@@ -25,9 +25,10 @@ interface ProductoRow {
 interface Props {
   productos: ProductoRow[];
   backUrl?: string;
+  subcategoriasPorCategoria?: Record<string, string[]>;
 }
 
-export function ProductosTableClient({ productos, backUrl = "/admin/productos" }: Props) {
+export function ProductosTableClient({ productos, backUrl = "/admin/productos", subcategoriasPorCategoria = {} }: Props) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
   function toggleOne(id: string) {
@@ -45,7 +46,7 @@ export function ProductosTableClient({ productos, backUrl = "/admin/productos" }
 
   return (
     <>
-      <BulkEditBar productoIds={[...selected]} onClear={() => setSelected(new Set())} />
+      <BulkEditBar productoIds={[...selected]} onClear={() => setSelected(new Set())} subcategoriasPorCategoria={subcategoriasPorCategoria} />
       <div className="bg-white border border-neutral-200 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
