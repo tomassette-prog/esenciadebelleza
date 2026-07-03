@@ -209,19 +209,25 @@ export async function calcularDiff(): Promise<{
     // 2. Cargar Supabase (productos + variaciones)
     const supa = adminClient();
     const supaMap = new Map<string, {
+      id: string;
       nombre: string; categoria: string; subcategoria: string | null;
       imagen_principal_url: string | null; descripcion_general: string | null;
+      woo_id?: number | null;
     }>();
+    const supaMapByWooId = new Map<number, string>();  // woo_id -> slug
     const supaPrecios = new Map<string, number>();  // SKU -> precio_b2c actual
     
     let offset = 0;
     while (true) {
       const { data } = await supa
         .from("productos_padre")
-        .select("slug, nombre, categoria, subcategoria, imagen_principal_url, descripcion_general")
+        .select("id, slug, nombre, categoria, subcategoria, imagen_principal_url, descripcion_general, woo_id")
         .range(offset, offset + 999);
       if (!data || data.length === 0) break;
-      for (const r of data) supaMap.set(r.slug, r);
+      for (const r of data) {
+        supaMap.set(r.slug, r);
+        if (r.woo_id) supaMapByWooId.set(r.woo_id, r.slug);
+      }
       if (data.length < 1000) break;
       offset += 1000;
     }
@@ -240,6 +246,7 @@ export async function calcularDiff(): Promise<{
     }
 
     // 3. Comparar SOLO precios (ignorar nombre, categoría, stock, etc.)
+    // Deduplicación: Buscar por woo_id primero (más confiable que slug)
     const catMap = await getDbCatMap(supa);
     const nuevos: ProductoDiff[] = [];
     const modificados: ProductoDiff[] = [];
@@ -247,7 +254,18 @@ export async function calcularDiff(): Promise<{
 
     for (const p of wooProductos) {
       const slug = p.slug || slugify(p.name);
-      const existing = supaMap.get(slug);
+      
+      // Buscar por woo_id primero (deduplicación robusta)
+      let slugEnDB: string | undefined;
+      if (p.id) {
+        slugEnDB = supaMapByWooId.get(p.id);
+      }
+      // Fallback: buscar por slug si no hay woo_id match
+      if (!slugEnDB) {
+        slugEnDB = slug;
+      }
+      
+      const existing = supaMap.get(slugEnDB);
 
       if (!existing) {
         // Producto nuevo en WooCommerce
@@ -263,7 +281,7 @@ export async function calcularDiff(): Promise<{
       if (wooPrice !== precioActual && wooPrice > 0) {
         // Precio cambió
         modificados.push({
-          slug,
+          slug: slugEnDB,  // Usar el slug encontrado en DB
           nombre: p.name,
           tipo: "modificado",
           wooId: p.id,
@@ -363,6 +381,45 @@ export async function aplicarCambios(slugsConId: Array<{ slug: string; wooId: nu
       .select("id, slug, activo, destacado, nuevo")
       .in("slug", slugsExistentes);
     const existMap = new Map((existentes ?? []).map(e => [e.slug, e]));
+
+    // Separar productos nuevos de existentes para actualizar woo_id
+    const nuevosProds: any[] = [];
+    const actualizarProds: any[] = [];
+
+    for (const p of seleccionados) {
+      const slug = p.slug || slugify(p.name);
+      const exists = existMap.get(slug);
+      
+      if (!exists) {
+        // Nuevo producto — guardar con woo_id
+        nuevosProds.push({
+          nombre: p.name.trim(),
+          slug,
+          woo_id: p.id,
+          activo: false,
+          destacado: false,
+          nuevo: false,
+        });
+      } else {
+        // Existente — asegurar que tiene woo_id guardado
+        if (exists.id) {
+          actualizarProds.push({
+            id: exists.id,
+            woo_id: p.id,
+          });
+        }
+      }
+    }
+
+    // Insertar nuevos
+    if (nuevosProds.length > 0) {
+      await supa.from("productos_padre").insert(nuevosProds);
+    }
+
+    // Actualizar woo_id en existentes
+    for (const prod of actualizarProds) {
+      await supa.from("productos_padre").update({ woo_id: prod.woo_id }).eq("id", prod.id);
+    }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     // IMPORTANTE: Solo actualizar PRECIOS, no tocar otros campos del producto
@@ -543,7 +600,7 @@ export async function publicarAprobados(payload: ReviewPayload): Promise<SmartAp
     const maxNombre = 60 - suffix.length;
 
     const rowsNuevos: any[] = [];
-    const rowsActualizar: Array<{ slug: string; marca_id: number | null }> = [];
+    const rowsActualizar: any[] = [];
     
     for (const p of fetched) {
       const slug = p.slug || slugify(p.name);
@@ -558,6 +615,7 @@ export async function publicarAprobados(payload: ReviewPayload): Promise<SmartAp
         rowsNuevos.push({
           nombre: p.name.trim(),
           slug,
+          woo_id: p.id,
           categoria: cat.categoria,
           subcategoria: cat.subcategoria,
           descripcion_general: p.description || p.short_description || null,
@@ -570,10 +628,11 @@ export async function publicarAprobados(payload: ReviewPayload): Promise<SmartAp
           marca_id: marcaId ?? null,
         });
       } else {
-        // Si ya existe, guardar solo marca_id para actualizar después
+        // Si ya existe, guardar marca_id y woo_id para actualizar después
         rowsActualizar.push({
           slug,
           marca_id: marcaId,
+          woo_id: p.id,
         });
       }
     }
@@ -587,11 +646,14 @@ export async function publicarAprobados(payload: ReviewPayload): Promise<SmartAp
       }
     }
 
-    // Actualizar solo marca_id en existentes
+    // Actualizar marca_id y woo_id en existentes
     for (const row of rowsActualizar) {
-      if (row.marca_id) {
+      const updates: any = {};
+      if (row.marca_id) updates.marca_id = row.marca_id;
+      if (row.woo_id) updates.woo_id = row.woo_id;
+      if (Object.keys(updates).length > 0) {
         await supa.from("productos_padre")
-          .update({ marca_id: row.marca_id })
+          .update(updates)
           .eq("slug", row.slug);
       }
     }
