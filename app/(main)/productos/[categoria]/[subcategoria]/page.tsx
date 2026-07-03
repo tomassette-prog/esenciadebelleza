@@ -187,12 +187,12 @@ export default async function SubcategoriaPage({ params, searchParams }: PagePro
                   }`}
                 >
                   {m.logo_url ? (
-                    <div className="flex items-center justify-center w-16 h-8 shrink-0 bg-neutral-50 rounded p-1">
+                    <div className="flex items-center justify-center w-20 h-12 shrink-0 bg-neutral-50 rounded p-1">
                       <Image
                         src={m.logo_url}
                         alt={m.nombre}
-                        width={56}
-                        height={28}
+                        width={80}
+                        height={48}
                         className="object-contain opacity-70 group-hover:opacity-100"
                       />
                     </div>
@@ -222,22 +222,78 @@ export default async function SubcategoriaPage({ params, searchParams }: PagePro
         </div>
       )}
 
-      {/* Paginación */}
+      {/* Paginación inteligente */}
       {totalPaginas > 1 && (
-        <div className="flex items-center justify-center gap-2 mt-16 flex-wrap">
-          {Array.from({ length: totalPaginas }, (_, i) => i + 1).map((p) => (
+        <div className="flex items-center justify-center gap-1 mt-16">
+          {/* Anterior */}
+          {page > 1 ? (
             <a
-              key={p}
-              href={`${baseUrl}${marca ? `?marca=${marca}` : ""}${marca ? "&" : "?"}pagina=${p}`}
-              className={`w-10 h-10 flex items-center justify-center text-sm border transition-colors ${
-                p === page
-                  ? "border-neutral-900 bg-neutral-900 text-white"
-                  : "border-neutral-200 hover:border-neutral-900"
-              }`}
+              href={`${baseUrl}${marca ? `?marca=${marca}` : ""}${marca ? "&" : "?"}pagina=${page - 1}`}
+              className="px-3 py-2 text-sm border border-neutral-200 hover:border-neutral-900 transition-colors"
             >
-              {p}
+              ← Anterior
             </a>
-          ))}
+          ) : (
+            <span className="px-3 py-2 text-sm text-neutral-300 cursor-not-allowed">← Anterior</span>
+          )}
+
+          {/* Números de página inteligentes */}
+          <div className="flex items-center gap-1">
+            {page > 3 && (
+              <>
+                <a
+                  href={`${baseUrl}${marca ? `?marca=${marca}` : ""}${marca ? "&" : "?"}pagina=1`}
+                  className="w-8 h-8 flex items-center justify-center text-sm border border-neutral-200 hover:border-neutral-900"
+                >
+                  1
+                </a>
+                {page > 4 && <span className="text-neutral-400">...</span>}
+              </>
+            )}
+            {Array.from(
+              { length: Math.min(5, totalPaginas) },
+              (_, i) => {
+                const start = Math.max(1, page - 2);
+                const adjustedStart = Math.min(start, totalPaginas - 4);
+                return adjustedStart + i;
+              }
+            ).map((p) => (
+              <a
+                key={p}
+                href={`${baseUrl}${marca ? `?marca=${marca}` : ""}${marca ? "&" : "?"}pagina=${p}`}
+                className={`w-8 h-8 flex items-center justify-center text-sm border transition-colors ${
+                  p === page
+                    ? "border-neutral-900 bg-neutral-900 text-white"
+                    : "border-neutral-200 hover:border-neutral-900"
+                }`}
+              >
+                {p}
+              </a>
+            ))}
+            {page < totalPaginas - 2 && (
+              <>
+                {page < totalPaginas - 3 && <span className="text-neutral-400">...</span>}
+                <a
+                  href={`${baseUrl}${marca ? `?marca=${marca}` : ""}${marca ? "&" : "?"}pagina=${totalPaginas}`}
+                  className="w-8 h-8 flex items-center justify-center text-sm border border-neutral-200 hover:border-neutral-900"
+                >
+                  {totalPaginas}
+                </a>
+              </>
+            )}
+          </div>
+
+          {/* Siguiente */}
+          {page < totalPaginas ? (
+            <a
+              href={`${baseUrl}${marca ? `?marca=${marca}` : ""}${marca ? "&" : "?"}pagina=${page + 1}`}
+              className="px-3 py-2 text-sm border border-neutral-200 hover:border-neutral-900 transition-colors"
+            >
+              Siguiente →
+            </a>
+          ) : (
+            <span className="px-3 py-2 text-sm text-neutral-300 cursor-not-allowed">Siguiente →</span>
+          )}
         </div>
       )}
     </div>

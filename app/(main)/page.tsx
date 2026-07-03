@@ -355,16 +355,18 @@ export default async function HomePage() {
       {packsDestacados.length > 0 && (
         <section className="py-16 px-6 bg-[#fdf6f4]">
           <div className="container-main">
-            <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 mb-8">
+            <div className="flex flex-col gap-4 mb-8">
               <div>
                 <p className="text-xs tracking-[0.3em] uppercase mb-2 text-[#C4857A]">Especiales</p>
                 <h2 className="text-3xl font-light text-neutral-900" style={{ fontFamily: "var(--font-cormorant)" }}>
                   Packs de regalo
                 </h2>
               </div>
-              <Link href="/packs" className="px-8 py-4 text-sm tracking-widest uppercase font-bold bg-white border-2 border-[#C4857A] text-[#C4857A] hover:bg-[#C4857A] hover:text-white transition-colors w-full sm:w-fit">
-                Ver todos los packs →
-              </Link>
+              <div className="flex justify-start sm:justify-end">
+                <Link href="/packs" className="px-8 py-4 text-sm tracking-widest uppercase font-bold bg-white border-2 border-[#C4857A] text-[#C4857A] hover:bg-[#C4857A] hover:text-white transition-colors w-full sm:w-fit">
+                  Ver todos los packs →
+                </Link>
+              </div>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
               {packsDestacados.map((pack) => {
