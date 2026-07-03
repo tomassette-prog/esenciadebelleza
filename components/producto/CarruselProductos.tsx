@@ -15,8 +15,7 @@ interface Props {
 
 export function CarruselProductos({ productos, titulo, subtitulo, verTodosHref = "/productos", autoScrollMs = 25000 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const track1Ref = useRef<HTMLDivElement>(null);
-  const track2Ref = useRef<HTMLDivElement>(null);
+  const trackRef = useRef<HTMLDivElement>(null);
   const [paused, setPaused] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const pointerStartX = useRef(0);
@@ -24,10 +23,8 @@ export function CarruselProductos({ productos, titulo, subtitulo, verTodosHref =
   const didDrag = useRef(false);
 
   useEffect(() => {
-    const els = [track1Ref.current, track2Ref.current].filter(Boolean);
-    els.forEach((el) => {
-      if (el) el.style.animationPlayState = (paused || isDragging) ? "paused" : "running";
-    });
+    const el = trackRef.current;
+    if (el) el.style.animationPlayState = (paused || isDragging) ? "paused" : "running";
   }, [paused, isDragging]);
 
   const handlePointerDown = (e: React.PointerEvent) => {
@@ -79,7 +76,7 @@ export function CarruselProductos({ productos, titulo, subtitulo, verTodosHref =
         </div>
       </div>
 
-      {/* Marquee continuo de dos tracks + drag interactivo */}
+      {/* Marquee continuo con track único + drag interactivo */}
       <div
         className="relative"
         onMouseEnter={() => setPaused(true)}
@@ -98,30 +95,24 @@ export function CarruselProductos({ productos, titulo, subtitulo, verTodosHref =
           onPointerUp={handlePointerUp}
           onPointerLeave={handlePointerUp}
         >
-          <div className="flex" style={{ width: "200%" }}>
-            <div
-              ref={track1Ref}
-              className="flex items-start gap-4 px-4"
-              style={{ animation: `marquee ${duration} linear infinite`, width: "50%" }}
-            >
-              {productos.map((p, i) => (
-                <div key={p.id} className="flex-shrink-0 w-52 sm:w-60 select-none" style={{ pointerEvents: isDragging ? "none" : "auto" }}>
-                  <ProductoCard producto={p} priority={i < 3} />
-                </div>
-              ))}
-            </div>
-            <div
-              ref={track2Ref}
-              className="flex items-start gap-4 px-4"
-              style={{ animation: `marquee ${duration} linear infinite`, width: "50%" }}
-              aria-hidden="true"
-            >
-              {productos.map((p) => (
-                <div key={p.id} className="flex-shrink-0 w-52 sm:w-60 select-none">
-                  <ProductoCard producto={p} priority={false} />
-                </div>
-              ))}
-            </div>
+          {/* Track único con duplicación interna */}
+          <div
+            ref={trackRef}
+            className="flex items-start gap-4 px-4"
+            style={{ animation: `marquee ${duration} linear infinite`, width: "200%" }}
+          >
+            {/* Primera pasada */}
+            {productos.map((p, i) => (
+              <div key={`${p.id}-1`} className="flex-shrink-0 w-52 sm:w-60 select-none" style={{ pointerEvents: isDragging ? "none" : "auto" }}>
+                <ProductoCard producto={p} priority={i < 3} />
+              </div>
+            ))}
+            {/* Segunda pasada (loop) */}
+            {productos.map((p) => (
+              <div key={`${p.id}-2`} className="flex-shrink-0 w-52 sm:w-60 select-none" style={{ pointerEvents: isDragging ? "none" : "auto" }}>
+                <ProductoCard producto={p} priority={false} />
+              </div>
+            ))}
           </div>
         </div>
       </div>
