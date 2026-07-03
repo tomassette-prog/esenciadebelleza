@@ -362,7 +362,7 @@ export default async function HomePage() {
                   Packs de regalo
                 </h2>
               </div>
-              <Link href="/packs" className="text-xs tracking-widest uppercase text-neutral-500 hover:text-neutral-900 transition-colors hidden sm:block">
+              <Link href="/packs" className="text-xs tracking-widest uppercase text-neutral-500 hover:text-neutral-900 transition-colors">
                 Ver todos →
               </Link>
             </div>
@@ -393,11 +393,6 @@ export default async function HomePage() {
                   </Link>
                 );
               })}
-            </div>
-            <div className="mt-6 text-center sm:hidden">
-              <Link href="/packs" className="text-xs tracking-widest uppercase text-neutral-500 hover:text-neutral-900 transition-colors">
-                Ver todos los packs →
-              </Link>
             </div>
           </div>
         </section>
