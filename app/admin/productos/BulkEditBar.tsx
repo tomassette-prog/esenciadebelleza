@@ -28,7 +28,8 @@ export function BulkEditBar({ productoIds, onClear, subcategoriasPorCategoria = 
   const categorias = Object.keys(subcategoriasPorCategoria).sort();
 
   useEffect(() => {
-    if (accion !== "marca" || marcas.length > 0) return;
+    if (accion !== "marca") return;
+    // Refetch marcas cada vez que se selecciona "Asignar marca"
     fetch("/api/marcas")
       .then(r => r.json())
       .then((data: MarcaOption[]) => {
@@ -37,7 +38,7 @@ export function BulkEditBar({ productoIds, onClear, subcategoriasPorCategoria = 
         if (sorted.length > 0) setMarcaId(sorted[0].id);
       })
       .catch(() => {});
-  }, [accion, marcas.length]);
+  }, [accion]);
 
   if (productoIds.length === 0) return null;
 
