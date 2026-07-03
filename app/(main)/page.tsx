@@ -362,8 +362,8 @@ export default async function HomePage() {
                   Packs de regalo
                 </h2>
               </div>
-              <Link href="/packs" className="px-4 py-2 text-xs tracking-widest uppercase text-neutral-500 hover:text-neutral-900 border border-neutral-300 hover:border-neutral-900 transition-colors w-fit">
-                Ver todos →
+              <Link href="/packs" className="px-6 py-3 text-xs tracking-widest uppercase font-semibold bg-white border-2 border-[#C4857A] text-[#C4857A] hover:bg-[#C4857A] hover:text-white transition-colors w-fit">
+                Ver todos packs →
               </Link>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
