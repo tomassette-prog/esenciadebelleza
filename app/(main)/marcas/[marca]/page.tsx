@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Breadcrumb } from "@/components/layout/Breadcrumb";
 import { buildBreadcrumbJsonLdItems, buildBreadcrumbJsonLd, slugifyCategoria, formatPrice } from "@/lib/seo";
+import { MarcaProductosClient } from "@/components/marcas/MarcaProductosClient";
 
 export const revalidate = 0;          // sin caché — siempre SSR
 export const dynamic = "force-dynamic"; // nunca estático
@@ -134,61 +135,13 @@ export default async function MarcaPage({ params }: PageProps) {
           </span>
         </div>
 
-        {/* Grid de productos */}
+        {/* Productos con filtros dinámicos */}
         {!productos || productos.length === 0 ? (
           <p className="text-sm text-neutral-400">
             No hay productos disponibles de esta marca aún.
           </p>
         ) : (
-          <ul className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-px bg-neutral-100">
-            {productos.map((p) => {
-              const precios = (p.productos_variaciones as { precio_b2c: number }[] ?? []).map(
-                (v) => v.precio_b2c
-              );
-              const precioDesde = precios.length > 0 ? Math.min(...precios) : null;
-              const href = `/productos/${slugifyCategoria(p.categoria)}/${slugifyCategoria(p.subcategoria ?? "general")}/${p.slug}`;
-
-              return (
-                <li key={p.id}>
-                  <Link
-                    href={href}
-                    className="flex flex-col bg-white hover:bg-neutral-50 transition-colors group"
-                  >
-                    {/* Imagen */}
-                    <div className="aspect-square overflow-hidden bg-neutral-50">
-                      {p.imagen_principal_url ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={p.imagen_principal_url}
-                          alt={p.nombre}
-                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                        />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center">
-                          <div className="w-8 h-px" style={{ backgroundColor: "var(--color-oro)" }} />
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Info */}
-                    <div className="p-4">
-                      <p
-                        className="text-sm font-light text-neutral-900 leading-snug mb-2 line-clamp-2"
-                        style={{ fontFamily: "var(--font-cormorant)", fontSize: "1rem" }}
-                      >
-                        {p.nombre}
-                      </p>
-                      {precioDesde && (
-                        <p className="text-xs text-neutral-500">
-                          Desde <span className="text-neutral-900 font-medium">{formatPrice(precioDesde)}</span>
-                        </p>
-                      )}
-                    </div>
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
+          <MarcaProductosClient productos={productos} marcaNombre={marca.nombre} />
         )}
       </div>
     </>
