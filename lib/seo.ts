@@ -151,17 +151,13 @@ export function buildProductJsonLd(
     description,
     ...(imagenPrincipal ? { image: imagenPrincipal } : {}),
     ...(marcaNombre ? { brand: { "@type": "Brand", name: marcaNombre } } : {}),
-    ...(aggregate && aggregate.total_resenas > 0
-      ? {
-          aggregateRating: {
-            "@type": "AggregateRating",
-            ratingValue: aggregate.valoracion_media.toFixed(1),
-            reviewCount: aggregate.total_resenas,
-            bestRating: "5",
-            worstRating: "1",
-          },
-        }
-      : {}),
+    aggregateRating: {
+      "@type": "AggregateRating",
+      ratingValue: aggregate?.valoracion_media.toFixed(1) ?? "0",
+      reviewCount: aggregate?.total_resenas ?? 0,
+      bestRating: "5",
+      worstRating: "1",
+    },
     offers: (() => {
       if (offers.length === 1) return offers[0];
       const precios = producto.variaciones.map((v) => v.precio_b2c);
