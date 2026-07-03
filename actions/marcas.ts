@@ -54,6 +54,7 @@ export async function crearMarca(data: {
     .select("id").single();
   if (error) return { error: error.message };
   revalidatePath("/admin/marcas");
+  revalidatePath("/admin/productos");
   revalidatePath("/marcas");
   revalidatePath("/");
   return { ok: true, id: row.id };
@@ -76,6 +77,7 @@ export async function actualizarMarca(id: string, data: {
   const { error } = await supa.from("marcas").update(update).eq("id", id);
   if (error) return { error: error.message };
   revalidatePath("/admin/marcas");
+  revalidatePath("/admin/productos");
   revalidatePath("/marcas");
   revalidatePath("/");
   return { ok: true };
