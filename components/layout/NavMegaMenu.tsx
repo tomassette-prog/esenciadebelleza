@@ -177,12 +177,12 @@ export function NavMegaMenu() {
       <div className="md:hidden flex items-center justify-between pb-3 gap-2">
         <button
           onClick={() => setMobileOpen(true)}
-          className="flex items-center gap-2 text-xs tracking-widest uppercase text-neutral-500 hover:text-neutral-900 transition-colors py-1.5"
+          className="flex items-center gap-1.5 text-xs tracking-widest uppercase text-neutral-500 hover:text-neutral-900 transition-colors py-1"
           aria-expanded={mobileOpen}
           aria-label="Abrir menú"
         >
           <svg
-            className="w-5 h-5"
+            className="w-4 h-4"
             fill="none"
             viewBox="0 0 24 24"
             stroke="currentColor"
@@ -199,15 +199,15 @@ export function NavMegaMenu() {
         </button>
         <Link
           href="/packs"
-          className="flex-1 text-center text-xs font-semibold tracking-wider uppercase text-[#C4857A] hover:text-[#3D2018] transition-colors px-3 py-2 border border-[#C4857A] hover:border-[#3D2018]"
+          className="text-xs font-semibold tracking-wider uppercase text-[#C4857A] hover:text-[#3D2018] transition-colors px-2 py-1.5 border border-[#C4857A] hover:border-[#3D2018] whitespace-nowrap"
         >
-          🎁 Packs
+          🎁 Packs Regalos
         </Link>
         <Link
           href="/profesionales"
-          className="text-xs tracking-widest uppercase text-neutral-500 hover:text-neutral-900 transition-colors"
+          className="text-xs tracking-widest uppercase text-neutral-900 hover:text-white hover:bg-neutral-900 transition-colors px-3 py-1.5 border border-neutral-300 hover:border-neutral-900"
         >
-          Prof
+          Área Pro
         </Link>
       </div>
 
