@@ -1,5 +1,4 @@
 import { notFound } from "next/navigation";
-import Image from "next/image";
 import { createClient } from "@/lib/supabase/server";
 import { ProductoCard } from "@/components/producto/ProductoCard";
 import { buildCategoriaMetadata, slugifyCategoria } from "@/lib/seo";
@@ -180,28 +179,13 @@ export default async function SubcategoriaPage({ params, searchParams }: PagePro
                   key={m.id}
                   href={`${baseUrl}?marca=${m.id}`}
                   title={m.nombre}
-                  className={`flex items-center gap-2.5 px-4 py-2 border transition-colors ${
+                  className={`px-4 py-2 border transition-colors whitespace-nowrap text-sm font-medium ${
                     activa
-                      ? "border-neutral-900 bg-neutral-50 shadow-sm"
-                      : "border-neutral-200 hover:border-neutral-400 bg-white"
+                      ? "border-neutral-900 bg-neutral-900 text-white"
+                      : "border-neutral-200 text-neutral-600 hover:border-neutral-900 hover:text-neutral-900"
                   }`}
                 >
-                  {m.logo_url ? (
-                    <div className="flex items-center justify-center w-20 h-12 shrink-0 bg-neutral-50 rounded p-1">
-                      <Image
-                        src={m.logo_url}
-                        alt={m.nombre}
-                        width={80}
-                        height={48}
-                        className="object-contain opacity-70 group-hover:opacity-100"
-                      />
-                    </div>
-                  ) : null}
-                  <span className={`text-xs tracking-wide whitespace-nowrap ${
-                    activa ? "font-medium text-neutral-900" : "text-neutral-600"
-                  }`}>
-                    {m.nombre}
-                  </span>
+                  {m.nombre}
                 </a>
               );
             })}

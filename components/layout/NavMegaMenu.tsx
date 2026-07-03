@@ -92,9 +92,9 @@ export function NavMegaMenu() {
         <span className="ml-auto flex items-center gap-4">
           <Link
             href="/packs"
-            className="text-xs tracking-widest uppercase text-neutral-500 hover:text-[#C4857A] transition-colors"
+            className="text-sm font-semibold tracking-wider uppercase text-[#C4857A] hover:text-[#3D2018] transition-colors px-3 py-2 border border-[#C4857A] hover:border-[#3D2018]"
           >
-            🎁 Packs regalo
+            🎁 Packs
           </Link>
           <Link
             href="/profesionales"
