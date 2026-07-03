@@ -28,16 +28,23 @@ export default function MarcasCarrusel({ marcas }: Props) {
     if (el) el.style.animationPlayState = (paused || isDragging) ? "paused" : "running";
   }, [paused, isDragging]);
 
-  const handlePointerDown = (e: React.PointerEvent) => {
+  const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+    // Solo permitir drag con mouse en desktop
+    if (e.button !== 0) return; // Solo botón izquierdo
+    
     pointerStartX.current = e.clientX;
     scrollStartX.current = containerRef.current?.scrollLeft ?? 0;
     didDrag.current = false;
     setIsDragging(true);
     setPaused(true);
+    
+    // Prevenir selección de texto mientras dragas
+    e.preventDefault();
   };
 
-  const handlePointerMove = (e: React.PointerEvent) => {
-    if (!containerRef.current) return;
+  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!isDragging || !containerRef.current) return;
+    
     const delta = e.clientX - pointerStartX.current;
     if (Math.abs(delta) > 5) {
       didDrag.current = true;
@@ -45,13 +52,23 @@ export default function MarcasCarrusel({ marcas }: Props) {
     }
   };
 
-  const handlePointerUp = () => {
+  const handleMouseUp = () => {
     setIsDragging(false);
     setPaused(false);
   };
 
   return (
     <section className="py-12 bg-white border-y border-neutral-100 overflow-hidden">
+      <style>{`
+        .marcas-carrusel-container::-webkit-scrollbar {
+          height: 0px;
+        }
+        .marcas-carrusel-container {
+          scrollbar-width: none;
+          -ms-overflow-style: none;
+        }
+      `}</style>
+
       <p className="text-center text-xs tracking-[0.3em] uppercase text-neutral-400 mb-8"
         style={{ fontFamily: "var(--font-inter)" }}>
         Nuestras marcas
@@ -65,15 +82,15 @@ export default function MarcasCarrusel({ marcas }: Props) {
         <div className="absolute left-0 top-0 bottom-0 w-16 z-10 bg-gradient-to-r from-white to-transparent pointer-events-none" />
         <div className="absolute right-0 top-0 bottom-0 w-16 z-10 bg-gradient-to-l from-white to-transparent pointer-events-none" />
 
-        {/* Contenedor scrollable */}
+        {/* Contenedor scrollable con drag support */}
         <div
           ref={containerRef}
-          className="flex overflow-x-auto scroll-smooth"
+          className="marcas-carrusel-container flex overflow-x-auto scroll-smooth select-none"
           style={{ scrollBehavior: "smooth", WebkitOverflowScrolling: "touch" }}
-          onPointerDown={handlePointerDown}
-          onPointerMove={handlePointerMove}
-          onPointerUp={handlePointerUp}
-          onPointerLeave={handlePointerUp}
+          onMouseDown={handleMouseDown}
+          onMouseMove={handleMouseMove}
+          onMouseUp={handleMouseUp}
+          onMouseLeave={handleMouseUp}
         >
           {/* Track único con duplicación interna */}
           <div ref={trackRef} className="flex items-center" style={{ animation: "marquee 20s linear infinite", width: "200%" }}>
@@ -87,7 +104,7 @@ export default function MarcasCarrusel({ marcas }: Props) {
                 onClick={(e) => { if (didDrag.current) e.preventDefault(); }}
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={marca.logo_url} alt={marca.nombre} className="h-10 w-auto object-contain max-w-[80px]" loading="lazy" draggable={false} style={{ pointerEvents: "none" }}/>
+                <img src={marca.logo_url} alt={marca.nombre} className="h-10 w-auto object-contain max-w-[80px]" loading="lazy" draggable={false} style={{ pointerEvents: "none", userSelect: "none" }}/>
                 <span className="text-[9px] tracking-widest uppercase text-neutral-500 text-center leading-tight whitespace-normal w-full">{marca.nombre}</span>
               </Link>
             ))}
@@ -101,7 +118,7 @@ export default function MarcasCarrusel({ marcas }: Props) {
                 onClick={(e) => { if (didDrag.current) e.preventDefault(); }}
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={marca.logo_url} alt={marca.nombre} className="h-10 w-auto object-contain max-w-[80px]" loading="lazy" draggable={false} style={{ pointerEvents: "none" }}/>
+                <img src={marca.logo_url} alt={marca.nombre} className="h-10 w-auto object-contain max-w-[80px]" loading="lazy" draggable={false} style={{ pointerEvents: "none", userSelect: "none" }}/>
                 <span className="text-[9px] tracking-widest uppercase text-neutral-500 text-center leading-tight whitespace-normal w-full">{marca.nombre}</span>
               </Link>
             ))}
@@ -119,6 +136,3 @@ interface Marca {
   slug: string;
   logo_url: string;
 }
-
-
-
