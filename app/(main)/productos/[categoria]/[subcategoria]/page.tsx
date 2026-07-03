@@ -159,7 +159,7 @@ export default async function SubcategoriaPage({ params, searchParams }: PagePro
       {/* Filtro por marcas — cards visuales con logo */}
       {marcas.length > 1 && (
         <div className="mb-10">
-          <div className="flex flex-wrap gap-3">
+          <div className="flex flex-wrap gap-2 sm:gap-3">
             {/* "Todas" pill */}
             <a
               href={baseUrl}
@@ -224,12 +224,12 @@ export default async function SubcategoriaPage({ params, searchParams }: PagePro
 
       {/* Paginación */}
       {totalPaginas > 1 && (
-        <div className="flex items-center justify-center gap-2 mt-16">
+        <div className="flex items-center justify-center gap-2 mt-16 flex-wrap">
           {Array.from({ length: totalPaginas }, (_, i) => i + 1).map((p) => (
             <a
               key={p}
-              href={`?pagina=${p}`}
-              className={`w-9 h-9 flex items-center justify-center text-sm border transition-colors ${
+              href={`${baseUrl}${marca ? `?marca=${marca}` : ""}${marca ? "&" : "?"}pagina=${p}`}
+              className={`w-10 h-10 flex items-center justify-center text-sm border transition-colors ${
                 p === page
                   ? "border-neutral-900 bg-neutral-900 text-white"
                   : "border-neutral-200 hover:border-neutral-900"
