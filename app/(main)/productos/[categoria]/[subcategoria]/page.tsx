@@ -187,13 +187,13 @@ export default async function SubcategoriaPage({ params, searchParams }: PagePro
                   }`}
                 >
                   {m.logo_url ? (
-                    <div className="relative w-14 h-7 shrink-0">
+                    <div className="flex items-center justify-center w-16 h-8 shrink-0 bg-neutral-50 rounded p-1">
                       <Image
                         src={m.logo_url}
                         alt={m.nombre}
-                        fill
-                        sizes="56px"
-                        className="object-contain"
+                        width={56}
+                        height={28}
+                        className="object-contain opacity-70 group-hover:opacity-100"
                       />
                     </div>
                   ) : null}
