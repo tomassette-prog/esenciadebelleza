@@ -174,7 +174,7 @@ export function NavMegaMenu() {
       )}
 
       {/* ─────────────────── MOBILE: barra inferior de nav ───────── */}
-      <div className="md:hidden flex items-center justify-between pb-3">
+      <div className="md:hidden flex items-center justify-between pb-3 gap-2">
         <button
           onClick={() => setMobileOpen(true)}
           className="flex items-center gap-2 text-xs tracking-widest uppercase text-neutral-500 hover:text-neutral-900 transition-colors py-1.5"
@@ -198,10 +198,16 @@ export function NavMegaMenu() {
           Menú
         </button>
         <Link
+          href="/packs"
+          className="flex-1 text-center text-xs font-semibold tracking-wider uppercase text-[#C4857A] hover:text-[#3D2018] transition-colors px-3 py-2 border border-[#C4857A] hover:border-[#3D2018]"
+        >
+          🎁 Packs
+        </Link>
+        <Link
           href="/profesionales"
           className="text-xs tracking-widest uppercase text-neutral-500 hover:text-neutral-900 transition-colors"
         >
-          Área Profesional
+          Prof
         </Link>
       </div>
 
