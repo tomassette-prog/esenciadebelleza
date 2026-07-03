@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { generarSeoProducto } from "@/actions/productos";
 
-export function GenerarSeoBtn({ productoId }: { productoId: string }) {
+export function GenerarSeoBtn({ productoId, hasSeo = false }: { productoId: string; hasSeo?: boolean }) {
   const [isPending, startTransition] = useTransition();
   const [done, setDone] = useState(false);
   const [err, setErr] = useState(false);
@@ -25,10 +25,10 @@ export function GenerarSeoBtn({ productoId }: { productoId: string }) {
     <button
       onClick={handleClick}
       disabled={isPending}
-      title="Generar SEO"
-      className="text-xs text-neutral-400 hover:text-neutral-700 disabled:opacity-40 transition-colors"
+      title={hasSeo ? "SEO ya generado — regenerar" : "Generar SEO"}
+      className={`text-xs disabled:opacity-40 transition-colors ${hasSeo ? "text-green-500 hover:text-green-700" : "text-neutral-400 hover:text-neutral-700"}`}
     >
-      {isPending ? "…" : "SEO"}
+      {isPending ? "…" : hasSeo ? "✓SEO" : "SEO"}
     </button>
   );
 }

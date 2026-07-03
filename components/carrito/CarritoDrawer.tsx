@@ -98,6 +98,8 @@ export function CarritoDrawer() {
                         fill
                         sizes="80px"
                         className="object-contain p-1"
+                        unoptimized
+                        loading="eager"
                       />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center text-neutral-300">
@@ -174,7 +176,7 @@ export function CarritoDrawer() {
                 <li key={pack.pack_id} className="py-5 flex gap-4">
                   <div className="w-20 h-20 bg-neutral-50 border border-neutral-100 shrink-0 relative overflow-hidden flex items-center justify-center">
                     {pack.imagen_url ? (
-                      <Image src={pack.imagen_url} alt={pack.nombre} fill sizes="80px" className="object-contain p-1" />
+                      <Image src={pack.imagen_url} alt={pack.nombre} fill sizes="80px" className="object-contain p-1" unoptimized loading="eager" />
                     ) : (
                       <span className="text-3xl">🎁</span>
                     )}

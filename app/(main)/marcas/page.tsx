@@ -64,12 +64,14 @@ export default async function MarcasPage() {
                   className="flex flex-col items-center justify-center gap-3 bg-white py-10 px-4 hover:bg-neutral-50 transition-colors group text-center"
                 >
                   {marca.logo_url ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={marca.logo_url}
-                      alt={`Logo ${marca.nombre}`}
-                      className="h-10 w-auto object-contain grayscale group-hover:grayscale-0 transition-all"
-                    />
+                    <div className="w-24 h-12 flex items-center justify-center bg-neutral-50 rounded p-1">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={marca.logo_url}
+                        alt={`Logo ${marca.nombre}`}
+                        className="max-h-full max-w-full object-contain transition-opacity group-hover:opacity-100 opacity-70"
+                      />
+                    </div>
                   ) : (
                     <div
                       className="w-10 h-px"

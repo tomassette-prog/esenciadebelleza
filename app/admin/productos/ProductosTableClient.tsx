@@ -17,6 +17,7 @@ interface ProductoRow {
   nuevo: boolean;
   oferta: boolean;
   imagen_principal_url: string | null;
+  seo_title: string | null;
   marca: { id: string; nombre: string } | { id: string; nombre: string }[] | null;
   variaciones: { id: string; activa: boolean; stock: number; precio_b2c: number }[];
 }
@@ -128,7 +129,7 @@ export function ProductosTableClient({ productos, backUrl = "/admin/productos" }
                     <td className="px-4 py-3 text-right">
                       <div className="flex items-center justify-end gap-3">
                         <Link href={urlPath} target="_blank" className="text-xs text-neutral-400 hover:text-neutral-700 transition-colors" title="Ver en tienda">↗</Link>
-                        <GenerarSeoBtn productoId={p.id} />
+                        <GenerarSeoBtn productoId={p.id} hasSeo={!!p.seo_title} />
                         <Link href={`/admin/productos/${p.id}?back=${encodeURIComponent(backUrl)}`} className="text-xs text-neutral-600 hover:text-neutral-900 underline underline-offset-2 transition-colors">Editar</Link>
                       </div>
                     </td>
