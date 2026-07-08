@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
 import { createClient as createSupabase } from "@supabase/supabase-js";
 
@@ -106,6 +107,11 @@ export async function crearSubcategoria(data: {
     .single();
 
   if (error) return { error: error.message };
+  
+  // Revalidar para que aparezca inmediatamente en la navbar
+  revalidatePath("/");
+  revalidatePath("/admin/categorias");
+  
   return { data: result as Subcategoria };
 }
 
@@ -124,6 +130,11 @@ export async function actualizarSubcategoria(
     .single();
 
   if (error) return { error: error.message };
+  
+  // Revalidar para que cambios de "activa" se reflejen inmediatamente en navbar
+  revalidatePath("/");
+  revalidatePath("/admin/categorias");
+  
   return { data: result as Subcategoria };
 }
 
@@ -132,6 +143,11 @@ export async function eliminarSubcategoria(id: string): Promise<{ ok?: boolean; 
   const supa = adminClient();
   const { error } = await supa.from("subcategorias").delete().eq("id", id);
   if (error) return { error: error.message };
+  
+  // Revalidar para que desaparezca de la navbar
+  revalidatePath("/");
+  revalidatePath("/admin/categorias");
+  
   return { ok: true };
 }
 
