@@ -1,7 +1,34 @@
 // ─── Funciones para construir NAV_ITEMS dinámicamente ──────────────────────────
 
-import { createAdminClient } from "@/lib/supabase/admin";
+import { createClient } from "@supabase/supabase-js";
 import type { NavItem, NavColumna, NavLink } from "@/lib/categorias";
+
+// Cliente anon para leer datos públicos (subcategorias no tiene RLS)
+function createAnonClient() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    { auth: { persistSession: false } }
+  );
+}
+
+// Fallback hardcodeado si la BD no responde
+const FALLBACK_SUBCATEGORIAS: Omit<Subcategoria, "id" | "seo_title" | "seo_description" | "descripcion_intro">[] = [
+  { categoria: "peluqueria", slug: "tintes", label: "Tintes", columna: "Coloración", orden: 1, activa: true },
+  { categoria: "peluqueria", slug: "decoloracion", label: "Decoloración", columna: "Coloración", orden: 2, activa: true },
+  { categoria: "peluqueria", slug: "tratamientos-capilares", label: "Tratamientos", columna: "Cuidado Capilar", orden: 3, activa: true },
+  { categoria: "peluqueria", slug: "champus", label: "Champús", columna: "Cuidado Capilar", orden: 4, activa: true },
+  { categoria: "peluqueria", slug: "mascarillas", label: "Mascarillas", columna: "Cuidado Capilar", orden: 5, activa: true },
+  { categoria: "peluqueria", slug: "styling", label: "Styling", columna: "Styling", orden: 6, activa: true },
+  { categoria: "peluqueria", slug: "secadores", label: "Secadores", columna: "Equipos y Herramientas", orden: 7, activa: true },
+  { categoria: "peluqueria", slug: "planchas", label: "Planchas", columna: "Equipos y Herramientas", orden: 8, activa: true },
+  { categoria: "estetica", slug: "facial", label: "Facial", columna: "Facial", orden: 1, activa: true },
+  { categoria: "estetica", slug: "corporal", label: "Corporal", columna: "Corporal", orden: 2, activa: true },
+  { categoria: "estetica", slug: "depilacion", label: "Depilación", columna: "Depilación", orden: 3, activa: true },
+  { categoria: "estetica", slug: "unas", label: "Uñas", columna: "Uñas y Maquillaje", orden: 4, activa: true },
+  { categoria: "barberia", slug: "afeitado", label: "Afeitado y Barba", columna: "Afeitado", orden: 1, activa: true },
+  { categoria: "perfumeria", slug: "perfumes", label: "Perfumes", columna: "Perfumes", orden: 1, activa: true },
+];
 
 export interface Subcategoria {
   id: string;
@@ -20,23 +47,26 @@ export interface Subcategoria {
  * Obtiene todas las subcategorías activas desde la BD
  */
 export async function obtenerSubcategoriasDinamicas(): Promise<Subcategoria[]> {
-  const supa = createAdminClient();
-  // Usar headers para forzar no-store en Next.js
-  const headers = new Headers();
-  headers.append('Cache-Control', 'no-store');
-  
-  const { data, error } = await supa
-    .from("subcategorias")
-    .select("*")
-    .eq("activa", true)
-    .order("orden", { ascending: true });
+  try {
+    const supa = createAnonClient();
+    const { data, error } = await supa
+      .from("subcategorias")
+      .select("*")
+      .eq("activa", true)
+      .order("orden", { ascending: true });
 
-  if (error) {
-    console.error("Error al obtener subcategorías:", error.message);
-    return [];
+    if (error) {
+      console.error("Error al obtener subcategorías:", error.message);
+      return FALLBACK_SUBCATEGORIAS as Subcategoria[];
+    }
+
+    const result = (data || []) as Subcategoria[];
+    // Si la BD devuelve vacío, usar fallback para no romper la navbar
+    return result.length > 0 ? result : FALLBACK_SUBCATEGORIAS as Subcategoria[];
+  } catch (err) {
+    console.error("Error crítico al obtener subcategorías:", err);
+    return FALLBACK_SUBCATEGORIAS as Subcategoria[];
   }
-
-  return (data || []) as Subcategoria[];
 }
 
 /**
@@ -46,7 +76,7 @@ export async function obtenerSubcategoriaDetalles(
   categoria: string,
   slug: string
 ): Promise<Subcategoria | null> {
-  const supa = createAdminClient();
+  const supa = createAnonClient();
   const { data, error } = await supa
     .from("subcategorias")
     .select("*")
@@ -65,7 +95,7 @@ export async function obtenerSubcategoriaDetalles(
 export async function obtenerTodasLasSubcategorias(): Promise<
   Array<{ categoria: string; slug: string; updated_at?: string }>
 > {
-  const supa = createAdminClient();
+  const supa = createAnonClient();
   const { data, error } = await supa
     .from("subcategorias")
     .select("categoria, slug, updated_at")
