@@ -2,6 +2,7 @@
 import { cookies } from "next/headers";
 import { createClient } from "@supabase/supabase-js";
 import { createClient as createServerClient } from "@/lib/supabase/server";
+import { construirNavItems } from "@/lib/categorias-dinamicas";
 import { BotonesCarritoHeader } from "@/components/carrito/BotonesCarritoHeader";
 import { LogoEsencia } from "@/components/layout/LogoEsencia";
 import { NavMegaMenu } from "@/components/layout/NavMegaMenu";
@@ -43,6 +44,9 @@ export async function Header() {
   let userId: string | null = null;
   let userEmail: string | null = null;
   let perfil: { nombre_completo: string | null; tipo_cliente: string } | null = null;
+
+  // Obtener NAV_ITEMS dinámicamente
+  let navItems = await construirNavItems().catch(() => []);
 
   try {
     const supabase = await createServerClient();
@@ -186,7 +190,7 @@ export async function Header() {
         </div>
 
         {/* Navegación — mega menu (desktop) + drawer (mobile) */}
-        <NavMegaMenu />
+        <NavMegaMenu navItems={navItems} />
       </div>
     </header>
   );

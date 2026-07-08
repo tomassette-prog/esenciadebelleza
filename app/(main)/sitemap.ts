@@ -1,6 +1,7 @@
 import type { MetadataRoute } from "next";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { slugifyCategoria } from "@/lib/seo";
+import { obtenerTodasLasSubcategorias } from "@/lib/categorias-dinamicas";
 
 export const revalidate = 3600;
 
@@ -31,10 +32,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const BASE = "https://esenciadebelleza.es";
   const supabase = createAdminClient();
 
-  const [productos, marcasData, postsData] = await Promise.all([
+  // Obtener productos, marcas, posts, y subcategorías dinámicamente
+  const [productos, marcasData, postsData, subcatsDinamicas] = await Promise.all([
     fetchAllProductos(),
     supabase.from("marcas").select("slug, updated_at").eq("activa", true),
     supabase.from("posts").select("slug, updated_at").eq("publicado", true),
+    obtenerTodasLasSubcategorias(),
   ]);
 
   // URLs de productos individuales
@@ -53,13 +56,21 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority: 0.7,
   }));
 
-  // Subcategorías únicas
+  // Subcategorías únicas (dinámicas + de productos)
   const subcatSet = new Set<string>();
+  
+  // Agregar subcategorías dinámicas desde la tabla
+  for (const subcat of subcatsDinamicas) {
+    subcatSet.add(`${subcat.categoria}|||${subcat.slug}`);
+  }
+  
+  // Agregar subcategorías de productos (por compatibilidad)
   for (const p of productos) {
     if (p.subcategoria) {
       subcatSet.add(`${p.categoria}|||${p.subcategoria}`);
     }
   }
+  
   const subcatUrls: MetadataRoute.Sitemap = [...subcatSet].map((key) => {
     const [cat, sub] = key.split("|||");
     return {

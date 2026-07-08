@@ -1,11 +1,12 @@
 import type { Metadata } from "next";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { GestionCategorias } from "./GestionCategorias";
+import { GestionSubcategorias } from "./GestionSubcategorias";
 
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Categorías WooCommerce | Admin",
+  title: "Categorías | Admin",
   robots: { index: false, follow: false },
 };
 
@@ -18,8 +19,16 @@ export default async function CategoriasPage() {
     .order("subcategoria");
 
   return (
-    <div className="max-w-4xl">
-      <GestionCategorias mappings={mappings ?? []} />
+    <div className="space-y-16">
+      {/* Sección: Gestión de Subcategorías */}
+      <div className="max-w-5xl">
+        <GestionSubcategorias />
+      </div>
+
+      {/* Sección: Mapeos WooCommerce */}
+      <div className="max-w-4xl border-t border-neutral-200 pt-16">
+        <GestionCategorias mappings={mappings ?? []} />
+      </div>
     </div>
   );
 }

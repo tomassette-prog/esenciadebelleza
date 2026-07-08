@@ -3,6 +3,7 @@
 import { useFormState, useFormStatus } from "react-dom";
 import { slugifyCategoria } from "@/lib/seo";
 import { useState } from "react";
+import { SubcategoriaSelect } from "./SubcategoriaSelect";
 import type { Marca } from "@/types/producto";
 
 interface Props {
@@ -231,50 +232,14 @@ export function ProductoForm({ action, marcas, categoriasExistentes, subcategori
             <label className="block text-xs uppercase tracking-widest text-neutral-600 mb-1.5">
               Subcategoría
             </label>
-            {subcategoriasPorCategoria[categoria]?.length > 0 && !nuevaSubcategoria ? (
-              <>
-                <select
-                  name="subcategoria"
-                  value={subcategoria}
-                  onChange={(e) => {
-                    if (e.target.value === "__nueva__") {
-                      setNuevaSubcategoria(true);
-                      setSubcategoria("");
-                    } else {
-                      setSubcategoria(e.target.value);
-                    }
-                  }}
-                  className="input-clean w-full"
-                >
-                  <option value="">— Seleccionar subcategoría —</option>
-                  {subcategoriasPorCategoria[categoria].map((s) => (
-                    <option key={s} value={s}>{s}</option>
-                  ))}
-                  <option value="__nueva__">+ Nueva subcategoría...</option>
-                </select>
-              </>
-            ) : (
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  name="subcategoria"
-                  value={subcategoria}
-                  onChange={(e) => setSubcategoria(e.target.value)}
-                  className="input-clean w-full"
-                  placeholder="Ej: tintes"
-                  autoFocus={nuevaSubcategoria}
-                />
-                {nuevaSubcategoria && subcategoriasPorCategoria[categoria]?.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => { setNuevaSubcategoria(false); setSubcategoria(defaultValues.subcategoria ?? ""); }}
-                    className="text-xs text-neutral-400 hover:text-neutral-700 whitespace-nowrap px-2"
-                  >
-                    ← Volver
-                  </button>
-                )}
-              </div>
-            )}
+            <SubcategoriaSelect
+              categoria={categoria}
+              subcategoriaActual={subcategoria}
+              subcategorias={subcategoriasPorCategoria[categoria] ?? []}
+              cambiarSubcategoria={(v) => setSubcategoria(v)}
+              cambiarNuevaSubcategoria={(nueva) => setNuevaSubcategoria(nueva)}
+              permitirNueva={true}
+            />
           </div>
         </div>
 

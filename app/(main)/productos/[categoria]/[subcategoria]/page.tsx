@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { obtenerSubcategoriaDetalles } from "@/lib/categorias-dinamicas";
 import { ProductoCard } from "@/components/producto/ProductoCard";
 import { buildCategoriaMetadata, slugifyCategoria } from "@/lib/seo";
 import { Breadcrumb } from "@/components/layout/Breadcrumb";
@@ -15,6 +16,32 @@ interface PageProps {
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { categoria, subcategoria } = await params;
+  
+  // Intenta obtener metadatos dinámicos desde la tabla
+  const subcatDinamica = await obtenerSubcategoriaDetalles(categoria, subcategoria).catch(() => null);
+  
+  if (subcatDinamica?.seo_title || subcatDinamica?.seo_description) {
+    const title = (subcatDinamica.seo_title || `${subcatDinamica.label} | Esencia de Belleza`).slice(0, 60);
+    const description = (subcatDinamica.seo_description || `Descubre ${subcatDinamica.label} en Esencia de Belleza`).slice(0, 155);
+    
+    return {
+      title,
+      description,
+      alternates: {
+        canonical: `https://esenciadebelleza.es/productos/${categoria}/${subcategoria}`,
+      },
+      openGraph: {
+        title,
+        description,
+        url: `https://esenciadebelleza.es/productos/${categoria}/${subcategoria}`,
+        siteName: "Esencia de Belleza",
+        locale: "es_ES",
+        type: "website",
+      },
+    };
+  }
+  
+  // Fallback: genera metadata genérica
   return buildCategoriaMetadata(categoria, subcategoria);
 }
 
@@ -129,6 +156,9 @@ export default async function SubcategoriaPage({ params, searchParams }: PagePro
 
   const totalPaginas = Math.ceil((count ?? 0) / PAGE_SIZE);
   const baseUrl = `/productos/${categoria}/${subcategoria}`;
+  
+  // Obtener metadatos dinámicos de la subcategoría
+  const subcatDinamica = await obtenerSubcategoriaDetalles(categoria, subcategoria).catch(() => null);
 
   return (
     <div className="container-main py-8 lg:py-12">
@@ -150,6 +180,15 @@ export default async function SubcategoriaPage({ params, searchParams }: PagePro
         >
           {(subcategoriaNombre ?? subcategoria).replace(/-/g, " ")}
         </h1>
+        
+        {/* Descripción introductoria si existe */}
+        {subcatDinamica?.descripcion_intro && (
+          <div 
+            className="text-sm text-neutral-600 mt-4 max-w-2xl prose prose-sm"
+            dangerouslySetInnerHTML={{ __html: subcatDinamica.descripcion_intro }}
+          />
+        )}
+        
         <p className="text-sm text-neutral-400 mt-2">
           {count ?? 0} productos{marca && marcas.find(m => m.id === marca) ? ` · ${marcas.find(m => m.id === marca)!.nombre}` : ""}
         </p>

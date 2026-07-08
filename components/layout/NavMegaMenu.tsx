@@ -3,9 +3,9 @@
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { NAV_ITEMS, type NavItem } from "@/lib/categorias";
+import { type NavItem } from "@/lib/categorias";
 
-export function NavMegaMenu() {
+export function NavMegaMenu({ navItems }: { navItems: NavItem[] }) {
   const [menuAbierto, setMenuAbierto] = useState<string | null>(null);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [expandidoMobile, setExpandidoMobile] = useState<string | null>(null);
@@ -36,7 +36,7 @@ export function NavMegaMenu() {
     timerRef.current = setTimeout(() => setMenuAbierto(null), 120);
   };
 
-  const itemActivo = NAV_ITEMS.find((i) => i.href === menuAbierto && i.columnas);
+  const itemActivo = navItems.find((i) => i.href === menuAbierto && i.columnas);
 
   return (
     <>
@@ -45,7 +45,7 @@ export function NavMegaMenu() {
         className="hidden md:flex items-center gap-0.5 pb-3"
         onMouseLeave={handleMouseLeave}
       >
-        {NAV_ITEMS.map((item) =>
+        {navItems.map((item) =>
           item.columnas ? (
             <div
               key={item.href}
@@ -260,7 +260,7 @@ export function NavMegaMenu() {
 
             {/* Ítems del menú */}
             <nav className="flex-1 px-5 py-4">
-              {NAV_ITEMS.map((item) => (
+              {navItems.map((item) => (
                 <div key={item.href} className="border-b border-neutral-50 last:border-0">
                   {item.columnas ? (
                     <>

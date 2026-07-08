@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Suspense } from "react";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { slugifyCategoria } from "@/lib/seo";
+import { obtenerSubcategoriasPorCategoria } from "@/actions/categorias";
 import { FiltrosProductos } from "./FiltrosProductos";
 import { GenerarSeoBulkBtn } from "./GenerarSeoBulkBtn";
 import { ProductosTableClient } from "./ProductosTableClient";
@@ -44,22 +45,17 @@ export default async function AdminProductosPage({
   ]);
 
   const categorias = [...new Set((catData ?? []).map((p: { categoria: string }) => p.categoria))].sort() as string[];
-  const subcategorias = cat
-    ? ([...new Set((catData ?? []).filter((p: { categoria: string; subcategoria: string | null }) => p.categoria === cat).map((p: { subcategoria: string | null }) => p.subcategoria).filter(Boolean))].sort() as string[])
-    : [];
   
-  // Construir mapa de subcategorías por categoría (para bulk + editar)
+  // Obtener subcategorías por categoría usando nueva función
   const subcategoriasPorCategoria: Record<string, string[]> = {};
-  for (const p of catData ?? []) {
-    const cat = p.categoria;
-    if (!subcategoriasPorCategoria[cat]) subcategoriasPorCategoria[cat] = [];
-    if (p.subcategoria && !subcategoriasPorCategoria[cat].includes(p.subcategoria)) {
-      subcategoriasPorCategoria[cat].push(p.subcategoria);
+  for (const categoria of categorias) {
+    const result = await obtenerSubcategoriasPorCategoria(categoria);
+    if (result.data) {
+      subcategoriasPorCategoria[categoria] = result.data;
     }
   }
-  // Ordenar subcategorías
-  Object.values(subcategoriasPorCategoria).forEach(subs => subs.sort());
   
+  const subcategorias = cat && subcategoriasPorCategoria[cat] ? subcategoriasPorCategoria[cat] : [];
   const marcas = (marcasData ?? []) as { id: string; nombre: string }[];
 
   let query = supabase

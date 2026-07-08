@@ -7,6 +7,7 @@ import { VariacionesManager } from "@/components/admin/VariacionesManager";
 import { EliminarProductoBtn } from "@/components/admin/EliminarProductoBtn";
 import { AnadirAPackBtn } from "@/components/producto/AnadirAPackBtn";
 import { actualizarProducto } from "@/actions/productos";
+import { obtenerSubcategoriasPorCategoria } from "@/actions/categorias";
 import { slugifyCategoria } from "@/lib/seo";
 
 export const dynamic = "force-dynamic";
@@ -39,17 +40,17 @@ export default async function EditarProductoPage({ params, searchParams }: { par
 
   if (!producto) notFound();
 
-  // Usar taxonomía de la BD (igual que en page.tsx)
+  // Usar taxonomía de la BD
   const categorias = [...new Set((catData ?? []).map((p: { categoria: string }) => p.categoria))].sort();
+  
+  // Obtener subcategorías por categoría (combinadas: dinámicas + existentes)
   const subcategoriasPorCategoria: Record<string, string[]> = {};
-  for (const p of catData ?? []) {
-    const cat = p.categoria;
-    if (!subcategoriasPorCategoria[cat]) subcategoriasPorCategoria[cat] = [];
-    if (p.subcategoria && !subcategoriasPorCategoria[cat].includes(p.subcategoria)) {
-      subcategoriasPorCategoria[cat].push(p.subcategoria);
+  for (const cat of categorias) {
+    const result = await obtenerSubcategoriasPorCategoria(cat);
+    if (result.data) {
+      subcategoriasPorCategoria[cat] = result.data;
     }
   }
-  Object.values(subcategoriasPorCategoria).forEach(subs => subs.sort());
 
   const urlPreview = `/productos/${slugifyCategoria(producto.categoria)}/${slugifyCategoria(producto.subcategoria ?? "general")}/${producto.slug}`;
 
