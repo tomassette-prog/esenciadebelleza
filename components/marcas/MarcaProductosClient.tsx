@@ -164,7 +164,6 @@ export function MarcaProductosClient({ productos, marcaNombre }: MarcaProductosC
                     </p>
                     {precioDesde && (
                       <p className="text-xs text-neutral-500">
-                        Desde{" "}
                         <span className="text-neutral-900 font-medium">
                           {formatPrice(precioDesde)}
                         </span>

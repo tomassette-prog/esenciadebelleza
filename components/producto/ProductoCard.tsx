@@ -55,7 +55,7 @@ export function ProductoCard({ producto, priority = false }: Props) {
         <div className="flex items-baseline gap-2">
           <span className="text-sm font-medium text-neutral-900">
             {producto.precio_desde > 0
-              ? `Desde ${formatPrice(producto.precio_desde)}`
+              ? formatPrice(producto.precio_desde)
               : "Consultar precio"}
           </span>
           {producto.total_variaciones > 1 && (
