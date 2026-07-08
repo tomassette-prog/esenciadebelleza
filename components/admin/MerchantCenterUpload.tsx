@@ -26,6 +26,8 @@ export default function MerchantCenterUpload() {
       const text = await file.text();
       
       console.log(`📄 Primeras 500 caracteres del archivo:`, text.substring(0, 500));
+      console.log(`📊 Tamaño del archivo: ${text.length} caracteres`);
+      console.log(`📋 Número de líneas: ${text.split('\n').length}`);
 
       // Detectar delimitador (tabulación > punto y coma > coma)
       const line1 = text.split('\n')[0];
@@ -112,26 +114,39 @@ export default function MerchantCenterUpload() {
         } else {
           // Ningún delimitador funciona - el archivo es realmente inválido
           console.log(`❌ Ningún delimitador produjo múltiples columnas. Archivo inválido.`);
-          console.log(`📄 Primeros 200 caracteres:`, text.substring(0, 200));
+          console.log(`📄 Primeros 300 caracteres del archivo:`, text.substring(0, 300));
+          console.log(`📊 Tamaño: ${text.length} caracteres, ${text.split('\n').length} líneas`);
+          console.log(`🔍 Primera línea: "${line1.substring(0, 150)}"`);
+          
           setError(`❌ El CSV parece NO ser un archivo CSV válido.
-        
-Contenido detectado: ${headers[0].substring(0, 100)}...
 
-El archivo podría ser:
-1. Un documento Word, Excel o PDF (no CSV)
-2. Un archivo de configuración (JSON, YAML, XML)
-3. Un archivo con formato no estándar
+📄 Contenido detectado: 
+${headers[0].substring(0, 150)}...
 
-💡 Cómo exportar desde Google Merchant Center:
-1. Ve a Productos → Tu feed
-2. Selecciona los productos
-3. Haz clic en "Descargar" → "CSV"
-4. Abre en Google Drive o Excel para verificar que tiene columnas
+🔍 Diagnóstico:
+- Tamaño: ${text.length} caracteres
+- Líneas: ${text.split('\n').length}
+- Delimitadores en primera línea: coma(${commaCount}), punto-y-coma(${semicolonCount}), tabulación(${tabCount})
 
-💡 Si usas Excel:
-- Archivo → Guardar Como
-- Formato: "CSV (delimitado por comas)" (.csv)
-- NO es .xlsx, .xls ni .txt`);
+Esto parece ser TEXTO PLANO sin estructura de columnas.
+
+❓ Posibles problemas:
+1. ⚠️ Descargaste una página HTML o instrucciones en lugar del CSV
+2. ⚠️ Guardaste un documento Word/PDF como texto
+3. ⚠️ El archivo se descargó con extensión .txt en lugar de .csv
+4. ⚠️ Abriste el CSV en Notepad y guardaste como texto plano
+
+✅ Solución:
+1. Ve a Google Merchant Center → Productos
+2. Usa el botón "⋮ Más" → "Descargar" (o "Download")
+3. Selecciona "CSV" en el menú desplegable
+4. IMPORTANTE: Descarga a una carpeta y verifica que sea "archivo.csv" (no .txt)
+5. Abre en Excel para verificar que tenga COLUMNAS separadas
+
+💡 Si el problema persiste:
+- Intenta descargar desde incognito/privado
+- Borra la caché del navegador
+- Usa un navegador diferente (Chrome, Firefox, Edge)`);
           setCargando(false);
           return;
         }
