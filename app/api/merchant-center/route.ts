@@ -134,7 +134,10 @@ export async function POST(request: NextRequest) {
         // Crear cliente y actualizar
         const supabase = createAdminClient();
 
-        let { error, data } = await supabase
+        let updated = false;
+        
+        // Intentar actualizar por woo_id primero
+        let result = await supabase
           .from("productos_padre")
           .update({
             descripcion: producto.descripcionActual
@@ -144,9 +147,13 @@ export async function POST(request: NextRequest) {
           })
           .eq("woo_id", producto.productoId);
 
+        if (!result.error && Array.isArray(result.data) && result.data.length > 0) {
+          updated = true;
+        }
+
         // Si no encuentra por woo_id, intentar por id
-        if (!data || data.length === 0) {
-          ({ error, data } = await supabase
+        if (!updated) {
+          result = await supabase
             .from("productos_padre")
             .update({
               descripcion: producto.descripcionActual
@@ -154,12 +161,16 @@ export async function POST(request: NextRequest) {
                 : descripcionGenerada,
               updated_at: new Date().toISOString(),
             })
-            .eq("id", producto.productoId));
+            .eq("id", producto.productoId);
+
+          if (!result.error && Array.isArray(result.data) && result.data.length > 0) {
+            updated = true;
+          }
         }
 
         // Si no encuentra por id, intentar por nombre
-        if (!data || data.length === 0) {
-          ({ error, data } = await supabase
+        if (!updated) {
+          result = await supabase
             .from("productos_padre")
             .update({
               descripcion: producto.descripcionActual
@@ -167,20 +178,30 @@ export async function POST(request: NextRequest) {
                 : descripcionGenerada,
               updated_at: new Date().toISOString(),
             })
-            .ilike("nombre", producto.nombre));
+            .ilike("nombre", producto.nombre);
+
+          if (!result.error && Array.isArray(result.data) && result.data.length > 0) {
+            updated = true;
+          }
         }
 
-        if (error) {
+        if (result.error) {
           resultados.push({
             nombre: producto.nombre,
             ok: false,
-            error: `No se encontró el producto: ${error.message}`,
+            error: `No se encontró el producto: ${result.error.message}`,
           });
-        } else {
+        } else if (updated) {
           resultados.push({
             nombre: producto.nombre,
             ok: true,
             descripcionGenerada,
+          });
+        } else {
+          resultados.push({
+            nombre: producto.nombre,
+            ok: false,
+            error: "Producto no encontrado",
           });
         }
 
