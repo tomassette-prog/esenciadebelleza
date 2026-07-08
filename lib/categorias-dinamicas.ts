@@ -21,6 +21,10 @@ export interface Subcategoria {
  */
 export async function obtenerSubcategoriasDinamicas(): Promise<Subcategoria[]> {
   const supa = createAdminClient();
+  // Usar headers para forzar no-store en Next.js
+  const headers = new Headers();
+  headers.append('Cache-Control', 'no-store');
+  
   const { data, error } = await supa
     .from("subcategorias")
     .select("*")
