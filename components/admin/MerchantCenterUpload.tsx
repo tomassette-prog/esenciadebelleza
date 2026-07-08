@@ -30,27 +30,42 @@ export default function MerchantCenterUpload() {
       console.log(`📋 Número de líneas: ${text.split('\n').length}`);
 
       // Detectar delimitador (tabulación > punto y coma > coma)
-      const line1 = text.split('\n')[0];
+      // Buscar primera línea que tenga delimitadores (saltar encabezados de Google Merchant Center)
+      const lines = text.split('\n').filter(l => l.trim().length > 0);
+      let headerLineIndex = 0;
       let delimiter = ',';
+      let tabCount = 0, semicolonCount = 0, commaCount = 0;
       
-      // Contar delimitadores potenciales en la primera línea
-      const tabCount = (line1.match(/\t/g) || []).length;
-      const semicolonCount = (line1.match(/;/g) || []).length;
-      const commaCount = (line1.match(/,/g) || []).length;
-      
-      // Priorizar: tabulación > punto y coma > coma
-      if (tabCount > 0) {
-        delimiter = '\t';
-      } else if (semicolonCount > 0 && semicolonCount >= commaCount) {
-        delimiter = ';';
-      } else {
-        delimiter = ',';
+      for (let i = 0; i < Math.min(lines.length, 5); i++) {
+        const line = lines[i];
+        tabCount = (line.match(/\t/g) || []).length;
+        semicolonCount = (line.match(/;/g) || []).length;
+        commaCount = (line.match(/,/g) || []).length;
+        
+        // Si encontramos delimitadores, esta es la línea de headers
+        if (tabCount > 0 || semicolonCount > 1 || commaCount > 1) {
+          headerLineIndex = i;
+          
+          // Priorizar: tabulación > punto y coma > coma
+          if (tabCount > 0) {
+            delimiter = '\t';
+          } else if (semicolonCount > 0 && semicolonCount >= commaCount) {
+            delimiter = ';';
+          } else {
+            delimiter = ',';
+          }
+          
+          console.log(`🔍 Línea de headers encontrada en índice ${i}`);
+          console.log(`🔍 Delimitador detectado: '${delimiter === '\t' ? 'TAB' : delimiter}' (TAB: ${tabCount}, ;: ${semicolonCount}, ,: ${commaCount})`);
+          break;
+        }
       }
       
-      console.log(`🔍 Delimitador detectado: '${delimiter === '\t' ? 'TAB' : delimiter}' (TAB: ${tabCount}, ;: ${semicolonCount}, ,: ${commaCount})`);
+      // Reconstruir el CSV sin las líneas de encabezado
+      const csvToProcess = lines.slice(headerLineIndex).join('\n');
 
       // Parsear CSV con PapaParse
-      const parseResult = Papa.parse(text, {
+      const parseResult = Papa.parse(csvToProcess, {
         header: true,
         skipEmptyLines: true,
         dynamicTyping: false,
@@ -82,7 +97,7 @@ export default function MerchantCenterUpload() {
         let bestResult = { delimiter, columnCount: 1, records: [...records], headers };
         
         for (const testDelim of allDelimiters) {
-          const testResult = Papa.parse(text, {
+          const testResult = Papa.parse(csvToProcess, {
             header: true,
             skipEmptyLines: true,
             dynamicTyping: false,
@@ -114,9 +129,8 @@ export default function MerchantCenterUpload() {
         } else {
           // Ningún delimitador funciona - el archivo es realmente inválido
           console.log(`❌ Ningún delimitador produjo múltiples columnas. Archivo inválido.`);
-          console.log(`📄 Primeros 300 caracteres del archivo:`, text.substring(0, 300));
-          console.log(`📊 Tamaño: ${text.length} caracteres, ${text.split('\n').length} líneas`);
-          console.log(`🔍 Primera línea: "${line1.substring(0, 150)}"`);
+          console.log(`📄 Primeros 300 caracteres del archivo:`, csvToProcess.substring(0, 300));
+          console.log(`📊 Tamaño: ${csvToProcess.length} caracteres, ${csvToProcess.split('\n').length} líneas`);
           
           setError(`❌ El CSV parece NO ser un archivo CSV válido.
 
@@ -124,9 +138,9 @@ export default function MerchantCenterUpload() {
 ${headers[0].substring(0, 150)}...
 
 🔍 Diagnóstico:
-- Tamaño: ${text.length} caracteres
-- Líneas: ${text.split('\n').length}
-- Delimitadores en primera línea: coma(${commaCount}), punto-y-coma(${semicolonCount}), tabulación(${tabCount})
+- Tamaño: ${csvToProcess.length} caracteres
+- Líneas: ${csvToProcess.split('\n').length}
+- Delimitadores encontrados en los headers: coma(${commaCount}), punto-y-coma(${semicolonCount}), tabulación(${tabCount})
 
 Esto parece ser TEXTO PLANO sin estructura de columnas.
 
