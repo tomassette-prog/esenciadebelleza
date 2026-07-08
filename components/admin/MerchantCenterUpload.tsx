@@ -34,24 +34,83 @@ export default function MerchantCenterUpload() {
 
       const records: any[] = parseResult.data;
 
-      console.log(`📊 CSV parseado: ${records.length} productos`);
+      console.log(`📊 CSV parseado: ${records.length} filas`);
+      console.log(`📋 Headers detectados:`, Object.keys(records[0] || {}));
+      console.log(`📝 Primera fila:`, records[0]);
 
-      // Filtrar solo productos sin descripción o incompletos
+      if (records.length === 0) {
+        setError("El archivo CSV está vacío.");
+        setCargando(false);
+        return;
+      }
+
+      // Detectar headers de forma flexible (insensible a mayúsculas y espacios)
+      const firstRow = records[0];
+      const headers = Object.keys(firstRow);
+      
+      // Normalizar headers para búsqueda
+      const normalizar = (h: string) => h.toLowerCase().trim().replace(/\s+/g, " ");
+      
+      // Buscar columns dinámicamente
+      const findColumn = (keywords: string[]) => {
+        return headers.find(h => 
+          keywords.some(k => normalizar(h).includes(normalizar(k)) || normalizar(k).includes(normalizar(h)))
+        );
+      };
+
+      const colProductoId = findColumn(["id de producto", "product id", "id", "product"]);
+      const colProducto = findColumn(["producto", "title", "product name", "nombre"]);
+      const colDescripcion = findColumn(["descripción", "description", "desc"]);
+      const colQueAgregar = findColumn(["añadir", "add to description", "agregar", "additional"]);
+
+      console.log(`🔍 Columnas detectadas:`, {
+        productoId: colProductoId,
+        producto: colProducto,
+        descripcion: colDescripcion,
+        queAgregar: colQueAgregar,
+      });
+
+      if (!colProductoId || !colProducto || !colQueAgregar) {
+        setError(
+          `Columnas requeridas no encontradas en el CSV.
+          
+Detectadas: ${headers.join(", ")}
+
+Se necesitan columns que contengan: "ID de producto", "Producto" y "Añadir/Add to description"`
+        );
+        setCargando(false);
+        return;
+      }
+
+      // Filtrar solo productos con "Añadir a la descripción" no vacío
       const productosIncompletos: EnriquecerProductoInput[] = records
-        .filter(
-          (r: any) =>
-            (!r.Descripción || r.Descripción.trim() === "") &&
-            r["Añadir a la descripción"]
-        )
-        .map((r: any) => ({
-          productoId: r["ID de producto"],
-          nombre: r.Producto,
-          descripcionActual: r.Descripción || undefined,
-          queAgregar: r["Añadir a la descripción"],
-        }));
+        .filter((r: any) => {
+          if (!colQueAgregar) return false;
+          const queAgregar = r[colQueAgregar]?.trim();
+          return queAgregar && queAgregar.length > 0;
+        })
+        .map((r: any) => {
+          const id = String(r[colProductoId!]).trim();
+          const nombre = String(r[colProducto!]).trim();
+          const desc = colDescripcion ? String(r[colDescripcion]).trim() : undefined;
+          const agregar = String(r[colQueAgregar!]).trim();
+
+          console.log(`  ✓ ${nombre} (${id}): agregar "${agregar}"`);
+
+          return {
+            productoId: id,
+            nombre: nombre,
+            descripcionActual: desc || undefined,
+            queAgregar: agregar,
+          };
+        });
 
       if (productosIncompletos.length === 0) {
-        setError("No se encontraron productos con descripciones incompletas.");
+        setError(
+          `No se encontraron productos con datos en la columna "${colQueAgregar}".
+          
+Verifica que el CSV tenga productos con información que agregar a la descripción.`
+        );
         setCargando(false);
         return;
       }
@@ -154,7 +213,7 @@ export default function MerchantCenterUpload() {
 
       {error && (
         <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-          <p className="text-red-800">{error}</p>
+          <p className="text-red-800 whitespace-pre-wrap text-sm font-mono">{error}</p>
         </div>
       )}
 
