@@ -135,6 +135,7 @@ export async function POST(request: NextRequest) {
         const supabase = createAdminClient();
 
         let updated = false;
+        let finalError: any = null;
         
         // Intentar actualizar por woo_id primero
         let result = await supabase
@@ -147,8 +148,10 @@ export async function POST(request: NextRequest) {
           })
           .eq("woo_id", producto.productoId);
 
-        if (!result.error && Array.isArray(result.data) && result.data.length > 0) {
+        if (!result.error && result.data) {
           updated = true;
+        } else if (result.error) {
+          finalError = result.error;
         }
 
         // Si no encuentra por woo_id, intentar por id
@@ -163,8 +166,10 @@ export async function POST(request: NextRequest) {
             })
             .eq("id", producto.productoId);
 
-          if (!result.error && Array.isArray(result.data) && result.data.length > 0) {
+          if (!result.error && result.data) {
             updated = true;
+          } else if (result.error) {
+            finalError = result.error;
           }
         }
 
@@ -180,18 +185,14 @@ export async function POST(request: NextRequest) {
             })
             .ilike("nombre", producto.nombre);
 
-          if (!result.error && Array.isArray(result.data) && result.data.length > 0) {
+          if (!result.error && result.data) {
             updated = true;
+          } else if (result.error) {
+            finalError = result.error;
           }
         }
 
-        if (result.error) {
-          resultados.push({
-            nombre: producto.nombre,
-            ok: false,
-            error: `No se encontró el producto: ${result.error.message}`,
-          });
-        } else if (updated) {
+        if (updated) {
           resultados.push({
             nombre: producto.nombre,
             ok: true,
@@ -201,7 +202,7 @@ export async function POST(request: NextRequest) {
           resultados.push({
             nombre: producto.nombre,
             ok: false,
-            error: "Producto no encontrado",
+            error: finalError ? `Error: ${finalError.message}` : "Producto no encontrado",
           });
         }
 
