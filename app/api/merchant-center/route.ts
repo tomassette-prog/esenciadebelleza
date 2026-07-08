@@ -1,0 +1,195 @@
+import { NextRequest, NextResponse } from "next/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+import Anthropic from "@anthropic-ai/sdk";
+import { cookies } from "next/headers";
+
+const claude = new Anthropic();
+const ADMIN_EMAILS = ["ziarresamot@gmail.com"];
+
+async function verificarAdmin() {
+  try {
+    const cookieStore = await cookies();
+    const authToken = cookieStore.get("sb-yjanobsfzcwpusynvlun-auth-token")?.value;
+
+    if (!authToken) {
+      throw new Error("No autorizado: token no encontrado");
+    }
+
+    const parsed = JSON.parse(authToken);
+    const email = parsed.user?.email || parsed.email;
+
+    if (!ADMIN_EMAILS.includes(email)) {
+      throw new Error(`No autorizado: ${email} no está en la lista de admins`);
+    }
+
+    return true;
+  } catch (error) {
+    throw new Error(`Acceso denegado: ${String(error)}`);
+  }
+}
+
+async function generarDescripcion(
+  nombre: string,
+  descripcionActual: string | undefined,
+  queAgregar: string
+): Promise<string> {
+  const prompt = `Eres un especialista en copywriting para productos de belleza y peluquería.
+  
+Producto: ${nombre}
+Descripción actual: ${descripcionActual || "Sin descripción"}
+Se necesita agregar: ${queAgregar}
+
+Genera una descripción enriquecida que incluya exactamente lo solicitado.
+
+Importante:
+- Mantén un tono profesional y atractivo
+- Sé conciso pero informativo (máx 500 caracteres)
+- Si ya hay descripción, complétala; no la repliques
+- Enfoca en lo que el cliente busca (resultados, no solo composición)
+
+Devuelve SOLO el texto enriquecido, sin explicaciones.`;
+
+  const response = await claude.messages.create({
+    model: "claude-3-5-sonnet-20241022",
+    max_tokens: 500,
+    messages: [
+      {
+        role: "user",
+        content: prompt,
+      },
+    ],
+  });
+
+  const text = response.content[0];
+  if (text.type === "text") {
+    return text.text.trim();
+  }
+  return "";
+}
+
+export async function POST(request: NextRequest) {
+  try {
+    // Verificar admin
+    try {
+      await verificarAdmin();
+    } catch (authError) {
+      return NextResponse.json(
+        { error: String(authError) },
+        { status: 401 }
+      );
+    }
+
+    // Parsear JSON del body
+    const body = await request.json();
+    const { productos } = body;
+
+    if (!Array.isArray(productos)) {
+      return NextResponse.json(
+        { error: "Se espera un array de productos" },
+        { status: 400 }
+      );
+    }
+
+    console.log(`📊 Procesando ${productos.length} productos`);
+
+    // Procesar cada producto
+    const resultados: any[] = [];
+    for (const producto of productos) {
+      try {
+        // Generar descripción
+        const descripcionGenerada = await generarDescripcion(
+          producto.nombre,
+          producto.descripcionActual,
+          producto.queAgregar
+        );
+
+        if (!descripcionGenerada) {
+          resultados.push({
+            nombre: producto.nombre,
+            ok: false,
+            error: "No se pudo generar descripción",
+          });
+          continue;
+        }
+
+        // Crear cliente y actualizar
+        const supabase = createAdminClient();
+
+        let { error, data } = await supabase
+          .from("productos_padre")
+          .update({
+            descripcion: producto.descripcionActual
+              ? `${producto.descripcionActual}\n\n${descripcionGenerada}`
+              : descripcionGenerada,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("woo_id", producto.productoId);
+
+        // Si no encuentra por woo_id, intentar por id
+        if (!data || data.length === 0) {
+          ({ error, data } = await supabase
+            .from("productos_padre")
+            .update({
+              descripcion: producto.descripcionActual
+                ? `${producto.descripcionActual}\n\n${descripcionGenerada}`
+                : descripcionGenerada,
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", producto.productoId));
+        }
+
+        // Si no encuentra por id, intentar por nombre
+        if (!data || data.length === 0) {
+          ({ error, data } = await supabase
+            .from("productos_padre")
+            .update({
+              descripcion: producto.descripcionActual
+                ? `${producto.descripcionActual}\n\n${descripcionGenerada}`
+                : descripcionGenerada,
+              updated_at: new Date().toISOString(),
+            })
+            .ilike("nombre", producto.nombre));
+        }
+
+        if (error) {
+          resultados.push({
+            nombre: producto.nombre,
+            ok: false,
+            error: `No se encontró el producto: ${error.message}`,
+          });
+        } else {
+          resultados.push({
+            nombre: producto.nombre,
+            ok: true,
+            descripcionGenerada,
+          });
+        }
+
+        // Rate limiting
+        await new Promise((r) => setTimeout(r, 500));
+      } catch (err) {
+        resultados.push({
+          nombre: producto.nombre,
+          ok: false,
+          error: String(err),
+        });
+      }
+    }
+
+    const exitosos = resultados.filter((r) => r.ok).length;
+    const fallidos = resultados.filter((r) => !r.ok).length;
+
+    return NextResponse.json({
+      totalProcesados: productos.length,
+      exitosos,
+      fallidos,
+      detalles: resultados,
+    });
+  } catch (error) {
+    console.error("Error en merchant-center API:", error);
+    return NextResponse.json(
+      { error: String(error) },
+      { status: 500 }
+    );
+  }
+}
