@@ -92,6 +92,25 @@ export async function POST(request: NextRequest) {
 
     console.log(`📊 Procesando ${productos.length} productos`);
 
+    // Verificar que SUPABASE_SERVICE_ROLE_KEY esté disponible
+    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+
+    if (!serviceKey || !url) {
+      console.error("❌ Variables de entorno faltantes:");
+      console.error("  SUPABASE_SERVICE_ROLE_KEY:", serviceKey ? "✓" : "✗");
+      console.error("  NEXT_PUBLIC_SUPABASE_URL:", url ? "✓" : "✗");
+      
+      return NextResponse.json(
+        {
+          error: "Faltan variables de entorno en Vercel. Contacta al administrador.",
+          detalles:
+            "Las variables SUPABASE_SERVICE_ROLE_KEY y/o NEXT_PUBLIC_SUPABASE_URL no están configuradas",
+        },
+        { status: 500 }
+      );
+    }
+
     // Procesar cada producto
     const resultados: any[] = [];
     for (const producto of productos) {
