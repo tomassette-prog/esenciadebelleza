@@ -146,12 +146,12 @@ export async function obtenerSubcategoriasPorCategoria(
 ): Promise<{ data?: string[]; error?: string }> {
   const supa = adminClient();
 
-  // 1. Obtener dinámicas
+  // 1. Obtener dinámicas (activas = true, o no especificado que es true por DEFAULT)
   const { data: dinamicas, error: errD } = await supa
     .from("subcategorias")
     .select("slug")
     .eq("categoria", categoria)
-    .eq("activa", true)
+    .not("activa", "eq", false)
     .order("orden", { ascending: true });
 
   if (errD && errD.code !== "PGRST116") {
