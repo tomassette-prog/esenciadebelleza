@@ -1,5 +1,6 @@
 // ─── Funciones para construir NAV_ITEMS dinámicamente ──────────────────────────
 
+import { unstable_noStore as noStore } from "next/cache";
 import { createClient } from "@supabase/supabase-js";
 import type { NavItem, NavColumna, NavLink } from "@/lib/categorias";
 
@@ -87,6 +88,7 @@ export interface Subcategoria {
  * Obtiene todas las subcategorías activas desde la BD
  */
 export async function obtenerSubcategoriasDinamicas(): Promise<Subcategoria[]> {
+  noStore(); // Nunca cachear — siempre leer de BD
   try {
     const supa = createAnonClient();
     const { data, error } = await supa
