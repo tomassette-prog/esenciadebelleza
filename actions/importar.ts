@@ -310,7 +310,7 @@ export async function calcularDiff(): Promise<{
         const wooP = wooProductos.find(p => p.id === nuevo.wooId);
         const cat = wooP?.categories.find(c => c.id === catId);
         const wooCatName = cat?.name ?? String(catId);
-        const suggestion = suggestCategory(wooCatName, nuevo.nombre);
+        const suggestion = await suggestCategory(wooCatName, nuevo.nombre);
         unmappedCategories.push({
           wooCatId: catId,
           wooCatName,

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { getAllCategoriaPairs } from "@/lib/category-suggester";
+import type { CategoriaPair } from "@/lib/category-suggester";
 import { guardarMapeoCategoria, eliminarMapeoCategoria } from "@/actions/categorias";
 
 interface Mapping {
@@ -11,7 +11,7 @@ interface Mapping {
   subcategoria: string;
 }
 
-export function GestionCategorias({ mappings }: { mappings: Mapping[] }) {
+export function GestionCategorias({ mappings, allPairs }: { mappings: Mapping[]; allPairs: CategoriaPair[] }) {
   const [lista, setLista] = useState<Mapping[]>(mappings);
   const [isPending, startTransition] = useTransition();
   const [nuevoId, setNuevoId] = useState("");
@@ -20,7 +20,6 @@ export function GestionCategorias({ mappings }: { mappings: Mapping[] }) {
   const [nuevoSubcat, setNuevoSubcat] = useState("peluqueria-general");
   const [msg, setMsg] = useState<string | null>(null);
 
-  const allPairs = getAllCategoriaPairs();
   const categorias = [...new Set(allPairs.map(p => p.categoria))];
 
   function handleAdd() {

@@ -10,7 +10,7 @@ import {
   type ReviewGroup,
   type SmartApplyResult,
 } from "@/actions/importar";
-import { getAllCategoriaPairs, type CategoriaPair } from "@/lib/category-suggester";
+import type { CategoriaPair } from "@/lib/category-suggester";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -57,7 +57,7 @@ function buildReviewGroups(nuevos: ProductoDiff[], gaps: DiffGaps): ReviewGroup[
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export function ImportarPanel() {
+export function ImportarPanel({ allPairs }: { allPairs: CategoriaPair[] }) {
   const [isPending, startTransition] = useTransition();
   const [nuevos, setNuevos]         = useState<ProductoDiff[]>([]);
   const [modificados, setModificados] = useState<ProductoDiff[]>([]);
@@ -72,7 +72,6 @@ export function ImportarPanel() {
   const [gaps, setGaps]             = useState<DiffGaps>({ newBrands: [], unmappedCategories: [] });
   const [reviewGroups, setReviewGroups] = useState<ReviewGroup[]>([]);
   const [groupApprovals, setGroupApprovals] = useState<Map<string, GroupState>>(new Map());
-  const [allPairs]                  = useState<CategoriaPair[]>(() => getAllCategoriaPairs());
   const [smartResult, setSmartResult] = useState<SmartApplyResult | null>(null);
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
 

@@ -1,6 +1,7 @@
 // ─── Funciones para construir NAV_ITEMS dinámicamente ──────────────────────────
 
 import { createAdminClient } from "@/lib/supabase/admin";
+import type { NavItem, NavColumna, NavLink } from "@/lib/categorias";
 
 export interface Subcategoria {
   id: string;

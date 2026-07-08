@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { GestionCategorias } from "./GestionCategorias";
 import { GestionSubcategorias } from "./GestionSubcategorias";
+import { getAllCategoriaPairs } from "@/lib/category-suggester";
 
 export const dynamic = "force-dynamic";
 
@@ -17,6 +18,8 @@ export default async function CategoriasPage() {
     .select("woo_cat_id, woo_cat_name, categoria, subcategoria")
     .order("categoria")
     .order("subcategoria");
+  
+  const allPairs = await getAllCategoriaPairs();
 
   return (
     <div className="space-y-16">
@@ -27,7 +30,7 @@ export default async function CategoriasPage() {
 
       {/* Sección: Mapeos WooCommerce */}
       <div className="max-w-4xl border-t border-neutral-200 pt-16">
-        <GestionCategorias mappings={mappings ?? []} />
+        <GestionCategorias mappings={mappings ?? []} allPairs={allPairs} />
       </div>
     </div>
   );
