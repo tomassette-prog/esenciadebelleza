@@ -239,6 +239,7 @@ export function GestionSubcategorias() {
               <th className="px-3 py-2 text-left uppercase tracking-widest text-neutral-500 whitespace-nowrap">SEO Title</th>
               <th className="px-3 py-2 text-left uppercase tracking-widest text-neutral-500 whitespace-nowrap">SEO Desc</th>
               <th className="px-3 py-2 text-center uppercase tracking-widest text-neutral-500">Orden</th>
+              <th className="px-3 py-2 text-center uppercase tracking-widest text-neutral-500">Activa</th>
               <th className="px-3 py-2" />
             </tr>
           </thead>
@@ -249,18 +250,21 @@ export function GestionSubcategorias() {
                   <>
                     <td className="px-3 py-2"><code className="text-xs text-neutral-600">{sub.slug}</code></td>
                     <td className="px-3 py-2">
-                      <input type="text" value={editLabel} onChange={e => setEditLabel(e.target.value)} className="w-full border border-neutral-300 px-1 py-0.5 text-xs" />
+                      <input type="text" value={editLabel} onChange={e => setEditLabel(e.target.value)} className="w-full border border-neutral-300 px-2 py-1.5 text-sm bg-white" />
                     </td>
                     <td className="px-3 py-2">
-                      <input type="text" value={editSeoTitle} onChange={e => setEditSeoTitle(e.target.value.slice(0, 60))} maxLength={60} className="w-full border border-neutral-300 px-1 py-0.5 text-xs" />
+                      <input type="text" value={editSeoTitle} onChange={e => setEditSeoTitle(e.target.value.slice(0, 60))} maxLength={60} className="w-full border border-neutral-300 px-2 py-1.5 text-sm bg-white" />
                       <span className="text-xs text-neutral-400">{editSeoTitle.length}/60</span>
                     </td>
                     <td className="px-3 py-2">
-                      <input type="text" value={editSeoDesc} onChange={e => setEditSeoDesc(e.target.value.slice(0, 155))} maxLength={155} className="w-full border border-neutral-300 px-1 py-0.5 text-xs" />
+                      <input type="text" value={editSeoDesc} onChange={e => setEditSeoDesc(e.target.value.slice(0, 155))} maxLength={155} className="w-full border border-neutral-300 px-2 py-1.5 text-sm bg-white" />
                       <span className="text-xs text-neutral-400">{editSeoDesc.length}/155</span>
                     </td>
                     <td className="px-3 py-2 text-center">
-                      <input type="number" value={editOrden} onChange={e => setEditOrden(e.target.value)} className="w-12 border border-neutral-300 px-1 py-0.5 text-xs text-center" />
+                      <input type="number" value={editOrden} onChange={e => setEditOrden(e.target.value)} className="w-16 border border-neutral-300 px-2 py-1.5 text-sm bg-white text-center" />
+                    </td>
+                    <td className="px-3 py-2 text-center flex items-center justify-center">
+                      <input type="checkbox" checked={editActiva} onChange={e => setEditActiva(e.target.checked)} className="w-5 h-5 cursor-pointer" />
                     </td>
                     <td className="px-3 py-2 text-right space-x-2">
                       <button onClick={handleSaveEdit} disabled={isPending} className="text-xs text-green-600 hover:text-green-800 disabled:opacity-40">Guardar</button>
@@ -274,6 +278,11 @@ export function GestionSubcategorias() {
                     <td className="px-3 py-2 text-neutral-600">{sub.seo_title || "—"}</td>
                     <td className="px-3 py-2 text-neutral-600">{sub.seo_description ? `${sub.seo_description.slice(0, 40)}...` : "—"}</td>
                     <td className="px-3 py-2 text-center text-neutral-600">{sub.orden}</td>
+                    <td className="px-3 py-2 text-center">
+                      <span className={`inline-block px-2 py-1 text-xs font-medium rounded ${sub.activa ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>
+                        {sub.activa ? "Sí" : "No"}
+                      </span>
+                    </td>
                     <td className="px-3 py-2 text-right space-x-2">
                       <button onClick={() => handleEdit(sub)} disabled={isPending} className="text-xs text-blue-600 hover:text-blue-800 disabled:opacity-40">Editar</button>
                       <button onClick={() => handleDelete(sub.id)} disabled={isPending} className="text-xs text-red-400 hover:text-red-600 disabled:opacity-40">Eliminar</button>
