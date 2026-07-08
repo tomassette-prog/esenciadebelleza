@@ -146,12 +146,11 @@ export async function obtenerSubcategoriasPorCategoria(
 ): Promise<{ data?: string[]; error?: string }> {
   const supa = adminClient();
 
-  // 1. Obtener dinámicas (activas = true, o no especificado que es true por DEFAULT)
+  // 1. Obtener dinámicas (sin filtro de activa, confiando en DEFAULT true)
   const { data: dinamicas, error: errD } = await supa
     .from("subcategorias")
-    .select("slug")
+    .select("slug, activa")
     .eq("categoria", categoria)
-    .not("activa", "eq", false)
     .order("orden", { ascending: true });
 
   if (errD && errD.code !== "PGRST116") {
@@ -167,10 +166,13 @@ export async function obtenerSubcategoriasPorCategoria(
     .eq("activo", true)
     .not("subcategoria", "is", null);
 
-  // 3. Combinar: dinámicas primero, luego productos
+  // 3. Combinar: dinámicas primero (excluyendo explícitamente inactivas), luego productos
   const set = new Set<string>();
   for (const d of dinamicas ?? []) {
-    if (d.slug) set.add(d.slug);
+    // Include if slug exists AND (activa is true OR activa is null = default true)
+    if (d.slug && d.activa !== false) {
+      set.add(d.slug);
+    }
   }
   for (const p of deProductos ?? []) {
     if (p.subcategoria) set.add(p.subcategoria);
