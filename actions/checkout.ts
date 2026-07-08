@@ -443,3 +443,109 @@ export async function iniciarPagoStripe(
 
   return { url: session.url, error: null };
 }
+
+// ── Confirmar pago de Stripe verificando con API ────────────────────────────
+export async function confirmarPedidoStripe(
+  sessionId: string
+): Promise<{ ok: boolean; wc_order_id?: number; email?: string; pedidoId?: string }> {
+  const supabase = createAdminClient();
+
+  // Obtener el pedido que corresponde a esta sesión
+  const { data: pedido } = await supabase
+    .from("pedidos")
+    .select("id, email_cliente, direccion_envio, gastos_envio, total, tipo_precio, estado")
+    .eq("stripe_payment_id", sessionId)
+    .single();
+
+  if (!pedido) return { ok: false };
+  if (pedido.estado === "pagado") return { ok: true, pedidoId: pedido.id, email: pedido.email_cliente }; // ya procesado (idempotente)
+
+  // Verificar la sesión con Stripe API
+  const session = await stripe.checkout.sessions.retrieve(sessionId);
+  
+  if (session.payment_status !== "paid") {
+    return { ok: false };
+  }
+
+  // Actualizar estado a pagado
+  await supabase
+    .from("pedidos")
+    .update({ estado: "pagado" })
+    .eq("stripe_payment_id", sessionId);
+
+  // Obtener líneas para email y WooCommerce
+  const { data: lineas } = await supabase
+    .from("pedidos_lineas")
+    .select("sku, cantidad, precio_unitario, nombre_producto, nombre_variacion")
+    .eq("pedido_id", pedido.id);
+
+  const dir = pedido.direccion_envio as Record<string, string>;
+
+  // Preparar líneas para WooCommerce
+  const lineasNormales = (lineas ?? []).filter((l) => !l.sku.startsWith("PACK-"));
+  const lineasPack     = (lineas ?? []).filter((l) => l.sku.startsWith("PACK-"));
+
+  type WooLinea = { sku: string; cantidad: number };
+  const lineasWooExtra: WooLinea[] = [];
+  if (lineasPack.length) {
+    for (const lp of lineasPack) {
+      const packIdPrefix = lp.sku.replace("PACK-", "");
+      const { data: packItems } = await supabase
+        .from("packs_regalo")
+        .select(`id, packs_regalo_items(variacion_id, cantidad, variacion:productos_variaciones(sku))`)
+        .ilike("id", `${packIdPrefix}%`)
+        .single();
+      if (packItems) {
+        const rows = ((packItems as unknown as { packs_regalo_items: { cantidad: number; variacion: unknown }[] }).packs_regalo_items) ?? [];
+        for (const item of rows) {
+          const varArr = item.variacion as { sku: string }[] | null;
+          const sku = Array.isArray(varArr) ? varArr[0]?.sku : (varArr as unknown as { sku: string } | null)?.sku;
+          if (sku) {
+            lineasWooExtra.push({ sku, cantidad: item.cantidad * lp.cantidad });
+          }
+        }
+      }
+    }
+  }
+
+  const todasLineasWoo: WooLinea[] = [
+    ...lineasNormales.map((l) => ({ sku: l.sku, cantidad: l.cantidad })),
+    ...lineasWooExtra,
+  ];
+
+  // Enviar notificación email al admin
+  void enviarNotificacionPedido({
+    pedidoId:   pedido.id,
+    email:      pedido.email_cliente,
+    nombre:     dir.nombre    ?? "",
+    apellidos:  dir.apellidos ?? "",
+    total:      pedido.total,
+    gastoEnvio: pedido.gastos_envio,
+    metodoPago: "Stripe",
+    tipoPrecio: pedido.tipo_precio,
+    provincia:  dir.provincia ?? "",
+    ciudad:     dir.ciudad    ?? "",
+    lineas: (lineas ?? []).map((l) => ({
+      nombre:           l.nombre_producto,
+      nombre_variacion: l.nombre_variacion,
+      cantidad:         l.cantidad,
+      precio:           l.precio_unitario,
+    })),
+  });
+
+  // Crear pedido en WooCommerce
+  const { wc_order_id } = await crearPedidoWooCommerce({
+    email:         pedido.email_cliente,
+    nombre:        dir.nombre        ?? "",
+    apellidos:     dir.apellidos     ?? "",
+    telefono:      dir.telefono      ?? "",
+    direccion:     dir.direccion     ?? "",
+    ciudad:        dir.ciudad        ?? "",
+    provincia:     dir.provincia     ?? "",
+    codigo_postal: dir.codigo_postal ?? "",
+    lineas:        todasLineasWoo as unknown as LineaCarrito[],
+    gasto_envio:   pedido.gastos_envio,
+  });
+
+  return { ok: true, wc_order_id: wc_order_id ?? undefined, email: pedido.email_cliente, pedidoId: pedido.id };
+}

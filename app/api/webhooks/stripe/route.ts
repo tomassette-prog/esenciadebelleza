@@ -22,72 +22,131 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid signature" }, { status: 400 });
   }
 
-  if (event.type === "payment_intent.succeeded") {
-    const pi = event.data.object as Stripe.PaymentIntent;
-    console.log(`[Stripe] Pago confirmado: ${pi.id} — ${(pi.amount / 100).toFixed(2)} EUR`);
+  // ── Sesión de checkout completada ───────────────────────────────────────
+  if (event.type === "checkout.session.completed") {
+    const session = event.data.object as Stripe.Checkout.Session;
+    console.log(`[Stripe] Sesión completada: ${session.id} — ${session.amount_total ? (session.amount_total / 100).toFixed(2) : 0} EUR`);
 
-    // Los datos del pedido se guardan en los metadatos del Payment Intent
-    // que el cliente envía al confirmar (ver CheckoutForm)
-    const meta = pi.metadata ?? {};
+    if (session.payment_status !== "paid") {
+      console.log(`[Stripe] Sesión ${session.id} no está pagada (status: ${session.payment_status})`);
+      return NextResponse.json({ received: true });
+    }
 
-    if (meta.checkout_data) {
-      try {
-        const datos = JSON.parse(meta.checkout_data);
-        const { wc_order_id, error } = await crearPedidoWooCommerce({
-          ...datos,
-          stripe_pi_id: pi.id,
-          gasto_envio: parseFloat(meta.gasto_envio ?? "0"),
-        });
+    const supabase = createAdminClient();
+    
+    // Obtener el pedido
+    const { data: pedido } = await supabase
+      .from("pedidos")
+      .select("id, email_cliente, direccion_envio, gastos_envio, total, tipo_precio, estado")
+      .eq("stripe_payment_id", session.id)
+      .single();
 
-        if (error) {
-          console.error("[Stripe Webhook] No se pudo crear pedido en WC:", error);
-        } else {
-          console.log(`[Stripe Webhook] Pedido creado en WC: #${wc_order_id}`);
+    if (!pedido) {
+      console.warn(`[Stripe Webhook] Pedido no encontrado para sesión ${session.id}`);
+      return NextResponse.json({ received: true });
+    }
+
+    if (pedido.estado === "pagado") {
+      console.log(`[Stripe Webhook] Pedido ${pedido.id} ya está marcado como pagado`);
+      return NextResponse.json({ received: true });
+    }
+
+    // Actualizar estado a pagado
+    await supabase
+      .from("pedidos")
+      .update({ estado: "pagado" })
+      .eq("id", pedido.id);
+
+    console.log(`[Stripe Webhook] Pedido ${pedido.id} marcado como pagado`);
+
+    // Obtener líneas
+    const { data: lineas } = await supabase
+      .from("pedidos_lineas")
+      .select("sku, cantidad, precio_unitario, nombre_producto, nombre_variacion")
+      .eq("pedido_id", pedido.id);
+
+    const dir = pedido.direccion_envio as Record<string, string>;
+
+    // Separar líneas normales de packs
+    const lineasNormales = (lineas ?? []).filter((l) => !l.sku.startsWith("PACK-"));
+    const lineasPack     = (lineas ?? []).filter((l) => l.sku.startsWith("PACK-"));
+
+    type WooLinea = { sku: string; cantidad: number };
+    const lineasWooExtra: WooLinea[] = [];
+    if (lineasPack.length) {
+      for (const lp of lineasPack) {
+        const packIdPrefix = lp.sku.replace("PACK-", "");
+        const { data: packItems } = await supabase
+          .from("packs_regalo")
+          .select(`id, packs_regalo_items(variacion_id, cantidad, variacion:productos_variaciones(sku))`)
+          .ilike("id", `${packIdPrefix}%`)
+          .single();
+        if (packItems) {
+          const rows = ((packItems as unknown as { packs_regalo_items: { cantidad: number; variacion: unknown }[] }).packs_regalo_items) ?? [];
+          for (const item of rows) {
+            const varArr = item.variacion as { sku: string }[] | null;
+            const sku = Array.isArray(varArr) ? varArr[0]?.sku : (varArr as unknown as { sku: string } | null)?.sku;
+            if (sku) {
+              lineasWooExtra.push({ sku, cantidad: item.cantidad * lp.cantidad });
+            }
+          }
         }
-
-        // Enviar notificación email al admin
-        const supabase = createAdminClient();
-        const { data: pedido } = await supabase
-          .from("pedidos")
-          .select("id, email_cliente, total, gastos_envio, tipo_precio, direccion_envio")
-          .eq("stripe_payment_id", pi.id)
-          .maybeSingle();
-
-        if (pedido) {
-          const { data: lineas } = await supabase
-            .from("pedidos_lineas")
-            .select("nombre_producto, nombre_variacion, cantidad, precio_unitario")
-            .eq("pedido_id", pedido.id);
-
-          const dir = (pedido.direccion_envio ?? {}) as Record<string, string>;
-          void enviarNotificacionPedido({
-            pedidoId:   pedido.id,
-            email:      pedido.email_cliente ?? datos.email,
-            nombre:     dir.nombre    ?? datos.nombre    ?? "",
-            apellidos:  dir.apellidos ?? datos.apellidos ?? "",
-            total:      pedido.total  ?? parseFloat(meta.total ?? "0"),
-            gastoEnvio: pedido.gastos_envio ?? parseFloat(meta.gasto_envio ?? "0"),
-            metodoPago: "Stripe",
-            tipoPrecio: pedido.tipo_precio ?? "b2c",
-            provincia:  dir.provincia ?? datos.provincia ?? "",
-            ciudad:     dir.ciudad    ?? datos.ciudad    ?? "",
-            lineas: (lineas ?? []).map((l) => ({
-              nombre:           l.nombre_producto,
-              nombre_variacion: l.nombre_variacion,
-              cantidad:         l.cantidad,
-              precio:           l.precio_unitario,
-            })),
-          });
-        }
-      } catch (err) {
-        console.error("[Stripe Webhook] Error parseando checkout_data:", err);
       }
+    }
+
+    const todasLineasWoo: WooLinea[] = [
+      ...lineasNormales.map((l) => ({ sku: l.sku, cantidad: l.cantidad })),
+      ...lineasWooExtra,
+    ];
+
+    // Enviar notificación email
+    void enviarNotificacionPedido({
+      pedidoId:   pedido.id,
+      email:      pedido.email_cliente,
+      nombre:     dir.nombre    ?? "",
+      apellidos:  dir.apellidos ?? "",
+      total:      pedido.total,
+      gastoEnvio: pedido.gastos_envio,
+      metodoPago: "Stripe",
+      tipoPrecio: pedido.tipo_precio,
+      provincia:  dir.provincia ?? "",
+      ciudad:     dir.ciudad    ?? "",
+      lineas: (lineas ?? []).map((l) => ({
+        nombre:           l.nombre_producto,
+        nombre_variacion: l.nombre_variacion,
+        cantidad:         l.cantidad,
+        precio:           l.precio_unitario,
+      })),
+    });
+
+    // Crear pedido en WooCommerce
+    try {
+      const { wc_order_id, error } = await crearPedidoWooCommerce({
+        email:         pedido.email_cliente,
+        nombre:        dir.nombre        ?? "",
+        apellidos:     dir.apellidos     ?? "",
+        telefono:      dir.telefono      ?? "",
+        direccion:     dir.direccion     ?? "",
+        ciudad:        dir.ciudad        ?? "",
+        provincia:     dir.provincia     ?? "",
+        codigo_postal: dir.codigo_postal ?? "",
+        lineas:        todasLineasWoo as unknown as { sku: string; cantidad: number }[],
+        gasto_envio:   pedido.gastos_envio,
+      });
+
+      if (error) {
+        console.error("[Stripe Webhook] Error creando pedido en WC:", error);
+      } else {
+        console.log(`[Stripe Webhook] Pedido WooCommerce #${wc_order_id} creado para ${pedido.id}`);
+      }
+    } catch (err) {
+      console.error("[Stripe Webhook] Excepción creando pedido WC:", err);
     }
   }
 
-  if (event.type === "payment_intent.payment_failed") {
-    const pi = event.data.object as Stripe.PaymentIntent;
-    console.warn(`[Stripe] Pago fallido: ${pi.id}`);
+  if (event.type === "checkout.session.expired") {
+    const session = event.data.object as Stripe.Checkout.Session;
+    console.log(`[Stripe] Sesión expirada: ${session.id}`);
   }
 
   return NextResponse.json({ received: true });
