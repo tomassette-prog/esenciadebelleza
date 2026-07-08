@@ -30,8 +30,9 @@ const FALLBACK_SUBCATEGORIAS: Omit<Subcategoria, "id" | "seo_title" | "seo_descr
   { categoria: "peluqueria", slug: "lacas", label: "Lacas", columna: "Styling", orden: 10, activa: true },
   { categoria: "peluqueria", slug: "espumas", label: "Espumas", columna: "Styling", orden: 11, activa: true },
   { categoria: "peluqueria", slug: "gominas-y-ceras", label: "Gominas y Ceras", columna: "Styling", orden: 12, activa: true },
-  { categoria: "peluqueria", slug: "rizos", label: "Rizos y Anticrespo", columna: "Styling", orden: 13, activa: true },
-  { categoria: "peluqueria", slug: "permanentes", label: "Permanentes", columna: "Styling", orden: 14, activa: true },
+  { categoria: "peluqueria", slug: "sprays", label: "Sprays", columna: "Styling", orden: 13, activa: true },
+  { categoria: "peluqueria", slug: "rizos", label: "Rizos y Anticrespo", columna: "Styling", orden: 14, activa: true },
+  { categoria: "peluqueria", slug: "permanentes", label: "Permanentes", columna: "Styling", orden: 15, activa: true },
   // PELUQUERÍA - Equipos y Herramientas
   { categoria: "peluqueria", slug: "secadores-y-planchas", label: "Secadores y Planchas", columna: "Equipos y Herramientas", orden: 15, activa: true },
   { categoria: "peluqueria", slug: "maquinas-corte", label: "Máquinas de corte", columna: "Equipos y Herramientas", orden: 16, activa: true },
