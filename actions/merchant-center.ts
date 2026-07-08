@@ -111,39 +111,73 @@ export async function enriquecerProducto(
       };
     }
 
-    // Actualizar en Supabase
-    // Primero intentar buscar por woo_id (que es el ID de Google Merchant Center)
-    const supabase = createAdminClient();
-    
-    let query = supabase
+    // Crear cliente Supabase aquí (dentro del try)
+    let supabase;
+    try {
+      supabase = createAdminClient();
+    } catch (authError) {
+      return {
+        ok: false,
+        mensaje: "Error de autenticación",
+        error: `No se pudo inicializar cliente Supabase: ${String(authError)}`,
+      };
+    }
+
+    // Intentar actualizar por woo_id primero (ID de Google Merchant Center)
+    let { error, data } = await supabase
       .from("productos_padre")
       .update({
         descripcion: input.descripcionActual
           ? `${input.descripcionActual}\n\n${descripcionGenerada}`
           : descripcionGenerada,
         updated_at: new Date().toISOString(),
-      });
+      })
+      .eq("woo_id", input.productoId);
 
-    // Intentar buscar por woo_id primero (ID de Google Merchant Center)
-    let result = await query.eq("woo_id", input.productoId);
-    
+    if (error && error.code !== "PGRST116") {
+      // Si hay error pero no es "relación no existe", devolver
+      console.warn(`Error updating by woo_id: ${error.message}`);
+    }
+
     // Si no encuentra por woo_id, intentar por id (UUID)
-    if (!result.error && result.data?.length === 0) {
-      result = await query.eq("id", input.productoId);
-    }
-    
-    // Si no encuentra por id, intentar por nombre
-    if (!result.error && result.data?.length === 0) {
-      result = await query.ilike("nombre", input.nombre);
+    if (!data || data.length === 0) {
+      ({ error, data } = await supabase
+        .from("productos_padre")
+        .update({
+          descripcion: input.descripcionActual
+            ? `${input.descripcionActual}\n\n${descripcionGenerada}`
+            : descripcionGenerada,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", input.productoId));
+
+      if (error && error.code !== "PGRST116") {
+        console.warn(`Error updating by id: ${error.message}`);
+      }
     }
 
-    const { error } = result;
+    // Si no encuentra por id, intentar por nombre
+    if (!data || data.length === 0) {
+      ({ error, data } = await supabase
+        .from("productos_padre")
+        .update({
+          descripcion: input.descripcionActual
+            ? `${input.descripcionActual}\n\n${descripcionGenerada}`
+            : descripcionGenerada,
+          updated_at: new Date().toISOString(),
+        })
+        .ilike("nombre", input.nombre));
+
+      if (error && error.code !== "PGRST116") {
+        console.warn(`Error updating by nombre: ${error.message}`);
+      }
+    }
 
     if (error) {
       return {
         ok: false,
-        mensaje: "Error al actualizar en BD",
-        error: error.message,
+        mensaje: "No se encontró el producto",
+        error: `Producto no encontrado: ${input.nombre}`,
       };
     }
 
