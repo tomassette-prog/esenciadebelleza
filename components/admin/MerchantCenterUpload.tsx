@@ -27,17 +27,25 @@ export default function MerchantCenterUpload() {
       
       console.log(`📄 Primeras 500 caracteres del archivo:`, text.substring(0, 500));
 
-      // Detectar delimitador (coma, punto y coma, tabulación)
+      // Detectar delimitador (tabulación > punto y coma > coma)
       const line1 = text.split('\n')[0];
       let delimiter = ',';
       
-      if (line1.includes('\t')) {
+      // Contar delimitadores potenciales en la primera línea
+      const tabCount = (line1.match(/\t/g) || []).length;
+      const semicolonCount = (line1.match(/;/g) || []).length;
+      const commaCount = (line1.match(/,/g) || []).length;
+      
+      // Priorizar: tabulación > punto y coma > coma
+      if (tabCount > 0) {
         delimiter = '\t';
-      } else if (line1.includes(';') && !line1.includes(',')) {
+      } else if (semicolonCount > 0 && semicolonCount >= commaCount) {
         delimiter = ';';
+      } else {
+        delimiter = ',';
       }
       
-      console.log(`🔍 Delimitador detectado: '${delimiter === '\t' ? 'TAB' : delimiter}'`);
+      console.log(`🔍 Delimitador detectado: '${delimiter === '\t' ? 'TAB' : delimiter}' (TAB: ${tabCount}, ;: ${semicolonCount}, ,: ${commaCount})`);
 
       // Parsear CSV con PapaParse
       const parseResult = Papa.parse(text, {
@@ -63,11 +71,60 @@ export default function MerchantCenterUpload() {
       const firstRow = records[0];
       const headers = Object.keys(firstRow);
       
-      // Si los headers parecen datos (muy largos o con descripción), probablemente es mal formato
-      if (headers.some(h => h.length > 100)) {
-        setError(`❌ El CSV parece tener un formato incorrecto.
+      // Si tenemos una sola columna Y es muy larga, probablemente es mal delimitado
+      if (headers.length === 1 && headers[0].length > 50) {
+        // Intentar con delimitador alternativo
+        const allDelimiters = [';', '\t', ','];
+        let foundBetter = false;
+        
+        for (const altDelim of allDelimiters) {
+          if (altDelim === delimiter) continue;
+          const altResult = Papa.parse(text, {
+            header: true,
+            skipEmptyLines: true,
+            dynamicTyping: false,
+            delimiter: altDelim,
+          });
+          const altRecords = altResult.data as any[];
+          const altHeaders = Object.keys(altRecords[0] || {});
+          
+          if (altHeaders.length > 1 && altHeaders.some(h => h.length < 50)) {
+            // Encontramos mejor delimitador
+            delimiter = altDelim;
+            records.length = 0;
+            records.push(...altRecords);
+            foundBetter = true;
+            console.log(`✅ Re-parsing con delimitador '${altDelim === '\t' ? 'TAB' : altDelim}'`);
+            break;
+          }
+        }
+        
+        if (!foundBetter) {
+          setError(`❌ El CSV parece tener un formato incorrecto.
         
 Headers detectados: ${headers.join(', ')}
+
+Posibles problemas:
+1. El archivo no es un CSV válido - parece tener una sola columna muy larga
+2. El delimitador es diferente (probamos: coma, punto y coma, tabulación)
+3. El archivo es XLS/XLSX exportado incorrectamente como texto
+
+💡 Solución: 
+- Asegúrate de descargar desde Google Merchant Center como "CSV"
+- Si usas Excel, guarda como "CSV (delimitado por comas)" o "CSV (delimitado por tabulaciones)"
+- No uses archivos XLS o XLSX directamente - abre en Excel y guarda como CSV
+- Verifica que el archivo contenga las columnas correctas`);
+          setCargando(false);
+          return;
+        }
+      }
+      
+      // Si los headers parecen datos (muy largos o con descripción), probablemente es mal formato
+      const reprocessedHeaders = Object.keys(records[0] || {});
+      if (reprocessedHeaders.some(h => h.length > 100)) {
+        setError(`❌ El CSV parece tener un formato incorrecto.
+        
+Headers detectados: ${reprocessedHeaders.join(', ')}
 
 Posibles problemas:
 1. El archivo no es un CSV válido
