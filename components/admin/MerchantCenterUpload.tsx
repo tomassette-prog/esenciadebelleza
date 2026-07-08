@@ -24,12 +24,27 @@ export default function MerchantCenterUpload() {
     try {
       // Leer archivo CSV
       const text = await file.text();
+      
+      console.log(`📄 Primeras 500 caracteres del archivo:`, text.substring(0, 500));
+
+      // Detectar delimitador (coma, punto y coma, tabulación)
+      const line1 = text.split('\n')[0];
+      let delimiter = ',';
+      
+      if (line1.includes('\t')) {
+        delimiter = '\t';
+      } else if (line1.includes(';') && !line1.includes(',')) {
+        delimiter = ';';
+      }
+      
+      console.log(`🔍 Delimitador detectado: '${delimiter === '\t' ? 'TAB' : delimiter}'`);
 
       // Parsear CSV con PapaParse
       const parseResult = Papa.parse(text, {
         header: true,
         skipEmptyLines: true,
         dynamicTyping: false,
+        delimiter: delimiter,
       });
 
       const records: any[] = parseResult.data;
@@ -48,6 +63,25 @@ export default function MerchantCenterUpload() {
       const firstRow = records[0];
       const headers = Object.keys(firstRow);
       
+      // Si los headers parecen datos (muy largos o con descripción), probablemente es mal formato
+      if (headers.some(h => h.length > 100)) {
+        setError(`❌ El CSV parece tener un formato incorrecto.
+        
+Headers detectados: ${headers.join(', ')}
+
+Posibles problemas:
+1. El archivo no es un CSV válido
+2. Usa un delimitador no estándar (verificamos: coma, punto y coma, tabulación)
+3. El archivo tiene formato de Excel sin exportar correctamente
+
+💡 Solución: 
+- Asegúrate de descargar desde Google Merchant Center como "CSV"
+- Si usas Excel, guarda como "CSV (delimitado por comas)" o "CSV (delimitado por tabulaciones)"
+- No uses archivos XLS o XLSX`);
+        setCargando(false);
+        return;
+      }
+
       // Normalizar headers para búsqueda
       const normalizar = (h: string) => h.toLowerCase().trim().replace(/\s+/g, " ");
       
@@ -58,10 +92,10 @@ export default function MerchantCenterUpload() {
         );
       };
 
-      const colProductoId = findColumn(["id de producto", "product id", "id", "product"]);
+      const colProductoId = findColumn(["id de producto", "product id", "id", "sku"]);
       const colProducto = findColumn(["producto", "title", "product name", "nombre"]);
       const colDescripcion = findColumn(["descripción", "description", "desc"]);
-      const colQueAgregar = findColumn(["añadir", "add to description", "agregar", "additional"]);
+      const colQueAgregar = findColumn(["añadir", "add to description", "agregar", "additional", "corrige"]);
 
       console.log(`🔍 Columnas detectadas:`, {
         productoId: colProductoId,
@@ -71,12 +105,28 @@ export default function MerchantCenterUpload() {
       });
 
       if (!colProductoId || !colProducto || !colQueAgregar) {
-        setError(
-          `Columnas requeridas no encontradas en el CSV.
-          
-Detectadas: ${headers.join(", ")}
+        const missingCols = [];
+        if (!colProductoId) missingCols.push("ID de producto / product id");
+        if (!colProducto) missingCols.push("Producto / title");
+        if (!colQueAgregar) missingCols.push("Añadir a la descripción / add to description");
 
-Se necesitan columns que contengan: "ID de producto", "Producto" y "Añadir/Add to description"`
+        setError(
+          `❌ Columnas requeridas no encontradas en el CSV.
+          
+Detectadas: ${headers.join(" | ")}
+
+Faltantes: ${missingCols.join(", ")}
+
+El CSV debe tener al menos estas columnas:
+- ID o código del producto
+- Nombre del producto
+- Descripción o sugerencias qué agregar
+
+💡 Si descargaste desde Google Merchant Center:
+1. Ve a Google Merchant Center
+2. Haz clic en "Productos"
+3. Usa el filtro para "Errores de feed"
+4. Descarga el CSV usando el botón "Exportar"`
         );
         setCargando(false);
         return;
@@ -107,9 +157,11 @@ Se necesitan columns que contengan: "ID de producto", "Producto" y "Añadir/Add 
 
       if (productosIncompletos.length === 0) {
         setError(
-          `No se encontraron productos con datos en la columna "${colQueAgregar}".
+          `❌ No se encontraron productos con datos en la columna "${colQueAgregar}".
           
-Verifica que el CSV tenga productos con información que agregar a la descripción.`
+Verifica que el CSV tenga productos con información que agregar a la descripción.
+
+📊 Detectamos ${records.length} filas, pero ninguna tiene datos en "${colQueAgregar}"`
         );
         setCargando(false);
         return;
@@ -131,7 +183,7 @@ Verifica que el CSV tenga productos con información que agregar a la descripci�
         fileInputRef.current.value = "";
       }
     } catch (err) {
-      setError(`Error al procesar archivo: ${String(err)}`);
+      setError(`❌ Error al procesar archivo: ${String(err)}`);
     } finally {
       setCargando(false);
     }
