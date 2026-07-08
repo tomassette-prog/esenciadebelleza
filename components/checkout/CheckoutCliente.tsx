@@ -6,8 +6,10 @@ import Link from "next/link";
 import { useCarrito } from "@/context/CarritoContext";
 import { iniciarPagoCeca } from "@/actions/checkout";
 import { calcularGastoEnvio, getZonaEnvio } from "@/lib/envio";
+import PaypalSmartButtons from "./PaypalSmartButtons";
 
 type Paso = "direccion" | "pago";
+type MetodoPago = "stripe" | "paypal" | "ceca" | null;
 
 interface DatosEnvio {
   email:         string;
@@ -39,6 +41,7 @@ export function CheckoutCliente({
 }) {
   const { lineas, packs, totalPrecio } = useCarrito();
   const [paso, setPaso]               = useState<Paso>("direccion");
+  const [metodoPago, setMetodoPago]   = useState<MetodoPago>(null);
   const [cecaCampos, setCecaCampos]   = useState<Record<string, string> | null>(null);
   const [cecaUrl, setCecaUrl]         = useState<string>("");
   const [gastoEnvioConf, setGastoEnvioConf] = useState(0);
@@ -336,35 +339,128 @@ export function CheckoutCliente({
               Elige tu método de pago
             </h2>
 
-            {/* ── Stripe — pago principal ── */}
-            <button
-              onClick={pagarConStripe}
-              disabled={cargandoStripe}
-              className="w-full py-4 bg-neutral-900 text-white text-xs tracking-widest uppercase hover:bg-neutral-700 disabled:opacity-50 transition-colors flex items-center justify-center gap-3 mb-3"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
-                  d="M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h3m-3.75 3h15a2.25 2.25 0 002.25-2.25V6.75A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25v10.5A2.25 2.25 0 004.5 19.5z" />
-              </svg>
-              {cargandoStripe
-                ? "Redirigiendo…"
-                : `Pagar ${(totalPrecio + gastoEnvioConf).toLocaleString("es-ES", { style: "currency", currency: "EUR" })} con tarjeta`}
-            </button>
+            {/* Botones de selección de método */}
+            <div className="grid grid-cols-1 gap-2 mb-6">
+              {/* Stripe */}
+              <button
+                onClick={() => setMetodoPago("stripe")}
+                className={`p-4 border-2 rounded transition-colors text-left ${
+                  metodoPago === "stripe"
+                    ? "border-neutral-900 bg-neutral-50"
+                    : "border-neutral-200 hover:border-neutral-400"
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+                      d="M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h3m-3.75 3h15a2.25 2.25 0 002.25-2.25V6.75A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25v10.5A2.25 2.25 0 004.5 19.5z" />
+                  </svg>
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-neutral-900">Tarjeta de crédito/débito</p>
+                    <p className="text-xs text-neutral-500">Visa, Mastercard, AmEx</p>
+                  </div>
+                </div>
+              </button>
 
-            <p className="text-xs text-neutral-400 text-center mb-5 flex items-center justify-center gap-2">
+              {/* PayPal */}
+              <button
+                onClick={() => setMetodoPago("paypal")}
+                className={`p-4 border-2 rounded transition-colors text-left ${
+                  metodoPago === "paypal"
+                    ? "border-neutral-900 bg-neutral-50"
+                    : "border-neutral-200 hover:border-neutral-400"
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M9.5 7h-4l-1 6h4l1-6zm3 0l-1 6h3l1-6h-3z" opacity="0.5" />
+                    <path d="M15.5 7l-2 6h3l2-6h-3z" />
+                  </svg>
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-neutral-900">PayPal</p>
+                    <p className="text-xs text-neutral-500">Rápido y seguro</p>
+                  </div>
+                </div>
+              </button>
+
+              {/* Cecabank TPV */}
+              <button
+                onClick={() => setMetodoPago("ceca")}
+                className={`p-4 border-2 rounded transition-colors text-left ${
+                  metodoPago === "ceca"
+                    ? "border-neutral-900 bg-neutral-50"
+                    : "border-neutral-200 hover:border-neutral-400"
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+                      d="M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h3m-3.75 3h15a2.25 2.25 0 002.25-2.25V6.75A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25v10.5A2.25 2.25 0 004.5 19.5z" />
+                  </svg>
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-neutral-900">Cecabank TPV</p>
+                    <p className="text-xs text-neutral-500">Terminal de punto de venta</p>
+                  </div>
+                </div>
+              </button>
+            </div>
+
+            {/* Renderizar según método seleccionado */}
+            {!metodoPago && (
+              <p className="text-sm text-neutral-500 text-center py-8">Selecciona un método de pago</p>
+            )}
+
+            {/* Stripe */}
+            {metodoPago === "stripe" && (
+              <button
+                onClick={pagarConStripe}
+                disabled={cargandoStripe}
+                className="w-full py-4 bg-neutral-900 text-white text-xs tracking-widest uppercase hover:bg-neutral-700 disabled:opacity-50 transition-colors"
+              >
+                {cargandoStripe ? "Redirigiendo…" : `Continuar con Stripe → ${(totalPrecio + gastoEnvioConf).toLocaleString("es-ES", { style: "currency", currency: "EUR" })}`}
+              </button>
+            )}
+
+            {/* PayPal */}
+            {metodoPago === "paypal" && (
+              <div>
+                <PaypalSmartButtons
+                  lineas={lineas}
+                  datosEnvio={datos}
+                  disabled={false}
+                />
+              </div>
+            )}
+
+            {/* Cecabank */}
+            {metodoPago === "ceca" && (
+              <>
+                <button
+                  onClick={pagarConTarjeta}
+                  className="w-full py-4 bg-neutral-900 text-white text-xs tracking-widest uppercase hover:bg-neutral-700 transition-colors"
+                >
+                  {`Continuar con Cecabank → ${(totalPrecio + gastoEnvioConf).toLocaleString("es-ES", { style: "currency", currency: "EUR" })}`}
+                </button>
+                <p className="text-xs text-neutral-400 text-center mt-3">
+                  Serás redirigido al gateway de pago seguro de Cecabank
+                </p>
+                
+                {/* Formulario oculto para Cecabank */}
+                <form ref={formCecaRef} action={cecaUrl} method="POST" className="hidden">
+                  {cecaCampos && Object.entries(cecaCampos).map(([name, value]) => (
+                    <input key={name} type="hidden" name={name} value={value} />
+                  ))}
+                </form>
+              </>
+            )}
+
+            <p className="text-xs text-neutral-400 text-center mt-5 flex items-center justify-center gap-2">
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
                   d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
               </svg>
-              Pago seguro Visa / Mastercard · Cifrado SSL
+              Pago seguro · Cifrado SSL
             </p>
-
-            {/* Formulario oculto que se envía a Cecabank (oculto, pendiente de resolver) */}
-            <form ref={formCecaRef} action={cecaUrl} method="POST" className="hidden">
-              {Object.entries(cecaCampos).map(([name, value]) => (
-                <input key={name} type="hidden" name={name} value={value} />
-              ))}
-            </form>
           </div>
         )}
       </div>
