@@ -30,6 +30,7 @@ export async function procesarLoteGoogleMerchant(
         headers: {
           "Content-Type": "application/json",
         },
+        credentials: "include", // ✅ Incluir cookies en la request
         body: JSON.stringify({ productos }),
       }
     );
