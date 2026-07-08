@@ -73,58 +73,78 @@ export default function MerchantCenterUpload() {
       
       // Si tenemos una sola columna Y es muy larga, probablemente es mal delimitado
       if (headers.length === 1 && headers[0].length > 50) {
-        // Intentar con delimitador alternativo
-        const allDelimiters = [';', '\t', ','];
-        let foundBetter = false;
+        console.log(`⚠️ Una sola columna con ${headers[0].length} caracteres. Probando delimitadores alternativos...`);
         
-        for (const altDelim of allDelimiters) {
-          if (altDelim === delimiter) continue;
-          const altResult = Papa.parse(text, {
+        // Intentar con todos los delimitadores y elegir el que produce más columnas
+        const allDelimiters = [';', '\t', ','];
+        let bestResult = { delimiter, columnCount: 1, records: [...records], headers };
+        
+        for (const testDelim of allDelimiters) {
+          const testResult = Papa.parse(text, {
             header: true,
             skipEmptyLines: true,
             dynamicTyping: false,
-            delimiter: altDelim,
+            delimiter: testDelim,
           });
-          const altRecords = altResult.data as any[];
-          const altHeaders = Object.keys(altRecords[0] || {});
+          const testRecords = testResult.data as any[];
+          if (testRecords.length === 0) continue;
           
-          if (altHeaders.length > 1 && altHeaders.some(h => h.length < 50)) {
-            // Encontramos mejor delimitador
-            delimiter = altDelim;
-            records.length = 0;
-            records.push(...altRecords);
-            foundBetter = true;
-            console.log(`✅ Re-parsing con delimitador '${altDelim === '\t' ? 'TAB' : altDelim}'`);
-            break;
+          const testHeaders = Object.keys(testRecords[0] || {});
+          const colCount = testHeaders.length;
+          
+          console.log(`  Delimitador '${testDelim === '\t' ? 'TAB' : testDelim}': ${colCount} columnas`);
+          
+          // Si encontramos más columnas, es mejor
+          if (colCount > bestResult.columnCount) {
+            bestResult = { delimiter: testDelim, columnCount: colCount, records: testRecords, headers: testHeaders };
           }
         }
         
-        if (!foundBetter) {
-          setError(`❌ El CSV parece tener un formato incorrecto.
+        // Si encontramos mejor parsificación, usarla
+        if (bestResult.columnCount > 1) {
+          delimiter = bestResult.delimiter;
+          records.length = 0;
+          records.push(...bestResult.records);
+          // IMPORTANTE: recalcular headers después del re-intento
+          const newHeaders = Object.keys(records[0] || {});
+          console.log(`✅ Re-parsing exitoso con delimitador '${delimiter === '\t' ? 'TAB' : delimiter}': ${bestResult.columnCount} columnas detectadas`);
+          console.log(`📋 Nuevos headers:`, newHeaders);
+        } else {
+          // Ningún delimitador funciona - el archivo es realmente inválido
+          console.log(`❌ Ningún delimitador produjo múltiples columnas. Archivo inválido.`);
+          console.log(`📄 Primeros 200 caracteres:`, text.substring(0, 200));
+          setError(`❌ El CSV parece NO ser un archivo CSV válido.
         
-Headers detectados: ${headers.join(', ')}
+Contenido detectado: ${headers[0].substring(0, 100)}...
 
-Posibles problemas:
-1. El archivo no es un CSV válido - parece tener una sola columna muy larga
-2. El delimitador es diferente (probamos: coma, punto y coma, tabulación)
-3. El archivo es XLS/XLSX exportado incorrectamente como texto
+El archivo podría ser:
+1. Un documento Word, Excel o PDF (no CSV)
+2. Un archivo de configuración (JSON, YAML, XML)
+3. Un archivo con formato no estándar
 
-💡 Solución: 
-- Asegúrate de descargar desde Google Merchant Center como "CSV"
-- Si usas Excel, guarda como "CSV (delimitado por comas)" o "CSV (delimitado por tabulaciones)"
-- No uses archivos XLS o XLSX directamente - abre en Excel y guarda como CSV
-- Verifica que el archivo contenga las columnas correctas`);
+💡 Cómo exportar desde Google Merchant Center:
+1. Ve a Productos → Tu feed
+2. Selecciona los productos
+3. Haz clic en "Descargar" → "CSV"
+4. Abre en Google Drive o Excel para verificar que tiene columnas
+
+💡 Si usas Excel:
+- Archivo → Guardar Como
+- Formato: "CSV (delimitado por comas)" (.csv)
+- NO es .xlsx, .xls ni .txt`);
           setCargando(false);
           return;
         }
       }
       
+      // Recalcular headers después de posible re-intento
+      const finalHeaders = Object.keys(records[0] || {});
+      
       // Si los headers parecen datos (muy largos o con descripción), probablemente es mal formato
-      const reprocessedHeaders = Object.keys(records[0] || {});
-      if (reprocessedHeaders.some(h => h.length > 100)) {
+      if (finalHeaders.some(h => h.length > 100)) {
         setError(`❌ El CSV parece tener un formato incorrecto.
         
-Headers detectados: ${reprocessedHeaders.join(', ')}
+Headers detectados: ${finalHeaders.join(', ')}
 
 Posibles problemas:
 1. El archivo no es un CSV válido
@@ -144,7 +164,7 @@ Posibles problemas:
       
       // Buscar columns dinámicamente
       const findColumn = (keywords: string[]) => {
-        return headers.find(h => 
+        return finalHeaders.find(h => 
           keywords.some(k => normalizar(h).includes(normalizar(k)) || normalizar(k).includes(normalizar(h)))
         );
       };
@@ -170,7 +190,7 @@ Posibles problemas:
         setError(
           `❌ Columnas requeridas no encontradas en el CSV.
           
-Detectadas: ${headers.join(" | ")}
+Detectadas: ${finalHeaders.join(" | ")}
 
 Faltantes: ${missingCols.join(", ")}
 
