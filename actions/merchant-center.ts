@@ -244,3 +244,44 @@ export async function procesarLoteGoogleMerchant(
     };
   }
 }
+
+/**
+ * Enriquece un ÚNICO producto con descripción mejorada
+ * Se usa desde el formulario manual de Merchant Center
+ */
+export async function enriquecerProducto(
+  input: EnriquecerProductoInput
+): Promise<EnriquecerProductoOutput> {
+  try {
+    // Verificar admin
+    await verificarAdmin();
+
+    // Generar descripción
+    const descripcionGenerada = await generarDescripcion(
+      input.nombre,
+      input.descripcionActual,
+      input.queAgregar
+    );
+
+    if (!descripcionGenerada) {
+      return {
+        ok: false,
+        mensaje: input.nombre,
+        error: "No se pudo generar descripción",
+      };
+    }
+
+    return {
+      ok: true,
+      mensaje: input.nombre,
+      descripcionGenerada,
+    };
+  } catch (error) {
+    console.error("❌ Error en enriquecerProducto:", error);
+    return {
+      ok: false,
+      mensaje: input.nombre || "Error",
+      error: String(error),
+    };
+  }
+}
