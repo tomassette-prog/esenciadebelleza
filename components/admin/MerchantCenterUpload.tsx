@@ -8,11 +8,14 @@ export default function MerchantCenterUpload() {
   const [cargando, setCargando] = useState(false);
   const [resultado, setResultado] = useState<any>(null);
   const [error, setError] = useState<string>("");
+  const [dragActive, setDragActive] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
+  const procesarArchivo = async (file: File) => {
+    if (!file.name.endsWith(".csv")) {
+      setError("Por favor, selecciona un archivo CSV.");
+      return;
+    }
 
     setError("");
     setResultado(null);
@@ -75,6 +78,32 @@ export default function MerchantCenterUpload() {
     }
   };
 
+  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    await procesarArchivo(file);
+  };
+
+  const handleDrag = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.type === "dragenter" || e.type === "dragover") {
+      setDragActive(true);
+    } else if (e.type === "dragleave") {
+      setDragActive(false);
+    }
+  };
+
+  const handleDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragActive(false);
+
+    const file = e.dataTransfer?.files?.[0];
+    if (!file) return;
+    await procesarArchivo(file);
+  };
+
   return (
     <div className="space-y-6">
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
@@ -89,7 +118,17 @@ export default function MerchantCenterUpload() {
         </ul>
       </div>
 
-      <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
+      <div 
+        className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors ${
+          dragActive
+            ? "border-blue-500 bg-blue-50"
+            : "border-gray-300 hover:border-gray-400"
+        } ${cargando ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
+        onDragEnter={handleDrag}
+        onDragLeave={handleDrag}
+        onDragOver={handleDrag}
+        onDrop={handleDrop}
+      >
         <input
           ref={fileInputRef}
           type="file"
@@ -101,7 +140,7 @@ export default function MerchantCenterUpload() {
         />
         <label
           htmlFor="merchant-csv"
-          className={`cursor-pointer ${cargando ? "opacity-50 cursor-not-allowed" : ""}`}
+          className={`cursor-pointer block ${cargando ? "opacity-50 cursor-not-allowed" : ""}`}
         >
           <div className="text-4xl mb-2">📄</div>
           <p className="font-semibold text-gray-700">

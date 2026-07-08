@@ -1,14 +1,33 @@
 "use server";
 
 import { createAdminClient } from "@/lib/supabase/admin";
+import { cookies } from "next/headers";
 import Anthropic from "@anthropic-ai/sdk";
 
 const claude = new Anthropic();
 const ADMIN_EMAILS = ["ziarresamot@gmail.com"];
 
 async function verificarAdmin() {
-  // Por ahora simplificado — en producción usar el mismo verificarAdmin de stock.ts
-  return true;
+  try {
+    const cookieStore = await cookies();
+    const authToken = cookieStore.get("sb-yjanobsfzcwpusynvlun-auth-token")?.value;
+
+    if (!authToken) {
+      throw new Error("No autorizado: token no encontrado");
+    }
+
+    const parsed = JSON.parse(authToken);
+    const email = parsed.user?.email || parsed.email;
+
+    if (!ADMIN_EMAILS.includes(email)) {
+      throw new Error(`No autorizado: ${email} no está en la lista de admins`);
+    }
+
+    return true;
+  } catch (error) {
+    console.error("Error en verificarAdmin:", error);
+    throw new Error(`Acceso denegado: ${String(error)}`);
+  }
 }
 
 export interface EnriquecerProductoInput {
@@ -93,16 +112,32 @@ export async function enriquecerProducto(
     }
 
     // Actualizar en Supabase
+    // Primero intentar buscar por woo_id (que es el ID de Google Merchant Center)
     const supabase = createAdminClient();
-    const { error } = await supabase
+    
+    let query = supabase
       .from("productos_padre")
       .update({
         descripcion: input.descripcionActual
           ? `${input.descripcionActual}\n\n${descripcionGenerada}`
           : descripcionGenerada,
         updated_at: new Date().toISOString(),
-      })
-      .eq("id", input.productoId);
+      });
+
+    // Intentar buscar por woo_id primero (ID de Google Merchant Center)
+    let result = await query.eq("woo_id", input.productoId);
+    
+    // Si no encuentra por woo_id, intentar por id (UUID)
+    if (!result.error && result.data?.length === 0) {
+      result = await query.eq("id", input.productoId);
+    }
+    
+    // Si no encuentra por id, intentar por nombre
+    if (!result.error && result.data?.length === 0) {
+      result = await query.ilike("nombre", input.nombre);
+    }
+
+    const { error } = result;
 
     if (error) {
       return {
