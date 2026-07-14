@@ -126,21 +126,53 @@ export default function MerchantCenterUploadSimple() {
     <div className="space-y-6 max-w-4xl">
       {/* PASO 1: Pegar CSV */}
       <div className="bg-white rounded-lg shadow p-6">
-        <h2 className="text-xl font-bold mb-4">📋 Paso 1: Pega el CSV de Google Merchant Center</h2>
+        <h2 className="text-xl font-bold mb-4">📋 Paso 1: Carga el CSV de Google Merchant Center</h2>
+
+        {/* Subir archivo */}
+        <div className="mb-4">
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Subir archivo CSV
+          </label>
+          <input
+            type="file"
+            accept=".csv,.tsv,.txt"
+            onChange={e => {
+              const file = e.target.files?.[0];
+              if (!file) return;
+              const reader = new FileReader();
+              reader.onload = ev => setCsvText(ev.target?.result as string ?? '');
+              reader.readAsText(file, 'UTF-8');
+            }}
+            className="block w-full text-sm text-gray-600 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:bg-blue-50 file:text-blue-700 file:font-semibold hover:file:bg-blue-100 cursor-pointer"
+          />
+        </div>
+
+        {/* Separador */}
+        <div className="flex items-center gap-3 my-4">
+          <div className="flex-1 border-t border-gray-200" />
+          <span className="text-xs text-gray-400 uppercase">o pega el contenido</span>
+          <div className="flex-1 border-t border-gray-200" />
+        </div>
 
         <textarea
           value={csvText}
           onChange={e => setCsvText(e.target.value)}
           placeholder={`Pega aquí el CSV exportado desde Google Merchant Center (diagnóstico de productos con errores)`}
-          className="w-full h-32 p-3 border rounded font-mono text-sm"
+          className="w-full h-48 p-3 border rounded font-mono text-sm"
         />
 
-        <button
-          onClick={handleParsear}
-          className="mt-4 px-6 py-2 bg-blue-600 text-white rounded font-semibold hover:bg-blue-700"
-        >
-          ✓ Parsear CSV
-        </button>
+        <div className="mt-4 flex items-center gap-3">
+          <button
+            onClick={handleParsear}
+            disabled={!csvText.trim()}
+            className="px-6 py-2 bg-blue-600 text-white rounded font-semibold hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed"
+          >
+            ✓ Parsear CSV
+          </button>
+          {csvText.trim() && (
+            <span className="text-xs text-gray-500">{csvText.trim().split('\n').length} líneas cargadas</span>
+          )}
+        </div>
 
         {productos.length > 0 && (
           <p className="mt-2 text-sm text-gray-600">
