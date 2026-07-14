@@ -1,13 +1,14 @@
 'use client';
 
 import { useState } from 'react';
-import { enriquecerProducto } from '@/actions/merchant-center';
+import { enriquecerProducto, corregirLoteMerchant } from '@/actions/merchant-center';
 
 interface Producto {
   nombre: string;
   descripcionActual: string;
   queAgregar: string;
   descripcionGenerada?: string;
+  corregido?: boolean;
   error?: string;
 }
 
@@ -15,6 +16,9 @@ export default function MerchantCenterUploadSimple() {
   const [csvText, setCsvText] = useState('');
   const [productos, setProductos] = useState<Producto[]>([]);
   const [generando, setGenerando] = useState<Set<number>>(new Set());
+  const [corrigiendoTodo, setCorrigiendoTodo] = useState(false);
+  const [progreso, setProgreso] = useState(0);
+  const [resumenLote, setResumenLote] = useState<{ exitosos: number; fallidos: number } | null>(null);
 
   const handleParsear = () => {
     if (!csvText.trim()) {
@@ -24,11 +28,13 @@ export default function MerchantCenterUploadSimple() {
 
     const prods = parseCSV(csvText);
     if (prods.length === 0) {
-      alert('No se encontraron productos. Verifica el formato.');
+      alert('No se encontraron productos. Verifica el formato del CSV de Google Merchant Center.');
       return;
     }
 
     setProductos(prods);
+    setResumenLote(null);
+    setProgreso(0);
   };
 
   const handleGenerar = async (index: number) => {
@@ -46,6 +52,7 @@ export default function MerchantCenterUploadSimple() {
       const nuevos = [...productos];
       if (res.ok && res.descripcionGenerada) {
         nuevos[index].descripcionGenerada = res.descripcionGenerada;
+        nuevos[index].corregido = true;
       } else {
         nuevos[index].error = res.error || 'Error generando descripción';
       }
@@ -63,21 +70,68 @@ export default function MerchantCenterUploadSimple() {
     }
   };
 
-  const conteoGeneradas = productos.filter(p => p.descripcionGenerada).length;
+  const handleCorregirTodo = async () => {
+    if (!productos.length) return;
+    setCorrigiendoTodo(true);
+    setProgreso(0);
+    setResumenLote(null);
+
+    const pendientes = productos
+      .map((p, i) => ({ prod: p, idx: i }))
+      .filter(({ prod }) => !prod.corregido);
+
+    const nuevos = [...productos];
+    let exitosos = 0;
+    let fallidos = 0;
+
+    for (let i = 0; i < pendientes.length; i++) {
+      const { prod, idx } = pendientes[i];
+      try {
+        const res = await corregirLoteMerchant([{
+          nombre: prod.nombre,
+          tipoError: prod.queAgregar,
+        }]);
+        const detalle = res.detalles[0];
+        if (detalle.ok) {
+          nuevos[idx].corregido = true;
+          nuevos[idx].error = undefined;
+          if (detalle.accion === 'availability') {
+            nuevos[idx].descripcionGenerada = '✓ Disponibilidad activada';
+          }
+          exitosos++;
+        } else {
+          nuevos[idx].error = detalle.error || 'Error desconocido';
+          fallidos++;
+        }
+      } catch (err) {
+        nuevos[idx].error = err instanceof Error ? err.message : 'Error';
+        fallidos++;
+      }
+      setProductos([...nuevos]);
+      setProgreso(Math.round(((i + 1) / pendientes.length) * 100));
+    }
+
+    setResumenLote({ exitosos, fallidos });
+    setCorrigiendoTodo(false);
+  };
+
+  const pendientes = productos.filter(p => !p.corregido).length;
+  const corregidos = productos.filter(p => p.corregido).length;
+
+  // Detecta si todos los errores son de disponibilidad
+  const esErrorDisponibilidad = productos.length > 0 &&
+    productos.every(p => p.queAgregar.toLowerCase().includes('availability'));
 
   return (
     <div className="space-y-6 max-w-4xl">
       {/* PASO 1: Pegar CSV */}
       <div className="bg-white rounded-lg shadow p-6">
-        <h2 className="text-xl font-bold mb-4">📋 Paso 1: Pega el CSV de Google</h2>
-        
+        <h2 className="text-xl font-bold mb-4">📋 Paso 1: Pega el CSV de Google Merchant Center</h2>
+
         <textarea
           value={csvText}
           onChange={e => setCsvText(e.target.value)}
-          placeholder={`Ejemplo:
-Producto,Descripción,Añadir a la descripción
-Champú Hidratante,Champú base,Contiene proteínas
-Acondicionador,Acondicionador,Para cabello seco`}
+          placeholder={`Pega aquí el CSV exportado desde Google Merchant Center (diagnóstico de productos con errores)`}
           className="w-full h-32 p-3 border rounded font-mono text-sm"
         />
 
@@ -87,71 +141,131 @@ Acondicionador,Acondicionador,Para cabello seco`}
         >
           ✓ Parsear CSV
         </button>
-        
+
         {productos.length > 0 && (
           <p className="mt-2 text-sm text-gray-600">
-            ✅ {productos.length} productos encontrados
+            ✅ {productos.length} productos con errores encontrados
           </p>
         )}
       </div>
 
-      {/* PASO 2: Generar descripciones */}
+      {/* PASO 2: Corregir errores */}
       {productos.length > 0 && (
         <div className="bg-white rounded-lg shadow p-6">
-          <h2 className="text-xl font-bold mb-4">✨ Paso 2: Genera descripciones</h2>
-
-          <div className="space-y-3">
-            {productos.map((prod, idx) => (
-              <div key={idx} className="border rounded p-4 bg-gray-50">
-                {/* Nombre */}
-                <p className="font-semibold text-gray-800">{prod.nombre}</p>
-
-                {/* Descripción actual + lo que falta */}
-                <div className="text-sm text-gray-600 mt-2 grid grid-cols-2 gap-2">
-                  <div>
-                    <span className="font-medium">Actual:</span> {prod.descripcionActual || 'N/A'}
-                  </div>
-                  <div>
-                    <span className="font-medium">Google dice:</span> {prod.queAgregar || 'N/A'}
-                  </div>
-                </div>
-
-                {/* Descripción generada o error */}
-                {prod.descripcionGenerada ? (
-                  <div className="mt-3 p-3 bg-green-100 border border-green-300 rounded">
-                    <p className="text-sm text-green-800 font-semibold">✅ Generada:</p>
-                    <p className="text-sm text-green-700">{prod.descripcionGenerada}</p>
-                  </div>
-                ) : prod.error ? (
-                  <div className="mt-3 p-3 bg-red-100 border border-red-300 rounded">
-                    <p className="text-sm text-red-800 font-semibold">❌ {prod.error}</p>
-                  </div>
-                ) : null}
-
-                {/* Botón generar */}
-                {!prod.descripcionGenerada && (
-                  <button
-                    onClick={() => handleGenerar(idx)}
-                    disabled={generando.has(idx)}
-                    className="mt-3 px-4 py-2 bg-blue-500 text-white text-sm rounded hover:bg-blue-600 disabled:bg-gray-400"
-                  >
-                    {generando.has(idx) ? '⏳ Generando...' : 'Generar descrición'}
-                  </button>
-                )}
-              </div>
-            ))}
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-bold">
+              🔧 Paso 2: Corregir errores
+            </h2>
+            <span className="text-sm text-gray-500">
+              {corregidos}/{productos.length} corregidos
+            </span>
           </div>
 
-          {/* Resumen */}
-          <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded">
-            <p className="font-semibold">
-              {conteoGeneradas} de {productos.length} descripciones generadas ✨
-            </p>
+          {/* Banner tipo de error */}
+          {esErrorDisponibilidad && (
+            <div className="mb-4 p-3 bg-amber-50 border border-amber-300 rounded text-sm text-amber-800">
+              ⚠️ Todos los errores son de <strong>disponibilidad</strong> (availability). El botón "Corregir todo" activará los productos en Supabase.
+            </div>
+          )}
+
+          {/* Botón Corregir Todo */}
+          {pendientes > 0 && (
+            <div className="mb-6">
+              <button
+                onClick={handleCorregirTodo}
+                disabled={corrigiendoTodo}
+                className="px-6 py-3 bg-green-600 text-white rounded-lg font-semibold hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center gap-2"
+              >
+                {corrigiendoTodo ? (
+                  <>⏳ Corrigiendo... ({progreso}%)</>
+                ) : (
+                  <>⚡ Corregir todo ({pendientes} pendientes)</>
+                )}
+              </button>
+
+              {corrigiendoTodo && (
+                <div className="mt-3 w-full bg-gray-200 rounded-full h-2">
+                  <div
+                    className="bg-green-500 h-2 rounded-full transition-all duration-300"
+                    style={{ width: `${progreso}%` }}
+                  />
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Resumen tras corregir todo */}
+          {resumenLote && (
+            <div className={`mb-4 p-4 rounded border ${resumenLote.fallidos === 0 ? 'bg-green-50 border-green-300' : 'bg-yellow-50 border-yellow-300'}`}>
+              <p className="font-semibold">
+                ✅ {resumenLote.exitosos} corregidos
+                {resumenLote.fallidos > 0 && ` · ❌ ${resumenLote.fallidos} con error`}
+              </p>
+            </div>
+          )}
+
+          {/* Lista de productos */}
+          <div className="space-y-2">
+            {productos.map((prod, idx) => (
+              <div
+                key={idx}
+                className={`border rounded p-3 ${prod.corregido ? 'bg-green-50 border-green-200' : prod.error ? 'bg-red-50 border-red-200' : 'bg-gray-50'}`}
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-gray-800 text-sm truncate">{prod.nombre}</p>
+                    <p className="text-xs text-gray-500 mt-0.5">
+                      Error: {prod.queAgregar || 'N/A'}
+                    </p>
+                    {prod.descripcionGenerada && (
+                      <p className="text-xs text-green-700 mt-1">{prod.descripcionGenerada}</p>
+                    )}
+                    {prod.error && (
+                      <p className="text-xs text-red-600 mt-1">❌ {prod.error}</p>
+                    )}
+                  </div>
+
+                  <div className="flex-shrink-0">
+                    {prod.corregido ? (
+                      <span className="text-green-600 text-lg">✓</span>
+                    ) : (
+                      <button
+                        onClick={() => handleGenerar(idx)}
+                        disabled={generando.has(idx) || corrigiendoTodo}
+                        className="px-3 py-1 bg-blue-500 text-white text-xs rounded hover:bg-blue-600 disabled:bg-gray-400"
+                      >
+                        {generando.has(idx) ? '⏳' : 'Corregir'}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       )}
     </div>
   );
+}
+
+function splitCSVLine(line: string, delimiter: string): string[] {
+  if (delimiter !== ',') return line.split(delimiter).map(v => v.trim());
+  const result: string[] = [];
+  let current = '';
+  let inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (ch === '"') {
+      inQuotes = !inQuotes;
+    } else if (ch === ',' && !inQuotes) {
+      result.push(current.trim());
+      current = '';
+    } else {
+      current += ch;
+    }
+  }
+  result.push(current.trim());
+  return result;
 }
 
 function parseCSV(content: string): Producto[] {
@@ -169,15 +283,20 @@ function parseCSV(content: string): Producto[] {
   else if (firstLine.includes(';')) delimiter = ';';
 
   // Parse headers - busca columnas clave
-  const headers = firstLine.split(delimiter).map(h => h.toLowerCase().trim());
-  const prodIdx = headers.findIndex(h => 
-    h.includes('producto') || h.includes('product') || h.includes('title') || h.includes('nombre')
+  const headers = splitCSVLine(firstLine, delimiter).map(h =>
+    h.toLowerCase().trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
   );
-  const descIdx = headers.findIndex(h => 
-    h.includes('descripción') || h.includes('description') || h.includes('descripcion')
+  // Merchant Center export uses "titulo" (normalized from "Título")
+  const prodIdx = headers.findIndex(h =>
+    h.includes('titulo') || h.includes('producto') || h.includes('product') || h.includes('title') || h.includes('nombre')
   );
-  const addIdx = headers.findIndex(h => 
-    h.includes('añadir') || h.includes('add') || h.includes('datos') || h.includes('mejorar')
+  const descIdx = headers.findIndex(h =>
+    h.includes('descripcion') || h.includes('description')
+  );
+  // Merchant Center: "nombre del problema" tells us what's missing
+  const problemIdx = headers.findIndex(h => h.includes('nombre del problema') || h.includes('problema'));
+  const addIdx = headers.findIndex(h =>
+    h.includes('informacion adicional') || h.includes('anadir') || h.includes('add') || h.includes('datos') || h.includes('mejorar')
   );
 
   if (prodIdx === -1) return [];
@@ -185,12 +304,18 @@ function parseCSV(content: string): Producto[] {
   // Parse productos
   const productos: Producto[] = [];
   for (let i = 1; i < lines.length; i++) {
-    const values = lines[i].split(delimiter).map(v => v.trim());
+    const values = splitCSVLine(lines[i], delimiter);
     if (values[prodIdx]) {
+      const queAgregar =
+        addIdx >= 0 && values[addIdx]
+          ? values[addIdx]
+          : problemIdx >= 0 && values[problemIdx]
+          ? values[problemIdx]
+          : '';
       productos.push({
         nombre: values[prodIdx],
         descripcionActual: descIdx >= 0 ? values[descIdx] || '' : '',
-        queAgregar: addIdx >= 0 ? values[addIdx] || '' : '',
+        queAgregar,
       });
     }
   }

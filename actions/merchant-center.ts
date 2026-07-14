@@ -285,3 +285,130 @@ export async function enriquecerProducto(
     };
   }
 }
+
+export interface CorregirErrorInput {
+  nombre: string;
+  tipoError: string; // e.g. "availability", "description", etc.
+}
+
+export interface CorregirErrorOutput {
+  ok: boolean;
+  nombre: string;
+  accion: string;
+  error?: string;
+}
+
+/**
+ * Detecta el tipo de error y lo corrige:
+ * - "availability" → activa las variaciones del producto en Supabase
+ * - otros → genera descripción con IA
+ */
+export async function corregirErrorMerchant(
+  input: CorregirErrorInput
+): Promise<CorregirErrorOutput> {
+  try {
+    await verificarAdmin();
+    const supabase = createAdminClient();
+
+    if (input.tipoError.toLowerCase().includes("availability")) {
+      // Buscar el producto_padre por nombre (ilike)
+      const { data: productos, error: searchError } = await supabase
+        .from("productos_padre")
+        .select("id")
+        .ilike("nombre", `%${input.nombre.trim()}%`)
+        .limit(5);
+
+      if (searchError || !productos?.length) {
+        return {
+          ok: false,
+          nombre: input.nombre,
+          accion: "availability",
+          error: "Producto no encontrado en la base de datos",
+        };
+      }
+
+      // Activar todas las variaciones del producto
+      const ids = productos.map((p: { id: string }) => p.id);
+      const { error: updateError } = await supabase
+        .from("productos_variaciones")
+        .update({ activa: true })
+        .in("producto_id", ids);
+
+      if (updateError) {
+        return {
+          ok: false,
+          nombre: input.nombre,
+          accion: "availability",
+          error: updateError.message,
+        };
+      }
+
+      return {
+        ok: true,
+        nombre: input.nombre,
+        accion: "availability",
+      };
+    }
+
+    // Para otros errores → generar descripción con IA
+    const descripcionGenerada = await generarDescripcion(
+      input.nombre,
+      undefined,
+      input.tipoError
+    );
+
+    if (!descripcionGenerada) {
+      return {
+        ok: false,
+        nombre: input.nombre,
+        accion: "description",
+        error: "No se pudo generar descripción",
+      };
+    }
+
+    const { error: updateError } = await supabase
+      .from("productos_padre")
+      .update({ descripcion: descripcionGenerada, updated_at: new Date().toISOString() })
+      .ilike("nombre", `%${input.nombre.trim()}%`);
+
+    if (updateError) {
+      return {
+        ok: false,
+        nombre: input.nombre,
+        accion: "description",
+        error: updateError.message,
+      };
+    }
+
+    return { ok: true, nombre: input.nombre, accion: "description" };
+  } catch (error) {
+    return {
+      ok: false,
+      nombre: input.nombre,
+      accion: "unknown",
+      error: String(error),
+    };
+  }
+}
+
+/**
+ * Corrige en lote todos los errores del CSV de Merchant Center
+ */
+export async function corregirLoteMerchant(
+  productos: CorregirErrorInput[]
+): Promise<{ exitosos: number; fallidos: number; detalles: CorregirErrorOutput[] }> {
+  const detalles: CorregirErrorOutput[] = [];
+
+  for (const prod of productos) {
+    const res = await corregirErrorMerchant(prod);
+    detalles.push(res);
+    // Small rate limit to avoid hammering DB
+    await new Promise((r) => setTimeout(r, 100));
+  }
+
+  return {
+    exitosos: detalles.filter((d) => d.ok).length,
+    fallidos: detalles.filter((d) => !d.ok).length,
+    detalles,
+  };
+}
