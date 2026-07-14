@@ -310,12 +310,18 @@ export async function corregirErrorMerchant(
     await verificarAdmin();
     const supabase = createAdminClient();
 
+    // Google Merchant Center appends "Unidad" (and sometimes other suffixes) to product titles
+    const nombreLimpio = input.nombre
+      .replace(/\s*Unidad\s*$/i, '')
+      .replace(/\s*Pack\s*$/i, '')
+      .trim();
+
     if (input.tipoError.toLowerCase().includes("availability")) {
       // Buscar el producto_padre por nombre (ilike)
       const { data: productos, error: searchError } = await supabase
         .from("productos_padre")
         .select("id")
-        .ilike("nombre", `%${input.nombre.trim()}%`)
+        .ilike("nombre", `%${nombreLimpio}%`)
         .limit(5);
 
       if (searchError || !productos?.length) {
@@ -352,7 +358,7 @@ export async function corregirErrorMerchant(
 
     // Para otros errores → generar descripción con IA
     const descripcionGenerada = await generarDescripcion(
-      input.nombre,
+      nombreLimpio,
       undefined,
       input.tipoError
     );
@@ -369,7 +375,7 @@ export async function corregirErrorMerchant(
     const { error: updateError } = await supabase
       .from("productos_padre")
       .update({ descripcion: descripcionGenerada, updated_at: new Date().toISOString() })
-      .ilike("nombre", `%${input.nombre.trim()}%`);
+      .ilike("nombre", `%${nombreLimpio}%`);
 
     if (updateError) {
       return {
