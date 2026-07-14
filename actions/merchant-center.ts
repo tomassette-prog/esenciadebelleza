@@ -338,7 +338,7 @@ export async function corregirErrorMerchant(
       const { error: updateError } = await supabase
         .from("productos_variaciones")
         .update({ activa: true })
-        .in("producto_id", ids);
+        .in("producto_padre_id", ids);
 
       if (updateError) {
         return {
