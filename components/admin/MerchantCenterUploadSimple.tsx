@@ -325,7 +325,7 @@ function parseCSV(content: string): Producto[] {
   const descIdx = headers.findIndex(h =>
     h.includes('descripcion') || h.includes('description')
   );
-  // Merchant Center: "nombre del problema" tells us what's missing
+  // Merchant Center: "nombre del problema" tells us what's missing (e.g. "Falta el valor [availability]")
   const problemIdx = headers.findIndex(h => h.includes('nombre del problema') || h.includes('problema'));
   const addIdx = headers.findIndex(h =>
     h.includes('informacion adicional') || h.includes('anadir') || h.includes('add') || h.includes('datos') || h.includes('mejorar')
@@ -338,11 +338,13 @@ function parseCSV(content: string): Producto[] {
   for (let i = 1; i < lines.length; i++) {
     const values = splitCSVLine(lines[i], delimiter);
     if (values[prodIdx]) {
+      // Prefer "Nombre del problema" as the error type — it contains "Falta el valor [availability]" etc.
+      // Fall back to "Información adicional" if problem column not present
       const queAgregar =
-        addIdx >= 0 && values[addIdx]
-          ? values[addIdx]
-          : problemIdx >= 0 && values[problemIdx]
+        problemIdx >= 0 && values[problemIdx]
           ? values[problemIdx]
+          : addIdx >= 0 && values[addIdx]
+          ? values[addIdx]
           : '';
       productos.push({
         nombre: values[prodIdx],
