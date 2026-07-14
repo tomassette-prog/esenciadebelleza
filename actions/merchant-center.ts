@@ -317,19 +317,37 @@ export async function corregirErrorMerchant(
       .trim();
 
     if (input.tipoError.toLowerCase().includes("availability")) {
-      // Buscar el producto_padre por nombre (ilike)
-      const { data: productos, error: searchError } = await supabase
-        .from("productos_padre")
-        .select("id")
-        .ilike("nombre", `%${nombreLimpio}%`)
-        .limit(5);
+      // Estrategia de búsqueda progresiva para tolerar diferencias de formato
+      const buscarProductos = async (termino: string) => {
+        const { data, error } = await supabase
+          .from("productos_padre")
+          .select("id")
+          .ilike("nombre", `%${termino}%`)
+          .limit(10);
+        return error ? [] : (data ?? []);
+      };
 
-      if (searchError || !productos?.length) {
+      let productos = await buscarProductos(nombreLimpio);
+
+      // Si no encuentra con nombre completo, buscar con las primeras 3 palabras clave
+      if (!productos.length) {
+        const palabras = nombreLimpio.split(/\s+/).filter(p => p.length > 2);
+        if (palabras.length >= 2) {
+          // Intento con 3 palabras primero, luego con 2
+          for (let n = Math.min(3, palabras.length); n >= 2; n--) {
+            const termino = palabras.slice(0, n).join(' ');
+            productos = await buscarProductos(termino);
+            if (productos.length) break;
+          }
+        }
+      }
+
+      if (!productos.length) {
         return {
           ok: false,
           nombre: input.nombre,
           accion: "availability",
-          error: "Producto no encontrado en la base de datos",
+          error: `Producto no encontrado (buscado: "${nombreLimpio}")`,
         };
       }
 
