@@ -164,7 +164,7 @@ export default function MerchantCenterUploadSimple() {
           {/* Banner tipo de error */}
           {esErrorDisponibilidad && (
             <div className="mb-4 p-3 bg-amber-50 border border-amber-300 rounded text-sm text-amber-800">
-              ⚠️ Todos los errores son de <strong>disponibilidad</strong> (availability). El botón "Corregir todo" activará los productos en Supabase.
+              ⚠️ Todos los errores son de <strong>disponibilidad</strong> (availability). El botón &quot;Corregir todo&quot; activará los productos en Supabase.
             </div>
           )}
 
