@@ -18,6 +18,9 @@
 .DS_Store
 *.pem
 
+# VS Code extensions (not part of web build)
+extensions/
+
 # debug
 npm-debug.log*
 yarn-debug.log*
