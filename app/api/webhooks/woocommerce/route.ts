@@ -102,7 +102,7 @@ export async function POST(req: NextRequest) {
         await supabase
           .from("productos_padre")
           .update({ activo: false })
-          .eq("wc_product_id", wcId);
+          .eq("woo_id", wcId);
         break;
       }
 
@@ -154,12 +154,12 @@ async function sincronizarProducto(
     marcaId = marca?.id ?? null;
   }
 
-  // UPSERT producto padre por wc_product_id (más estable que slug)
+  // UPSERT producto padre por woo_id (más estable que slug)
   const { data: padre, error: errPadre } = await supabase
     .from("productos_padre")
     .upsert(
       {
-        wc_product_id:       wc_id,
+        woo_id:              wc_id,
         slug,
         nombre:              String(p.name),
         categoria,
@@ -169,7 +169,7 @@ async function sincronizarProducto(
         marca_id:            marcaId,
         activo:              p.status === "publish",
       },
-      { onConflict: "wc_product_id" }
+      { onConflict: "woo_id" }
     )
     .select("id")
     .single();

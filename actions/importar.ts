@@ -106,24 +106,36 @@ function extractBrandName(productName: string): string {
   return first;
 }
 
-function detectNewBrands(
-  nuevos: ProductoDiff[],
-  wooMap: Map<number, { name: string }>,
-  existingMarcaSlugs: Set<string>
-): string[] {
-  const seen = new Set<string>();
-  const result: string[] = [];
-  for (const nuevo of nuevos) {
-    const woo = wooMap.get(nuevo.wooId);
-    if (!woo) continue;
-    const brandName = extractBrandName(woo.name);
-    const brandSlug = slugify(brandName);
-    if (!existingMarcaSlugs.has(brandSlug) && !seen.has(brandSlug)) {
-      seen.add(brandSlug);
-      result.push(brandName);
-    }
+// ─── Brand resolution (woo_brand_mappings) ─────────────────────────────────────
+
+async function getBrandMappingsCache(
+  supa: ReturnType<typeof adminClient>
+): Promise<Map<string, { marca_id: string | null; is_new_brand: boolean }>> {
+  const { data } = await supa.from("woo_brand_mappings").select("woo_brand_name, marca_id, is_new_brand");
+  return new Map(
+    (data ?? []).map((r: { woo_brand_name: string; marca_id: string | null; is_new_brand: boolean }) => [
+      r.woo_brand_name,
+      { marca_id: r.marca_id, is_new_brand: r.is_new_brand },
+    ])
+  );
+}
+
+async function resolveBrandFromWc(
+  supa: ReturnType<typeof adminClient>,
+  wcProductName: string,
+  wcAttributes: { name: string; options: string[] }[],
+  brandMappingsCache: Map<string, { marca_id: string | null; is_new_brand: boolean }>
+): Promise<{ marcaId: string | null; status: "resolved" | "pending" | "new_confirmed"; brandName: string }> {
+  void supa; // reservado para futuras consultas directas a DB si el cache no basta
+  const attrBrand = wcAttributes?.find(a => a.name.toLowerCase().includes("marca"))?.options?.[0];
+  const brandName = (attrBrand?.trim() || extractBrandName(wcProductName)).trim();
+
+  const mapping = brandMappingsCache.get(brandName);
+  if (mapping) {
+    if (mapping.marca_id) return { marcaId: mapping.marca_id, status: "resolved", brandName };
+    if (mapping.is_new_brand) return { marcaId: null, status: "new_confirmed", brandName };
   }
-  return result;
+  return { marcaId: null, status: "pending", brandName };
 }
 
 export interface ProductoDiff {
@@ -134,6 +146,11 @@ export interface ProductoDiff {
   wooCategories: number[];
   cambios?: Record<string, { woo: string | null; actual: string | null }>;
   precioCambio?: { woo: number; actual: number };
+  brandResolution?: {
+    brandName: string;
+    status: "resolved" | "pending" | "new_confirmed";
+    marcaId?: string | null;
+  };
 }
 
 export interface UnmappedCategory {
@@ -144,9 +161,19 @@ export interface UnmappedCategory {
   confidence: "high" | "medium" | "low";
 }
 
+export interface MarcaResolution {
+  wooBrandName: string;
+  status: "resolved" | "pending" | "new_confirmed";
+  marcaId?: string | null;
+  marcaNombre?: string;
+  productCount: number;
+  productNames: string[];
+}
+
 export interface DiffGaps {
-  newBrands: string[];
+  newBrands: MarcaResolution[];
   unmappedCategories: UnmappedCategory[];
+  pendingBrands: MarcaResolution[];
 }
 
 export interface ReviewGroup {
@@ -164,6 +191,31 @@ export interface ReviewPayload {
     categoria: string;
     subcategoria: string;
   }>;
+  brandMappings?: Array<{
+    wooBrandName: string;
+    marcaId: string | null;
+    isNewBrand: boolean;
+  }>;
+}
+
+export interface MarcaExistente {
+  id: string;
+  nombre: string;
+}
+
+export async function listarMarcasExistentes(): Promise<{ marcas: MarcaExistente[]; error?: string }> {
+  try {
+    await verificarAdmin();
+  } catch {
+    return { marcas: [], error: "No autorizado" };
+  }
+  try {
+    const supa = adminClient();
+    const { data } = await supa.from("marcas").select("id, nombre").order("nombre");
+    return { marcas: (data ?? []) as MarcaExistente[] };
+  } catch (e) {
+    return { marcas: [], error: String(e) };
+  }
 }
 
 export interface SmartApplyResult {
@@ -184,7 +236,7 @@ export async function calcularDiff(): Promise<{
   try {
     await verificarAdmin();
   } catch {
-    return { nuevos: [], modificados: [], iguales: 0, gaps: { newBrands: [], unmappedCategories: [] }, error: "No autorizado" };
+    return { nuevos: [], modificados: [], iguales: 0, gaps: { newBrands: [], unmappedCategories: [], pendingBrands: [] }, error: "No autorizado" };
   }
 
   try {
@@ -196,6 +248,7 @@ export async function calcularDiff(): Promise<{
       price: string; regular_price: string; sale_price: string;
       images: { src: string }[];
       categories: { id: number; name: string }[];
+      attributes: { name: string; options: string[] }[];
     }[] = [];
     let page = 1;
     while (true) {
@@ -248,6 +301,7 @@ export async function calcularDiff(): Promise<{
     // 3. Comparar SOLO precios (ignorar nombre, categoría, stock, etc.)
     // Deduplicación: Buscar por woo_id primero (más confiable que slug)
     const catMap = await getDbCatMap(supa);
+    const brandMappingsCache = await getBrandMappingsCache(supa);
     const nuevos: ProductoDiff[] = [];
     const modificados: ProductoDiff[] = [];
     let iguales = 0;
@@ -269,7 +323,11 @@ export async function calcularDiff(): Promise<{
 
       if (!existing) {
         // Producto nuevo en WooCommerce
-        nuevos.push({ slug, nombre: p.name, tipo: "nuevo", wooId: p.id, wooCategories: p.categories.map(c => c.id) });
+        const brandResolution = await resolveBrandFromWc(supa, p.name, p.attributes ?? [], brandMappingsCache);
+        nuevos.push({
+          slug, nombre: p.name, tipo: "nuevo", wooId: p.id, wooCategories: p.categories.map(c => c.id),
+          brandResolution,
+        });
         continue;
       }
 
@@ -294,11 +352,27 @@ export async function calcularDiff(): Promise<{
       }
     }
 
-    // 4. Detectar gaps: marcas nuevas y categorías sin mapear
-    const { data: marcasRows } = await supa.from("marcas").select("slug");
-    const existingMarcaSlugs = new Set<string>((marcasRows ?? []).map((r: { slug: string }) => r.slug));
-    const wooMap = new Map(wooProductos.map(p => [p.id, { name: p.name }]));
-    const newBrands = detectNewBrands(nuevos, wooMap, existingMarcaSlugs);
+    // 4. Detectar gaps: marcas pendientes de aprobación y categorías sin mapear
+    const brandGroups = new Map<string, MarcaResolution>();
+    for (const nuevo of nuevos) {
+      const br = nuevo.brandResolution;
+      if (!br || br.status === "resolved") continue;
+      const key = `${br.status}:${br.brandName}`;
+      if (!brandGroups.has(key)) {
+        brandGroups.set(key, {
+          wooBrandName: br.brandName,
+          status: br.status,
+          marcaId: br.marcaId,
+          productCount: 0,
+          productNames: [],
+        });
+      }
+      const g = brandGroups.get(key)!;
+      g.productCount++;
+      if (g.productNames.length < 3) g.productNames.push(nuevo.nombre);
+    }
+    const newBrands = [...brandGroups.values()].filter(b => b.status === "new_confirmed");
+    const pendingBrands = [...brandGroups.values()].filter(b => b.status === "pending");
 
     // Detect unmapped using the same catMap
     const seenCatIds = new Set<number>();
@@ -321,11 +395,11 @@ export async function calcularDiff(): Promise<{
       }
     }
 
-    const gaps: DiffGaps = { newBrands, unmappedCategories };
+    const gaps: DiffGaps = { newBrands, unmappedCategories, pendingBrands };
 
     return { nuevos, modificados, iguales, gaps };
   } catch (e) {
-    return { nuevos: [], modificados: [], iguales: 0, gaps: { newBrands: [], unmappedCategories: [] }, error: String(e) };
+    return { nuevos: [], modificados: [], iguales: 0, gaps: { newBrands: [], unmappedCategories: [], pendingBrands: [] }, error: String(e) };
   }
 }
 
@@ -486,7 +560,7 @@ export async function publicarAprobados(payload: ReviewPayload): Promise<SmartAp
     return { ...empty, error: "No autorizado" };
   }
 
-  if (!payload.approvedGroups.length) return empty;
+  if (!payload.approvedGroups.length && !payload.brandMappings?.length) return empty;
 
   try {
     const supa = adminClient();
@@ -499,7 +573,13 @@ export async function publicarAprobados(payload: ReviewPayload): Promise<SmartAp
       stock_quantity: number | null; stock_status: string;
       images: { src: string }[];
       categories: { id: number; name: string }[];
+      attributes: { name: string; options: string[] }[];
     };
+
+    function brandNameForProduct(p: WooProducto): string {
+      const attrBrand = p.attributes?.find(a => a.name.toLowerCase().includes("marca"))?.options?.[0];
+      return (attrBrand?.trim() || extractBrandName(p.name)).trim();
+    }
 
     const allSlugsConId = payload.approvedGroups.flatMap(g => g.slugsConId);
     const PARALELO = 20;
@@ -521,34 +601,46 @@ export async function publicarAprobados(payload: ReviewPayload): Promise<SmartAp
       }
     }
 
-    // Step C — auto-create new brands
+    // Step C — process ONLY admin-approved brand decisions. NEVER auto-create brands.
     const { data: marcasExisting } = await supa.from("marcas").select("id, slug, nombre");
-    const marcaSlugToId = new Map<string, number>(
-      (marcasExisting ?? []).map((m: { id: number; slug: string }) => [m.slug, m.id])
+    const marcaSlugToId = new Map<string, string>(
+      (marcasExisting ?? []).map((m: { id: string; slug: string }) => [m.slug, m.id])
     );
 
-    const brandsToInsert: Array<{ nombre: string; slug: string; logo_url: null }> = [];
-    for (const p of fetched) {
-      const brandName = extractBrandName(p.name);
-      const brandSlug = slugify(brandName);
-      if (!marcaSlugToId.has(brandSlug)) {
-        brandsToInsert.push({ nombre: brandName, slug: brandSlug, logo_url: null });
-        marcaSlugToId.set(brandSlug, -1); // placeholder to avoid duplicates in loop
+    const brandMappingsCache = await getBrandMappingsCache(supa);
+    const resolvedBrandMap = new Map<string, string | null>(
+      [...brandMappingsCache.entries()].map(([name, m]) => [name, m.marca_id])
+    );
+
+    const brandsCreated: string[] = [];
+    const brandMappingUpserts: Array<{ woo_brand_name: string; marca_id: string | null; is_new_brand: boolean }> = [];
+
+    for (const bm of payload.brandMappings ?? []) {
+      if (bm.isNewBrand) {
+        const brandSlug = slugify(bm.wooBrandName);
+        let marcaId = marcaSlugToId.get(brandSlug);
+        if (!marcaId) {
+          const { data: inserted, error: insertErr } = await supa
+            .from("marcas")
+            .insert({ nombre: bm.wooBrandName, slug: brandSlug, logo_url: null })
+            .select("id")
+            .single();
+          if (insertErr || !inserted) continue;
+          marcaId = inserted.id as string;
+          marcaSlugToId.set(brandSlug, marcaId);
+          brandsCreated.push(bm.wooBrandName);
+        }
+        resolvedBrandMap.set(bm.wooBrandName, marcaId);
+        brandMappingUpserts.push({ woo_brand_name: bm.wooBrandName, marca_id: marcaId, is_new_brand: true });
+      } else if (bm.marcaId) {
+        resolvedBrandMap.set(bm.wooBrandName, bm.marcaId);
+        brandMappingUpserts.push({ woo_brand_name: bm.wooBrandName, marca_id: bm.marcaId, is_new_brand: false });
       }
     }
 
-    const uniqueBrands = brandsToInsert.filter(
-      (b, i, arr) => arr.findIndex(x => x.slug === b.slug) === i
-    );
-    const brandsCreated: string[] = [];
-    if (uniqueBrands.length > 0) {
-      const { data: inserted } = await supa.from("marcas")
-        .upsert(uniqueBrands, { onConflict: "slug", ignoreDuplicates: true })
-        .select("id, slug, nombre");
-      // Re-fetch to get actual IDs
-      const { data: marcasRefreshed } = await supa.from("marcas").select("id, slug");
-      for (const m of marcasRefreshed ?? []) marcaSlugToId.set(m.slug, m.id);
-      if (inserted) brandsCreated.push(...inserted.map((m: { nombre: string }) => m.nombre));
+    if (brandMappingUpserts.length > 0) {
+      await supa.from("woo_brand_mappings")
+        .upsert(brandMappingUpserts, { onConflict: "woo_brand_name" });
     }
 
     // Step D — build category override map, save to DB, and upsert rows
@@ -606,8 +698,7 @@ export async function publicarAprobados(payload: ReviewPayload): Promise<SmartAp
       const slug = p.slug || slugify(p.name);
       const cat = slugToCat.get(slug) ?? resolverCategoria(p.categories, new Map(Object.entries(WOO_CAT_MAP).map(([k,v]) => [Number(k),v])));
       const ex = existMap.get(slug);
-      const brandSlug = slugify(extractBrandName(p.name));
-      const marcaId = marcaSlugToId.get(brandSlug) ?? null;
+      const marcaId = resolvedBrandMap.get(brandNameForProduct(p)) ?? null;
       const nombreTruncado = p.name.trim().slice(0, maxNombre);
       
       // Si es nuevo (no existe en Esencia), crear con todos los campos

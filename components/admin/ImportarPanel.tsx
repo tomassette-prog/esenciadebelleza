@@ -5,10 +5,13 @@ import {
   calcularDiff,
   aplicarCambios,
   publicarAprobados,
+  listarMarcasExistentes,
   type ProductoDiff,
   type DiffGaps,
   type ReviewGroup,
   type SmartApplyResult,
+  type MarcaExistente,
+  type MarcaResolution,
 } from "@/actions/importar";
 import type { CategoriaPair } from "@/lib/category-suggester";
 
@@ -16,10 +19,18 @@ import type { CategoriaPair } from "@/lib/category-suggester";
 
 type Fase = "idle" | "diff" | "listo" | "revisando" | "publicando" | "aplicando";
 
+type Tab = "nuevos" | "precios" | "marcas";
+
 type GroupState = {
   approved: boolean;
   overrideCategoria?: string;
   overrideSubcategoria?: string;
+};
+
+type BrandState = {
+  approved: boolean;
+  isNewBrand: boolean;
+  mappingToExisting?: string;
 };
 
 // ─── Pure helpers (outside component) ─────────────────────────────────────────
@@ -69,11 +80,16 @@ export function ImportarPanel({ allPairs }: { allPairs: CategoriaPair[] }) {
   const [resumen, setResumen]       = useState<{ ok: number; noEncontrados: string[] } | null>(null);
 
   // Smart import state
-  const [gaps, setGaps]             = useState<DiffGaps>({ newBrands: [], unmappedCategories: [] });
+  const [gaps, setGaps]             = useState<DiffGaps>({ newBrands: [], unmappedCategories: [], pendingBrands: [] });
   const [reviewGroups, setReviewGroups] = useState<ReviewGroup[]>([]);
   const [groupApprovals, setGroupApprovals] = useState<Map<string, GroupState>>(new Map());
   const [smartResult, setSmartResult] = useState<SmartApplyResult | null>(null);
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+
+  // Tab + brand review state
+  const [activeTab, setActiveTab] = useState<Tab>("nuevos");
+  const [brandApprovals, setBrandApprovals] = useState<Map<string, BrandState>>(new Map());
+  const [marcasExistentes, setMarcasExistentes] = useState<MarcaExistente[]>([]);
 
   // ── Handlers ────────────────────────────────────────────────────────────────
 
@@ -83,12 +99,15 @@ export function ImportarPanel({ allPairs }: { allPairs: CategoriaPair[] }) {
     setSmartResult(null);
     setFase("diff");
     startTransition(async () => {
-      const res = await calcularDiff();
+      const [res, marcasRes] = await Promise.all([calcularDiff(), listarMarcasExistentes()]);
       if (res.error) { setError(res.error); setFase("idle"); return; }
       setNuevos(res.nuevos);
       setModificados(res.modificados);
       setIguales(res.iguales);
       setGaps(res.gaps);
+      setMarcasExistentes(marcasRes.marcas);
+      setBrandApprovals(new Map());
+      setActiveTab("nuevos");
       setSeleccionados(new Set(res.nuevos.map(p => p.slug)));
       setFase("listo");
     });
@@ -117,16 +136,57 @@ export function ImportarPanel({ allPairs }: { allPairs: CategoriaPair[] }) {
           subcategoria: state.overrideSubcategoria ?? group.suggestedSubcategoria,
         };
       });
-    if (!approvedGroups.length) return;
+    const brandMappings = [...brandApprovals.entries()]
+      .filter(([, state]) => state.approved)
+      .map(([wooBrandName, state]) => ({
+        wooBrandName,
+        marcaId: state.isNewBrand ? null : (state.mappingToExisting ?? null),
+        isNewBrand: state.isNewBrand,
+      }));
+    if (!approvedGroups.length && !brandMappings.length) return;
     const total = approvedGroups.reduce((s, g) => s + g.slugsConId.length, 0);
-    setProgreso({ ok: 0, total });
+    setProgreso(total > 0 ? { ok: 0, total } : null);
     setFase("publicando");
     startTransition(async () => {
-      const result = await publicarAprobados({ approvedGroups });
+      const result = await publicarAprobados({ approvedGroups, brandMappings });
       setSmartResult(result);
       if (result.error) setError(result.error);
       setProgreso(null);
       setFase("listo");
+    });
+  }
+
+  function setBrandAsNew(wooBrandName: string, checked: boolean) {
+    setBrandApprovals(prev => {
+      const next = new Map(prev);
+      if (!checked) { next.delete(wooBrandName); return next; }
+      next.set(wooBrandName, { approved: true, isNewBrand: true, mappingToExisting: undefined });
+      return next;
+    });
+  }
+
+  function setBrandMapping(wooBrandName: string, marcaId: string) {
+    setBrandApprovals(prev => {
+      const next = new Map(prev);
+      if (!marcaId) { next.delete(wooBrandName); return next; }
+      next.set(wooBrandName, { approved: true, isNewBrand: false, mappingToExisting: marcaId });
+      return next;
+    });
+  }
+
+  function selectAllBrandsAsNew(brands: MarcaResolution[]) {
+    setBrandApprovals(prev => {
+      const next = new Map(prev);
+      for (const b of brands) next.set(b.wooBrandName, { approved: true, isNewBrand: true, mappingToExisting: undefined });
+      return next;
+    });
+  }
+
+  function deselectAllBrands(brands: MarcaResolution[]) {
+    setBrandApprovals(prev => {
+      const next = new Map(prev);
+      for (const b of brands) next.delete(b.wooBrandName);
+      return next;
     });
   }
 
@@ -182,8 +242,9 @@ export function ImportarPanel({ allPairs }: { allPairs: CategoriaPair[] }) {
       return n + (group?.products.length ?? 0);
     }, 0);
 
-  const hasGaps = gaps.newBrands.length > 0 || gaps.unmappedCategories.length > 0;
+  const hasGaps = gaps.newBrands.length > 0 || gaps.unmappedCategories.length > 0 || gaps.pendingBrands.length > 0;
   const uniqueCategorias = [...new Set(allPairs.map(p => p.categoria))];
+  const brandApprovalCount = [...brandApprovals.values()].filter(s => s.approved).length;
 
   // ── Render ──────────────────────────────────────────────────────────────────
 
@@ -285,34 +346,57 @@ export function ImportarPanel({ allPairs }: { allPairs: CategoriaPair[] }) {
               <div className="text-sm text-amber-800 space-y-1">
                 <p className="font-medium">Se detectaron elementos que requieren revisión:</p>
                 {gaps.newBrands.length > 0 && (
-                  <p>• {gaps.newBrands.length} marca{gaps.newBrands.length > 1 ? "s" : ""} nueva{gaps.newBrands.length > 1 ? "s" : ""}: {gaps.newBrands.slice(0, 3).join(", ")}{gaps.newBrands.length > 3 ? "…" : ""}</p>
+                  <p>• {gaps.newBrands.length} marca{gaps.newBrands.length > 1 ? "s" : ""} confirmada{gaps.newBrands.length > 1 ? "s" : ""} como nueva{gaps.newBrands.length > 1 ? "s" : ""}: {gaps.newBrands.slice(0, 3).map(b => b.wooBrandName).join(", ")}{gaps.newBrands.length > 3 ? "…" : ""}</p>
+                )}
+                {gaps.pendingBrands.length > 0 && (
+                  <p>• {gaps.pendingBrands.length} marca{gaps.pendingBrands.length > 1 ? "s" : ""} pendiente{gaps.pendingBrands.length > 1 ? "s" : ""} de decisión — revisar en la pestaña Marcas</p>
                 )}
                 {gaps.unmappedCategories.length > 0 && (
                   <p>• {gaps.unmappedCategories.length} categoría{gaps.unmappedCategories.length > 1 ? "s" : ""} de WooCommerce sin mapear</p>
                 )}
               </div>
-              <button
-                onClick={handleRevisar}
-                className="shrink-0 px-4 py-2 bg-amber-700 text-white text-xs tracking-widest uppercase hover:bg-amber-800 transition-colors"
-              >
-                Revisar y publicar
-              </button>
+              {gaps.unmappedCategories.length > 0 && (
+                <button
+                  onClick={handleRevisar}
+                  className="shrink-0 px-4 py-2 bg-amber-700 text-white text-xs tracking-widest uppercase hover:bg-amber-800 transition-colors"
+                >
+                  Revisar categorías
+                </button>
+              )}
             </div>
           )}
 
-          {/* Action bar (fast path for mapped products) */}
-          <div className="flex items-center justify-between gap-4 bg-neutral-50 border border-neutral-200 px-4 py-3">
-            <p className="text-sm text-neutral-600">
-              <span className="font-medium text-neutral-900">{seleccionados.size}</span> seleccionados para aplicar
-            </p>
-            <button
-              onClick={handleAplicar}
-              disabled={!seleccionados.size || fase === "aplicando" || fase === "publicando"}
-              className="px-6 py-2 bg-neutral-900 text-white text-xs tracking-widest uppercase hover:bg-neutral-700 disabled:opacity-40 transition-colors"
-            >
-              {fase === "aplicando" ? "Aplicando…" : `Aplicar ${seleccionados.size} cambios`}
-            </button>
+          {/* Tab bar */}
+          <div className="flex border-b border-neutral-200">
+            {(["nuevos", "precios", "marcas"] as Tab[]).map(tab => {
+              const counts = { nuevos: nuevos.length, precios: modificados.length, marcas: gaps.pendingBrands?.length ?? 0 };
+              const labels = { nuevos: "Nuevos", precios: "Precios", marcas: "Marcas" };
+              return (
+                <button key={tab} onClick={() => setActiveTab(tab)}
+                  className={`px-4 py-2.5 text-xs tracking-widest uppercase border-b-2 transition-colors ${
+                    activeTab === tab ? "border-neutral-900 text-neutral-900" : "border-transparent text-neutral-400 hover:text-neutral-600"
+                  }`}>
+                  {labels[tab]} ({counts[tab]})
+                </button>
+              );
+            })}
           </div>
+
+          {/* Action bar (fast path for mapped products) — no aplica a la pestaña Marcas */}
+          {activeTab !== "marcas" && (
+            <div className="flex items-center justify-between gap-4 bg-neutral-50 border border-neutral-200 px-4 py-3">
+              <p className="text-sm text-neutral-600">
+                <span className="font-medium text-neutral-900">{seleccionados.size}</span> seleccionados para aplicar
+              </p>
+              <button
+                onClick={handleAplicar}
+                disabled={!seleccionados.size || fase === "aplicando" || fase === "publicando"}
+                className="px-6 py-2 bg-neutral-900 text-white text-xs tracking-widest uppercase hover:bg-neutral-700 disabled:opacity-40 transition-colors"
+              >
+                {fase === "aplicando" ? "Aplicando…" : `Aplicar ${seleccionados.size} cambios`}
+              </button>
+            </div>
+          )}
 
           {/* Progress bar */}
           {(fase === "aplicando" || fase === "publicando") && progreso && (
@@ -330,79 +414,162 @@ export function ImportarPanel({ allPairs }: { allPairs: CategoriaPair[] }) {
             </div>
           )}
 
-          {/* Nuevos list */}
-          {nuevos.length > 0 && (
-            <section>
-              <div className="flex items-center justify-between mb-3">
-                <h2 className="text-sm font-medium text-neutral-900 uppercase tracking-widest">
-                  Nuevos ({nuevos.length})
-                </h2>
-                <div className="flex gap-3">
-                  <button onClick={() => selectAll(nuevos)} className="text-xs text-neutral-500 hover:text-neutral-900 underline underline-offset-2">Todos</button>
-                  <button onClick={() => deselectAll(nuevos)} className="text-xs text-neutral-500 hover:text-neutral-900 underline underline-offset-2">Ninguno</button>
+          {/* Tab: Nuevos */}
+          {activeTab === "nuevos" && (
+            nuevos.length > 0 ? (
+              <section>
+                <div className="flex items-center justify-between mb-3">
+                  <h2 className="text-sm font-medium text-neutral-900 uppercase tracking-widest">
+                    Nuevos ({nuevos.length})
+                  </h2>
+                  <div className="flex gap-3">
+                    <button onClick={() => selectAll(nuevos)} className="text-xs text-neutral-500 hover:text-neutral-900 underline underline-offset-2">Todos</button>
+                    <button onClick={() => deselectAll(nuevos)} className="text-xs text-neutral-500 hover:text-neutral-900 underline underline-offset-2">Ninguno</button>
+                  </div>
                 </div>
-              </div>
-              <div className="border border-neutral-200 divide-y divide-neutral-100">
-                {nuevos.map(p => (
-                  <label key={p.slug} className="flex items-center gap-3 px-4 py-2.5 cursor-pointer hover:bg-neutral-50 transition-colors">
-                    <input
-                      type="checkbox"
-                      checked={seleccionados.has(p.slug)}
-                      onChange={() => toggleSlug(p.slug)}
-                      className="w-4 h-4 accent-neutral-900 shrink-0"
-                    />
-                    <span className="text-sm text-neutral-800 flex-1">{p.nombre}</span>
-                    <span className="text-xs text-neutral-400 font-mono">{p.slug}</span>
-                    <span className="text-xs px-2 py-0.5 bg-green-50 text-green-700 border border-green-200">nuevo</span>
-                  </label>
-                ))}
-              </div>
-            </section>
-          )}
-
-          {/* Modificados list */}
-          {modificados.length > 0 && (
-            <section>
-              <div className="flex items-center justify-between mb-3">
-                <h2 className="text-sm font-medium text-neutral-900 uppercase tracking-widest">
-                  Con cambios ({modificados.length})
-                </h2>
-                <div className="flex gap-3">
-                  <button onClick={() => selectAll(modificados)} className="text-xs text-neutral-500 hover:text-neutral-900 underline underline-offset-2">Todos</button>
-                  <button onClick={() => deselectAll(modificados)} className="text-xs text-neutral-500 hover:text-neutral-900 underline underline-offset-2">Ninguno</button>
-                </div>
-              </div>
-              <div className="border border-neutral-200 divide-y divide-neutral-100">
-                {modificados.map(p => (
-                  <details key={p.slug} className="group">
-                    <summary className="flex items-center gap-3 px-4 py-2.5 cursor-pointer hover:bg-neutral-50 transition-colors list-none">
+                <div className="border border-neutral-200 divide-y divide-neutral-100">
+                  {nuevos.map(p => (
+                    <label key={p.slug} className="flex items-center gap-3 px-4 py-2.5 cursor-pointer hover:bg-neutral-50 transition-colors">
                       <input
                         type="checkbox"
                         checked={seleccionados.has(p.slug)}
-                        onChange={(e) => { e.stopPropagation(); toggleSlug(p.slug); }}
-                        onClick={e => e.stopPropagation()}
+                        onChange={() => toggleSlug(p.slug)}
                         className="w-4 h-4 accent-neutral-900 shrink-0"
                       />
                       <span className="text-sm text-neutral-800 flex-1">{p.nombre}</span>
-                      <span className="text-xs text-neutral-400">
-                        {Object.keys(p.cambios ?? {}).join(", ")}
-                      </span>
-                      <span className="text-xs px-2 py-0.5 bg-amber-50 text-amber-700 border border-amber-200">
-                        {Object.keys(p.cambios ?? {}).length} cambio{Object.keys(p.cambios ?? {}).length > 1 ? "s" : ""}
-                      </span>
-                    </summary>
-                    <div className="px-11 pb-3 pt-1 space-y-1">
-                      {Object.entries(p.cambios ?? {}).map(([campo, vals]) => (
-                        <div key={campo} className="grid grid-cols-[80px_1fr_1fr] gap-2 text-xs">
-                          <span className="text-neutral-500 font-medium uppercase tracking-wide">{campo}</span>
-                          <span className="text-red-600 bg-red-50 px-2 py-0.5 truncate">{vals.actual ?? "—"}</span>
-                          <span className="text-green-700 bg-green-50 px-2 py-0.5 truncate">→ {vals.woo ?? "—"}</span>
-                        </div>
-                      ))}
+                      <span className="text-xs text-neutral-400 font-mono">{p.slug}</span>
+                      <span className="text-xs px-2 py-0.5 bg-green-50 text-green-700 border border-green-200">nuevo</span>
+                    </label>
+                  ))}
+                </div>
+              </section>
+            ) : (
+              <p className="text-sm text-neutral-400 py-8 text-center">No hay productos nuevos.</p>
+            )
+          )}
+
+          {/* Tab: Precios */}
+          {activeTab === "precios" && (
+            modificados.length > 0 ? (
+              <section>
+                <div className="flex items-center justify-between mb-3">
+                  <h2 className="text-sm font-medium text-neutral-900 uppercase tracking-widest">
+                    Con cambios ({modificados.length})
+                  </h2>
+                  <div className="flex gap-3">
+                    <button onClick={() => selectAll(modificados)} className="text-xs text-neutral-500 hover:text-neutral-900 underline underline-offset-2">Todos</button>
+                    <button onClick={() => deselectAll(modificados)} className="text-xs text-neutral-500 hover:text-neutral-900 underline underline-offset-2">Ninguno</button>
+                  </div>
+                </div>
+                <div className="border border-neutral-200 divide-y divide-neutral-100">
+                  {modificados.map(p => (
+                    <details key={p.slug} className="group">
+                      <summary className="flex items-center gap-3 px-4 py-2.5 cursor-pointer hover:bg-neutral-50 transition-colors list-none">
+                        <input
+                          type="checkbox"
+                          checked={seleccionados.has(p.slug)}
+                          onChange={(e) => { e.stopPropagation(); toggleSlug(p.slug); }}
+                          onClick={e => e.stopPropagation()}
+                          className="w-4 h-4 accent-neutral-900 shrink-0"
+                        />
+                        <span className="text-sm text-neutral-800 flex-1">{p.nombre}</span>
+                        <span className="text-xs text-neutral-400">
+                          {Object.keys(p.cambios ?? {}).join(", ")}
+                        </span>
+                        <span className="text-xs px-2 py-0.5 bg-amber-50 text-amber-700 border border-amber-200">
+                          {Object.keys(p.cambios ?? {}).length} cambio{Object.keys(p.cambios ?? {}).length > 1 ? "s" : ""}
+                        </span>
+                      </summary>
+                      <div className="px-11 pb-3 pt-1 space-y-1">
+                        {Object.entries(p.cambios ?? {}).map(([campo, vals]) => (
+                          <div key={campo} className="grid grid-cols-[80px_1fr_1fr] gap-2 text-xs">
+                            <span className="text-neutral-500 font-medium uppercase tracking-wide">{campo}</span>
+                            <span className="text-red-600 bg-red-50 px-2 py-0.5 truncate">{vals.actual ?? "—"}</span>
+                            <span className="text-green-700 bg-green-50 px-2 py-0.5 truncate">→ {vals.woo ?? "—"}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </details>
+                  ))}
+                </div>
+              </section>
+            ) : (
+              <p className="text-sm text-neutral-400 py-8 text-center">No hay cambios de precio.</p>
+            )
+          )}
+
+          {/* Tab: Marcas */}
+          {activeTab === "marcas" && (
+            <section className="space-y-4">
+              {gaps.pendingBrands.length === 0 ? (
+                <p className="text-sm text-neutral-400 py-8 text-center">No hay marcas pendientes de decisión.</p>
+              ) : (
+                <>
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm text-neutral-600">
+                      <span className="font-medium text-neutral-900">{brandApprovalCount}</span> de {gaps.pendingBrands.length} marcas con decisión
+                    </p>
+                    <div className="flex gap-3">
+                      <button onClick={() => selectAllBrandsAsNew(gaps.pendingBrands)} className="text-xs text-neutral-500 hover:text-neutral-900 underline underline-offset-2">Marcar todas como nuevas</button>
+                      <button onClick={() => deselectAllBrands(gaps.pendingBrands)} className="text-xs text-neutral-500 hover:text-neutral-900 underline underline-offset-2">Ninguno</button>
                     </div>
-                  </details>
-                ))}
-              </div>
+                  </div>
+                  <div className="border border-neutral-200 divide-y divide-neutral-100">
+                    {gaps.pendingBrands.map(brand => {
+                      const state = brandApprovals.get(brand.wooBrandName);
+                      const isNewSelected = !!state?.approved && state.isNewBrand;
+                      return (
+                        <div key={brand.wooBrandName} className="px-4 py-3 space-y-2">
+                          <div className="flex items-center justify-between gap-4">
+                            <div>
+                              <p className="text-sm text-neutral-800 font-medium">{brand.wooBrandName}</p>
+                              <p className="text-xs text-neutral-400">
+                                {brand.productNames.slice(0, 3).join(", ")}
+                                {brand.productCount > 3 ? ` +${brand.productCount - 3} más` : ""}
+                              </p>
+                            </div>
+                            <span className="text-xs text-neutral-400 shrink-0">
+                              {brand.productCount} producto{brand.productCount > 1 ? "s" : ""}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <button
+                              onClick={() => setBrandAsNew(brand.wooBrandName, !isNewSelected)}
+                              className={`px-3 py-1.5 text-xs tracking-widest uppercase border transition-colors ${
+                                isNewSelected
+                                  ? "bg-green-700 border-green-700 text-white"
+                                  : "border-green-200 bg-green-50 text-green-700 hover:bg-green-100"
+                              }`}
+                            >
+                              Marca nueva
+                            </button>
+                            <span className="text-xs text-neutral-400">o</span>
+                            <select
+                              value={state && !state.isNewBrand ? state.mappingToExisting ?? "" : ""}
+                              onChange={e => setBrandMapping(brand.wooBrandName, e.target.value)}
+                              className="text-xs border border-neutral-200 px-2 py-1.5 bg-white flex-1"
+                            >
+                              <option value="">Mapear a marca existente…</option>
+                              {marcasExistentes.map(m => (
+                                <option key={m.id} value={m.id}>{m.nombre}</option>
+                              ))}
+                            </select>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div className="flex justify-end">
+                    <button
+                      onClick={handlePublicarAprobados}
+                      disabled={brandApprovalCount === 0 || isPending}
+                      className="px-6 py-2.5 bg-[#3D2018] text-white text-xs tracking-widest uppercase hover:bg-neutral-900 disabled:opacity-40 transition-colors"
+                    >
+                      Guardar {brandApprovalCount > 0 ? `${brandApprovalCount} decisiones` : "decisiones"} de marca
+                    </button>
+                  </div>
+                </>
+              )}
             </section>
           )}
         </>
@@ -414,23 +581,23 @@ export function ImportarPanel({ allPairs }: { allPairs: CategoriaPair[] }) {
           {/* Summary */}
           <div className="border border-neutral-200 bg-neutral-50 px-4 py-3 text-sm text-neutral-600 flex gap-4">
             <span><strong className="text-neutral-900">{nuevos.length}</strong> nuevos</span>
-            <span><strong className="text-amber-700">{gaps.newBrands.length}</strong> marcas nuevas</span>
+            <span><strong className="text-amber-700">{gaps.newBrands.length}</strong> marcas confirmadas</span>
             <span><strong className="text-amber-700">{gaps.unmappedCategories.length}</strong> categorías sin mapear</span>
           </div>
 
           {/* New brands */}
           {gaps.newBrands.length > 0 && (
             <div className="border border-neutral-200 p-4 space-y-2">
-              <p className="text-xs font-medium tracking-widest uppercase text-neutral-500">Nuevas marcas detectadas</p>
+              <p className="text-xs font-medium tracking-widest uppercase text-neutral-500">Marcas confirmadas como nuevas</p>
               <div className="flex flex-wrap gap-2">
                 {gaps.newBrands.map(brand => (
-                  <span key={brand} className="inline-flex items-center gap-1.5 px-2.5 py-1 border border-amber-200 bg-amber-50 text-amber-800 text-xs">
-                    {brand}
-                    <span className="text-amber-500 font-medium">· sin logo</span>
+                  <span key={brand.wooBrandName} className="inline-flex items-center gap-1.5 px-2.5 py-1 border border-amber-200 bg-amber-50 text-amber-800 text-xs">
+                    {brand.wooBrandName}
+                    <span className="text-amber-500 font-medium">· {brand.productCount} producto{brand.productCount > 1 ? "s" : ""}</span>
                   </span>
                 ))}
               </div>
-              <p className="text-xs text-neutral-400">Se crearán automáticamente al publicar. Podrás añadir el logo después.</p>
+              <p className="text-xs text-neutral-400">Ya fueron aprobadas anteriormente en la pestaña Marcas. Se crearán al publicar.</p>
             </div>
           )}
 
