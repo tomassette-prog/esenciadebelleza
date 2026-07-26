@@ -298,7 +298,7 @@ export function ImportarPanel({ allPairs }: { allPairs: CategoriaPair[] }) {
             <div>
               <p className="text-sm font-medium text-amber-800">Vincular IDs de WooCommerce</p>
               <p className="text-xs text-amber-600 mt-0.5">
-                Si es la primera vez que usas el sistema de importación, ejecuta esto antes de "Calcular diff" para vincular los productos existentes con sus IDs de WooCommerce.
+                Si es la primera vez que usas el sistema de importación, ejecuta esto antes de &ldquo;Calcular diff&rdquo; para vincular los productos existentes con sus IDs de WooCommerce.
               </p>
             </div>
             <button
