@@ -39,6 +39,10 @@ next-env.d.ts
 # logs
 woo_import_log.txt
 scrape_log.txt
+
+# VS Code settings (contain API keys)
+.vscode/
+
 # Local AI runtime state
 .atl/
 
