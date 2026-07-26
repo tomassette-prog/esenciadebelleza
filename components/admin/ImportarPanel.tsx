@@ -6,6 +6,7 @@ import {
   aplicarCambios,
   publicarAprobados,
   listarMarcasExistentes,
+  backfillWooId,
   type ProductoDiff,
   type DiffGaps,
   type ReviewGroup,
@@ -90,6 +91,10 @@ export function ImportarPanel({ allPairs }: { allPairs: CategoriaPair[] }) {
   const [activeTab, setActiveTab] = useState<Tab>("nuevos");
   const [brandApprovals, setBrandApprovals] = useState<Map<string, BrandState>>(new Map());
   const [marcasExistentes, setMarcasExistentes] = useState<MarcaExistente[]>([]);
+
+  // Backfill state
+  const [backfillResult, setBackfillResult] = useState<{ ok: number; bySku: number; bySlug: number; byName: number; unmatched: number } | null>(null);
+  const [backfillPending, setBackfillPending] = useState(false);
 
   // ── Handlers ────────────────────────────────────────────────────────────────
 
@@ -207,6 +212,18 @@ export function ImportarPanel({ allPairs }: { allPairs: CategoriaPair[] }) {
     setSeleccionados(prev => new Set([...prev].filter(s => !rem.has(s))));
   }
 
+  function handleBackfill() {
+    setBackfillPending(true);
+    setBackfillResult(null);
+    setError(null);
+    startTransition(async () => {
+      const res = await backfillWooId();
+      if (res.error) { setError(res.error); }
+      setBackfillResult({ ok: res.ok, bySku: res.bySku, bySlug: res.bySlug, byName: res.byName, unmatched: res.unmatched });
+      setBackfillPending(false);
+    });
+  }
+
   function handleAplicar() {
     if (!seleccionados.size) return;
     setFase("aplicando");
@@ -272,6 +289,36 @@ export function ImportarPanel({ allPairs }: { allPairs: CategoriaPair[] }) {
       {/* Alerts */}
       {error && (
         <div className="p-3 bg-red-50 border border-red-200 text-red-700 text-sm">{error}</div>
+      )}
+
+      {/* Backfill woo_id — only show if no diff has been run yet */}
+      {fase === "idle" && (
+        <div className="border border-amber-200 bg-amber-50 p-4">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <p className="text-sm font-medium text-amber-800">Vincular IDs de WooCommerce</p>
+              <p className="text-xs text-amber-600 mt-0.5">
+                Si es la primera vez que usas el sistema de importación, ejecuta esto antes de "Calcular diff" para vincular los productos existentes con sus IDs de WooCommerce.
+              </p>
+            </div>
+            <button
+              onClick={handleBackfill}
+              disabled={backfillPending}
+              className="shrink-0 px-4 py-2 bg-amber-700 text-white text-xs tracking-widest uppercase hover:bg-amber-800 disabled:opacity-50 transition-colors"
+            >
+              {backfillPending ? "Vinculando…" : "Vincular IDs"}
+            </button>
+          </div>
+          {backfillResult && (
+            <div className="mt-3 p-3 bg-white border border-amber-200 text-xs space-y-1">
+              <p className="font-medium text-amber-800">✅ {backfillResult.ok} productos vinculados</p>
+              <p className="text-amber-700">Por SKU: {backfillResult.bySku} · Por slug: {backfillResult.bySlug} · Por nombre: {backfillResult.byName}</p>
+              {backfillResult.unmatched > 0 && (
+                <p className="text-amber-600">⚠️ {backfillResult.unmatched} productos sin match — revisa los logs del servidor</p>
+              )}
+            </div>
+          )}
+        </div>
       )}
 
       {/* Calculating */}

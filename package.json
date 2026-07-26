@@ -16,7 +16,8 @@
     "seo:batch:todos": "ts-node --project tsconfig.scripts.json scripts/seo-batch.ts --todos",
     "upload:logos": "ts-node --project tsconfig.scripts.json scripts/upload-logos.ts",
     "migrate:imagenes": "ts-node --project tsconfig.scripts.json scripts/migrate-imagenes.ts",
-    "merchant:fix": "ts-node --project tsconfig.scripts.json scripts/merchant-center-fix.ts"
+    "merchant:fix": "ts-node --project tsconfig.scripts.json scripts/merchant-center-fix.ts",
+    "backfill:woo-id": "ts-node --project tsconfig.scripts.json scripts/backfill-woo-id.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.27.3",

@@ -823,3 +823,148 @@ export async function publicarAprobados(payload: ReviewPayload): Promise<SmartAp
     return { ...empty, error: String(e) };
   }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// backfillWooId — Vincula productos existentes con sus IDs de WooCommerce
+// ─────────────────────────────────────────────────────────────────────────────
+
+export async function backfillWooId(): Promise<{
+  ok: number;
+  bySku: number;
+  bySlug: number;
+  byName: number;
+  unmatched: number;
+  unmatchedList: Array<{ id: number; name: string; slug: string }>;
+  error?: string;
+}> {
+  try {
+    await verificarAdmin();
+  } catch {
+    return { ok: 0, bySku: 0, bySlug: 0, byName: 0, unmatched: 0, unmatchedList: [], error: "No autorizado" };
+  }
+
+  try {
+    const supa = adminClient();
+    const auth = Buffer.from(`${CK}:${CS}`).toString("base64");
+
+    // 1. Fetch ALL WC products (paginated)
+    const wooProducts: { id: number; name: string; slug: string; type: string; sku: string; variations: number[] }[] = [];
+    let page = 1;
+    while (true) {
+      const res = await fetch(`${WOO_URL}/wp-json/wc/v3/products?status=publish&per_page=100&page=${page}`, {
+        headers: { Authorization: `Basic ${auth}` },
+        cache: "no-store",
+      });
+      if (!res.ok) break;
+      const batch = await res.json();
+      if (!Array.isArray(batch) || batch.length === 0) break;
+      wooProducts.push(...batch);
+      if (batch.length < 100) break;
+      page++;
+      await new Promise(r => setTimeout(r, 2000));
+    }
+
+    // 2. Load all Supabase products (only those without woo_id)
+    const sinWooId: { id: string; nombre: string; slug: string }[] = [];
+    const todos: { id: string; nombre: string; slug: string; woo_id: number | null }[] = [];
+    let offset = 0;
+    while (true) {
+      const { data } = await supa.from("productos_padre").select("id, nombre, slug, woo_id").range(offset, offset + 999);
+      if (!data || data.length === 0) break;
+      todos.push(...data);
+      for (const r of data) { if (!r.woo_id) sinWooId.push(r); }
+      if (data.length < 1000) break;
+      offset += 1000;
+    }
+
+    // 3. Load SKUs from variations
+    const skuToParentId = new Map<string, string>();
+    offset = 0;
+    while (true) {
+      const { data } = await supa.from("productos_variaciones").select("sku, producto_padre_id").range(offset, offset + 999);
+      if (!data || data.length === 0) break;
+      for (const r of data) { if (r.sku) skuToParentId.set(r.sku.trim().toLowerCase(), r.producto_padre_id); }
+      if (data.length < 1000) break;
+      offset += 1000;
+    }
+
+    // 4. Build indexes from Supabase
+    const slugToPadre = new Map<string, typeof sinWooId[0]>();
+    const nombreToPadre = new Map<string, typeof sinWooId[0]>();
+    for (const p of sinWooId) {
+      slugToPadre.set(slugify(p.slug), p);
+      const key = p.nombre.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").trim();
+      if (!nombreToPadre.has(key)) nombreToPadre.set(key, p);
+    }
+
+    // 5. Match WC products → Supabase
+    const updates = new Map<string, number>();
+    const unmatched: { id: number; name: string; slug: string }[] = [];
+    let bySku = 0, bySlug = 0, byName = 0;
+
+    for (const wp of wooProducts) {
+      let matched: typeof sinWooId[0] | undefined;
+      let metodo: "sku" | "slug" | "nombre" | undefined;
+
+      // By SKU
+      const skus = [wp.sku];
+      if (wp.type === "variable" && wp.variations?.length) {
+        try {
+          const varRes = await fetch(`${WOO_URL}/wp-json/wc/v3/products/${wp.id}/variations?per_page=100`, {
+            headers: { Authorization: `Basic ${auth}` }, cache: "no-store",
+          });
+          if (varRes.ok) {
+            const vars = await varRes.json();
+            if (Array.isArray(vars)) skus.push(...vars.map((v: { sku: string }) => v.sku).filter(Boolean));
+          }
+        } catch { /* skip */ }
+        await new Promise(r => setTimeout(r, 300));
+      }
+      for (const sku of skus) {
+        const parentId = skuToParentId.get(sku.trim().toLowerCase());
+        if (parentId) { matched = sinWooId.find(p => p.id === parentId); if (matched) { metodo = "sku"; break; } }
+      }
+
+      // By slug
+      if (!matched) {
+        const found = slugToPadre.get(slugify(wp.slug));
+        if (found) { matched = found; metodo = "slug"; }
+      }
+
+      // By name
+      if (!matched) {
+        const key = wp.name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").trim();
+        const found = nombreToPadre.get(key);
+        if (found) { matched = found; metodo = "nombre"; }
+      }
+
+      if (!matched) {
+        unmatched.push({ id: wp.id, name: wp.name, slug: wp.slug });
+        continue;
+      }
+      if (updates.has(matched.id)) continue;
+      updates.set(matched.id, wp.id);
+      if (metodo === "sku") bySku++;
+      else if (metodo === "slug") bySlug++;
+      else byName++;
+    }
+
+    // 6. Batch update
+    const pares = Array.from(updates.entries()).map(([id, woo_id]) => ({ id, woo_id }));
+    let actualizados = 0;
+    for (let i = 0; i < pares.length; i += 50) {
+      const chunk = pares.slice(i, i + 50);
+      const { error } = await supa.from("productos_padre").upsert(chunk, { onConflict: "id" });
+      if (!error) actualizados += chunk.length;
+    }
+
+    return {
+      ok: actualizados,
+      bySku, bySlug, byName,
+      unmatched: unmatched.length,
+      unmatchedList: unmatched.slice(0, 50),
+    };
+  } catch (e) {
+    return { ok: 0, bySku: 0, bySlug: 0, byName: 0, unmatched: 0, unmatchedList: [], error: String(e) };
+  }
+}
