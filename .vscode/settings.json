@@ -1,3 +1,7 @@
 {
-    "mimo-copilot.baseUrl": "https://token-plan-ams.xiaomimimo.com/v1"
+    "mimo-copilot.baseUrl": "https://token-plan-ams.xiaomimimo.com/v1",
+    "mimo-copilot.apiKey": "tp-e535694cfz0jk0m8uh572w4t8bdd1zp8gk55rb2jk3bzt8le",
+    "mimoChat.apiUrl": "https://token-plan-ams.xiaomimimo.com/v1",
+    "mimoChat.model": "mimo-v2.5-pro",
+    "mimoChat.apiKey": "tp-e535694cfz0jk0m8uh572w4t8bdd1zp8gk55rb2jk3bzt8le"
 }
