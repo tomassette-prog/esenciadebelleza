@@ -901,11 +901,25 @@ type BackfillResult = {
 };
 
 export async function getBackfillProgress() {
+  // Leer de la tabla de progreso (persiste entre invocaciones de Vercel)
+  try {
+    const supa = adminClient();
+    const { data } = await supa.from("backfill_progress").select("payload").eq("id", 1).single();
+    if (data?.payload) return JSON.parse(data.payload);
+  } catch { /* tabla no existe o error */ }
   return _backfillProgress ?? { phase: "idle", current: 0, total: 0, done: true };
+}
+
+async function _saveProgressToDb(progress: any) {
+  try {
+    const supa = adminClient();
+    await supa.from("backfill_progress").upsert({ id: 1, payload: JSON.stringify(progress) }, { onConflict: "id" });
+  } catch { /* ignore */ }
 }
 
 function setBfProgress(phase: string, current: number, total: number) {
   _backfillProgress = { phase, current, total, done: false };
+  _saveProgressToDb(_backfillProgress).catch(() => {});
 }
 
 export async function backfillWooId(): Promise<BackfillResult> {
@@ -1015,10 +1029,12 @@ export async function backfillWooId(): Promise<BackfillResult> {
 
     const result: BackfillResult = { ok: actualizados, bySku, bySlug, byName, unmatched: unmatched.length, unmatchedList: unmatched.slice(0, 50), error: lastError || undefined };
     _backfillProgress = { phase: "Completado", current: actualizados, total: actualizados, done: true, result };
+    await _saveProgressToDb(_backfillProgress);
     return result;
   } catch (e) {
     const result: BackfillResult = { ok: 0, bySku: 0, bySlug: 0, byName: 0, unmatched: 0, unmatchedList: [], error: String(e) };
     _backfillProgress = { phase: "Error", current: 0, total: 0, done: true, result };
+    await _saveProgressToDb(_backfillProgress);
     return result;
   }
 }

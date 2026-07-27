@@ -24,3 +24,14 @@ COMMENT ON TABLE woo_snapshot IS 'Último snapshot de WooCommerce para comparaci
 GRANT ALL ON woo_snapshot TO service_role;
 GRANT ALL ON woo_snapshot TO authenticated;
 GRANT ALL ON woo_snapshot TO anon;
+
+-- Tabla para tracking de progreso del backfill (persiste entre invocaciones de Vercel)
+CREATE TABLE IF NOT EXISTS backfill_progress (
+  id INTEGER PRIMARY KEY DEFAULT 1,
+  payload TEXT NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+GRANT ALL ON backfill_progress TO service_role;
+GRANT ALL ON backfill_progress TO authenticated;
+GRANT ALL ON backfill_progress TO anon;
