@@ -311,7 +311,53 @@ export async function calcularDiff(): Promise<{
       const snap = snapshotMap.get(p.id);
 
       if (!snap) {
-        // Producto no estaba en el snapshot → es nuevo en WC
+        // Producto no en snapshot — verificar si ya existe en Esencia por slug
+        const existingInEsencia = supaMap.get(slug);
+        if (existingInEsencia) {
+          // Existe en Esencia pero sin woo_id → vincular automáticamente
+          // Tratar como existente y comparar precio
+          supaMapByWooId.set(p.id, slug);
+          if (wooPrice > 0) {
+            modificados.push({
+              slug,
+              nombre: p.name,
+              tipo: "modificado",
+              wooId: p.id,
+              wooCategories: p.categories.map(c => c.id),
+              precioCambio: { woo: wooPrice, actual: 0 } // precio actual desconocido
+            });
+          } else {
+            iguales++;
+          }
+          continue;
+        }
+        // Fallback: buscar por nombre normalizado
+        const normName = p.name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").trim();
+        let foundByNombre = false;
+        for (const [, info] of supaMap) {
+          const infoName = (info as any).nombre?.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").trim();
+          if (infoName === normName) {
+            // Encontrado por nombre → vincular y tratar como existente
+            const foundSlug = (info as any).slug;
+            supaMapByWooId.set(p.id, foundSlug);
+            if (wooPrice > 0) {
+              modificados.push({
+                slug: foundSlug,
+                nombre: p.name,
+                tipo: "modificado",
+                wooId: p.id,
+                wooCategories: p.categories.map(c => c.id),
+                precioCambio: { woo: wooPrice, actual: 0 }
+              });
+            } else {
+              iguales++;
+            }
+            foundByNombre = true;
+            break;
+          }
+        }
+        if (foundByNombre) continue;
+        // No existe en Esencia → producto genuinamente nuevo
         const brandResolution = await resolveBrandFromWc(supa, p.name, p.attributes ?? [], brandMappingsCache);
         nuevos.push({
           slug, nombre: p.name, tipo: "nuevo", wooId: p.id, wooCategories: p.categories.map(c => c.id),
@@ -675,9 +721,19 @@ export async function publicarAprobados(payload: ReviewPayload): Promise<SmartAp
 
     const publishedSlugs = fetched.map(p => p.slug || slugify(p.name));
     const { data: existentes } = await supa.from("productos_padre")
-      .select("slug, destacado, nuevo")
+      .select("id, slug, nombre, destacado, nuevo, woo_id")
       .in("slug", publishedSlugs);
     const existMap = new Map((existentes ?? []).map(e => [e.slug, e]));
+
+    // También buscar por nombre normalizado como fallback anti-duplicado
+    const existByNombre = new Map<string, { slug: string; id: string }>();
+    const { data: todosProductos } = await supa.from("productos_padre")
+      .select("id, slug, nombre")
+      .range(0, 4999); // cargar todos para matching por nombre
+    for (const r of (todosProductos ?? [])) {
+      const key = r.nombre.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").trim();
+      existByNombre.set(key, { slug: r.slug, id: r.id });
+    }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     // IMPORTANTE: Para productos ya existentes, solo actualizar PRECIOS
@@ -693,7 +749,18 @@ export async function publicarAprobados(payload: ReviewPayload): Promise<SmartAp
     for (const p of fetched) {
       const slug = p.slug || slugify(p.name);
       const cat = slugToCat.get(slug) ?? resolverCategoria(p.categories, new Map(Object.entries(WOO_CAT_MAP).map(([k,v]) => [Number(k),v])));
-      const ex = existMap.get(slug);
+      let ex = existMap.get(slug);
+
+      // Fallback anti-duplicado: si no existe por slug, buscar por nombre
+      if (!ex) {
+        const normName = p.name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").trim();
+        const foundByName = existByNombre.get(normName);
+        if (foundByName) {
+          // Existe en Esencia con otro slug → vincular woo_id y tratar como existente
+          ex = { slug: foundByName.slug, id: foundByName.id } as any;
+        }
+      }
+
       const marcaId = resolvedBrandMap.get(brandNameForProduct(p)) ?? null;
       const nombreTruncado = p.name.trim().slice(0, maxNombre);
       
