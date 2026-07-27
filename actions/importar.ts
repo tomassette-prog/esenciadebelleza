@@ -842,10 +842,9 @@ export async function publicarAprobados(payload: ReviewPayload): Promise<SmartAp
 
 // ─────────────────────────────────────────────────────────────────────────────
 // backfillWooId — Vincula productos existentes con sus IDs de WooCommerce
-// Optimizado: lotes paralelos, Maps O(1), progreso en tiempo real
+// Estrategia rápida: slug + nombre (sin descargar variaciones)
 // ─────────────────────────────────────────────────────────────────────────────
 
-// Progreso global para polling desde el cliente
 let _backfillProgress: { phase: string; current: number; total: number; done: boolean; result?: BackfillResult } | null = null;
 
 type BackfillResult = {
@@ -868,12 +867,12 @@ export async function backfillWooId(): Promise<BackfillResult> {
   try {
     const supa = adminClient();
 
-    // 1. Fetch WC products
+    // 1. Fetch WC products (solo datos básicos, sin variaciones)
     setBfProgress("Descargando productos de WooCommerce…", 0, 0);
-    const wooProducts: { id: number; name: string; slug: string; type: string; sku: string; variations: number[] }[] = [];
+    const wooProducts: { id: number; name: string; slug: string; sku: string }[] = [];
     let page = 1;
     while (true) {
-      const batch = await fetchWoo(`/products?status=publish&per_page=100&page=${page}`) as { id: number; name: string; slug: string; type: string; sku: string; variations: number[] }[];
+      const batch = await fetchWoo(`/products?status=publish&per_page=100&page=${page}`) as { id: number; name: string; slug: string; sku: string }[];
       if (!Array.isArray(batch) || batch.length === 0) break;
       wooProducts.push(...batch);
       setBfProgress(`Descargando WC… ${wooProducts.length} productos`, wooProducts.length, 0);
@@ -881,30 +880,7 @@ export async function backfillWooId(): Promise<BackfillResult> {
       page++;
     }
 
-    // 2. Fetch variaciones EN PARALELO (lotes de 20)
-    const wooSkuMap = new Map<number, string[]>();
-    for (const p of wooProducts) {
-      if (p.type !== "variable" && p.sku) wooSkuMap.set(p.id, [p.sku.trim().toLowerCase()]);
-    }
-    const variables = wooProducts.filter(p => p.type === "variable" && p.variations?.length);
-    if (variables.length > 0) {
-      setBfProgress(`Descargando variaciones de ${variables.length} productos…`, 0, variables.length);
-      for (let i = 0; i < variables.length; i += 20) {
-        const chunk = variables.slice(i, i + 20);
-        const results = await Promise.all(chunk.map(async p => {
-          try {
-            const vars = await fetchWoo(`/products/${p.id}/variations?per_page=100`) as Array<{ sku: string }>;
-            const skus = Array.isArray(vars) ? vars.map(v => v.sku?.trim().toLowerCase()).filter(Boolean) : [];
-            if (p.sku) skus.push(p.sku.trim().toLowerCase());
-            return { id: p.id, skus };
-          } catch { return { id: p.id, skus: p.sku ? [p.sku.trim().toLowerCase()] : [] }; }
-        }));
-        for (const r of results) { if (r.skus.length > 0) wooSkuMap.set(r.id, r.skus); }
-        setBfProgress(`Descargando variaciones…`, i + chunk.length, variables.length);
-      }
-    }
-
-    // 3. Cargar Supabase
+    // 2. Cargar productos sin woo_id
     setBfProgress("Cargando catálogo de Esencia…", 0, 0);
     const sinWooId: { id: string; nombre: string; slug: string }[] = [];
     let offset = 0;
@@ -916,7 +892,7 @@ export async function backfillWooId(): Promise<BackfillResult> {
       offset += 1000;
     }
 
-    // 4. SKUs de variaciones de Supabase
+    // 3. Cargar SKUs de variaciones de Supabase
     const skuToParentId = new Map<string, string>();
     offset = 0;
     while (true) {
@@ -927,7 +903,7 @@ export async function backfillWooId(): Promise<BackfillResult> {
       offset += 1000;
     }
 
-    // 5. Índices O(1)
+    // 4. Índices O(1)
     const idToPadre = new Map(sinWooId.map(p => [p.id, p]));
     const slugToPadre = new Map(sinWooId.map(p => [slugify(p.slug), p]));
     const nombreToPadre = new Map<string, typeof sinWooId[0]>();
@@ -936,7 +912,7 @@ export async function backfillWooId(): Promise<BackfillResult> {
       if (!nombreToPadre.has(key)) nombreToPadre.set(key, p);
     }
 
-    // 6. Matching
+    // 5. Matching: SKU → slug → nombre
     setBfProgress("Emparejando productos…", 0, wooProducts.length);
     const updates = new Map<string, number>();
     const unmatched: { id: number; name: string; slug: string }[] = [];
@@ -947,11 +923,16 @@ export async function backfillWooId(): Promise<BackfillResult> {
       let matched: typeof sinWooId[0] | undefined;
       let metodo: "sku" | "slug" | "nombre" | undefined;
 
-      for (const sku of (wooSkuMap.get(wp.id) ?? [])) {
-        const parentId = skuToParentId.get(sku);
-        if (parentId) { matched = idToPadre.get(parentId); if (matched) { metodo = "sku"; break; } }
+      // By SKU (solo el SKU del padre, sin descargar variaciones)
+      if (wp.sku) {
+        const parentId = skuToParentId.get(wp.sku.trim().toLowerCase());
+        if (parentId) { matched = idToPadre.get(parentId); if (matched) metodo = "sku"; }
       }
+
+      // By slug
       if (!matched) { matched = slugToPadre.get(slugify(wp.slug)); if (matched) metodo = "slug"; }
+
+      // By name
       if (!matched) {
         const key = wp.name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").trim();
         matched = nombreToPadre.get(key); if (matched) metodo = "nombre";
@@ -961,10 +942,10 @@ export async function backfillWooId(): Promise<BackfillResult> {
       if (updates.has(matched.id)) continue;
       updates.set(matched.id, wp.id);
       if (metodo === "sku") bySku++; else if (metodo === "slug") bySlug++; else byName++;
-      if (i % 200 === 0) setBfProgress("Emparejando productos…", i, wooProducts.length);
+      if (i % 500 === 0) setBfProgress("Emparejando productos…", i, wooProducts.length);
     }
 
-    // 7. Batch update
+    // 6. Batch update
     setBfProgress("Guardando vínculos…", 0, updates.size);
     const pares = Array.from(updates.entries()).map(([id, woo_id]) => ({ id, woo_id }));
     let actualizados = 0;

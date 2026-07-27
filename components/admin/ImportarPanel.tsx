@@ -221,38 +221,34 @@ export function ImportarPanel({ allPairs }: { allPairs: CategoriaPair[] }) {
   }
 
   function handleBackfill() {
+    if (backfillPending) return; // Evitar llamadas duplicadas
     setBackfillPending(true);
     setBackfillResult(null);
     setBackfillProgress({ phase: "Iniciando…", current: 0, total: 0 });
     setError(null);
 
-    // Lanzar backfill y hacer polling via API route (no server action)
-    const resPromise = backfillWooId();
-
-    const poll = setInterval(async () => {
-      try {
-        const res = await fetch("/api/backfill-progress");
-        const prog = await res.json();
-        if (prog.done) {
-          clearInterval(poll);
-          return;
-        }
-        setBackfillProgress({ phase: prog.phase, current: prog.current, total: prog.total });
-      } catch { /* ignore */ }
-    }, 800);
-
-    resPromise.then(res => {
-      clearInterval(poll);
+    // Lanzar backfill y hacer polling via API route
+    backfillWooId().then(res => {
       if (res.error) setError(res.error);
       setBackfillResult({ ok: res.ok, bySku: res.bySku, bySlug: res.bySlug, byName: res.byName, unmatched: res.unmatched });
       setBackfillProgress(null);
       setBackfillPending(false);
     }).catch(e => {
-      clearInterval(poll);
       setError(String(e));
       setBackfillProgress(null);
       setBackfillPending(false);
     });
+
+    // Polling cada 2 segundos (solo mientras pending)
+    const poll = setInterval(async () => {
+      if (!backfillPending) { clearInterval(poll); return; }
+      try {
+        const res = await fetch("/api/backfill-progress");
+        const prog = await res.json();
+        if (prog.done) { clearInterval(poll); return; }
+        setBackfillProgress({ phase: prog.phase, current: prog.current, total: prog.total });
+      } catch { /* ignore */ }
+    }, 2000);
   }
 
   function handleSnapshot() {
