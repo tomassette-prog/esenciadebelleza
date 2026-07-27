@@ -7,7 +7,6 @@ import {
   publicarAprobados,
   listarMarcasExistentes,
   backfillWooId,
-  getBackfillProgress,
   guardarSnapshot,
   type ProductoDiff,
   type DiffGaps,
@@ -224,29 +223,33 @@ export function ImportarPanel({ allPairs }: { allPairs: CategoriaPair[] }) {
   function handleBackfill() {
     setBackfillPending(true);
     setBackfillResult(null);
-    setBackfillProgress(null);
+    setBackfillProgress({ phase: "Iniciando…", current: 0, total: 0 });
     setError(null);
 
-    // Lanzar backfill en background y hacer polling del progreso
-    startTransition(async () => {
-      const resPromise = backfillWooId();
+    // Lanzar backfill y hacer polling via API route (no server action)
+    const resPromise = backfillWooId();
 
-      // Polling cada 500ms
-      const poll = setInterval(async () => {
-        try {
-          const prog = await getBackfillProgress();
-          if (prog.done) {
-            clearInterval(poll);
-            return;
-          }
-          setBackfillProgress({ phase: prog.phase, current: prog.current, total: prog.total });
-        } catch { /* ignore */ }
-      }, 500);
+    const poll = setInterval(async () => {
+      try {
+        const res = await fetch("/api/backfill-progress");
+        const prog = await res.json();
+        if (prog.done) {
+          clearInterval(poll);
+          return;
+        }
+        setBackfillProgress({ phase: prog.phase, current: prog.current, total: prog.total });
+      } catch { /* ignore */ }
+    }, 800);
 
-      const res = await resPromise;
+    resPromise.then(res => {
       clearInterval(poll);
-      if (res.error) { setError(res.error); }
+      if (res.error) setError(res.error);
       setBackfillResult({ ok: res.ok, bySku: res.bySku, bySlug: res.bySlug, byName: res.byName, unmatched: res.unmatched });
+      setBackfillProgress(null);
+      setBackfillPending(false);
+    }).catch(e => {
+      clearInterval(poll);
+      setError(String(e));
       setBackfillProgress(null);
       setBackfillPending(false);
     });
