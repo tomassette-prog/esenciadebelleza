@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, useRef } from "react";
+import { useState, useRef } from "react";
 import {
   calcularDiff,
   aplicarCambios,
@@ -78,7 +78,6 @@ function buildReviewGroups(nuevos: ProductoDiff[], gaps: DiffGaps): ReviewGroup[
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export function ImportarPanel({ allPairs }: { allPairs: CategoriaPair[] }) {
-  const [isPending, startTransition] = useTransition();
   const [nuevos, setNuevos]         = useState<ProductoDiff[]>([]);
   const [modificados, setModificados] = useState<ProductoDiff[]>([]);
   const [iguales, setIguales]       = useState<number | null>(null);
@@ -113,33 +112,35 @@ export function ImportarPanel({ allPairs }: { allPairs: CategoriaPair[] }) {
   const [snapshotPending, setSnapshotPending] = useState(false);
   const [snapshotExists, setSnapshotExists] = useState<boolean | null>(null);
 
+  // Derived busy flag — use fase instead of isPending to avoid React 18 startTransition + async bug
+  // where isPending gets stuck on long-running server actions (>30s)
+  const busy = fase === "diff" || fase === "publicando" || fase === "revisando" || fase === "aplicando";
+
   // ── Handlers ────────────────────────────────────────────────────────────────
 
-  function handleDiff() {
+  async function handleDiff() {
     setError(null);
     setResumen(null);
     setSmartResult(null);
     setFase("diff");
-    startTransition(async () => {
-      try {
-        const [res, marcasRes] = await Promise.all([calcularDiff(), listarMarcasExistentes()]);
-        if (!res || res.error) { setError(res?.error ?? "Error al calcular diff"); setFase("idle"); return; }
-        setNuevos(res.nuevos);
-        setModificados(res.modificados);
-        setIguales(res.iguales);
-        setGaps(res.gaps);
-        setSnapshotExists(res.snapshotExists ?? false);
-        setMarcasExistentes(marcasRes?.marcas ?? []);
-        setBrandApprovals(new Map());
-        setProductOverrides(new Map());
-        setActiveTab("nuevos");
-        setSeleccionados(new Set(res.nuevos.map(p => p.slug)));
-        setFase("listo");
-      } catch (e) {
-        setError(String(e));
-        setFase("idle");
-      }
-    });
+    try {
+      const [res, marcasRes] = await Promise.all([calcularDiff(), listarMarcasExistentes()]);
+      if (!res || res.error) { setError(res?.error ?? "Error al calcular diff"); setFase("idle"); return; }
+      setNuevos(res.nuevos);
+      setModificados(res.modificados);
+      setIguales(res.iguales);
+      setGaps(res.gaps);
+      setSnapshotExists(res.snapshotExists ?? false);
+      setMarcasExistentes(marcasRes?.marcas ?? []);
+      setBrandApprovals(new Map());
+      setProductOverrides(new Map());
+      setActiveTab("nuevos");
+      setSeleccionados(new Set(res.nuevos.map(p => p.slug)));
+      setFase("listo");
+    } catch (e) {
+      setError(String(e));
+      setFase("idle");
+    }
   }
 
   function handleRevisar() {
@@ -189,7 +190,7 @@ export function ImportarPanel({ allPairs }: { allPairs: CategoriaPair[] }) {
     const total = approvedGroups.reduce((s, g) => s + g.slugsConId.length, 0);
     setProgreso(total > 0 ? { ok: 0, total } : null);
     setFase("publicando");
-    startTransition(async () => {
+    try {
       const result = await publicarAprobados({ approvedGroups, brandMappings });
       setSmartResult(result);
       if (result.error) {
@@ -217,9 +218,12 @@ export function ImportarPanel({ allPairs }: { allPairs: CategoriaPair[] }) {
           } catch { /* ignore */ }
         }, 2000);
       }
+    } catch (e) {
+      setError(String(e));
+    } finally {
       setProgreso(null);
       setFase("listo");
-    });
+    }
   }
 
   function setBrandAsNew(wooBrandName: string, checked: boolean) {
@@ -314,21 +318,20 @@ export function ImportarPanel({ allPairs }: { allPairs: CategoriaPair[] }) {
     setSnapshotPending(true);
     setSnapshotResult(null);
     setError(null);
-    startTransition(async () => {
-      const res = await guardarSnapshot();
+    guardarSnapshot().then(res => {
       if (res.error) { setError(res.error); }
       setSnapshotResult({ ok: res.ok });
       setSnapshotPending(false);
-    });
+    }).catch(() => { setSnapshotPending(false); });
   }
 
-  function handleAplicar() {
+  async function handleAplicar() {
     if (!seleccionados.size) return;
     setFase("aplicando");
     setError(null);
     setResumen(null);
     setProgreso({ ok: 0, total: seleccionados.size });
-    startTransition(async () => {
+    try {
       const todosDiff = [...nuevos, ...modificados];
       const slugToWooId = new Map(todosDiff.map(p => [p.slug, p.wooId]));
       const todos = [...seleccionados].map(slug => ({ slug, wooId: slugToWooId.get(slug) ?? 0 }));
@@ -344,9 +347,10 @@ export function ImportarPanel({ allPairs }: { allPairs: CategoriaPair[] }) {
         setProgreso({ ok: totalOk, total: seleccionados.size });
       }
       setResumen({ ok: totalOk, noEncontrados: totalNoEncontrados });
+    } finally {
       setFase("listo");
       setProgreso(null);
-    });
+    }
   }
 
   // ── Derived ─────────────────────────────────────────────────────────────────
@@ -377,7 +381,7 @@ export function ImportarPanel({ allPairs }: { allPairs: CategoriaPair[] }) {
         </div>
         <button
           onClick={handleDiff}
-          disabled={isPending}
+          disabled={busy}
           className="shrink-0 px-6 py-2.5 bg-neutral-900 text-white text-xs tracking-widest uppercase hover:bg-neutral-700 disabled:opacity-50 transition-colors"
         >
           {fase === "diff" ? "Calculando…" : "Calcular diff"}
@@ -806,7 +810,7 @@ export function ImportarPanel({ allPairs }: { allPairs: CategoriaPair[] }) {
                   <div className="flex justify-end">
                     <button
                       onClick={handlePublicarAprobados}
-                      disabled={brandApprovalCount === 0 || isPending}
+                      disabled={brandApprovalCount === 0 || busy}
                       className="px-6 py-2.5 bg-[#3D2018] text-white text-xs tracking-widest uppercase hover:bg-neutral-900 disabled:opacity-40 transition-colors"
                     >
                       Guardar {brandApprovalCount > 0 ? `${brandApprovalCount} decisiones` : "decisiones"} de marca
@@ -1002,7 +1006,7 @@ export function ImportarPanel({ allPairs }: { allPairs: CategoriaPair[] }) {
               Volver al diff
             </button>
             <button
-              disabled={approvedCount === 0 || isPending}
+              disabled={approvedCount === 0 || busy}
               onClick={handlePublicarAprobados}
               className="px-6 py-2.5 bg-[#3D2018] text-white text-xs tracking-widest uppercase hover:bg-neutral-900 disabled:opacity-40 transition-colors"
             >
