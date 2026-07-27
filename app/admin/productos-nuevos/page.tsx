@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { ProductosNuevosClient } from "@/components/admin/ProductosNuevosClient";
 import { getProductosNuevos } from "@/actions/productos-nuevos";
+import { getAllCategoriaPairs } from "@/lib/category-suggester";
 
 export const dynamic = "force-dynamic";
 
@@ -10,7 +11,10 @@ export const metadata: Metadata = {
 };
 
 export default async function ProductosNuevosPage() {
-  const { productos, clearedAt, error } = await getProductosNuevos();
+  const [{ productos, clearedAt, error }, allPairs] = await Promise.all([
+    getProductosNuevos(),
+    getAllCategoriaPairs(),
+  ]);
 
   return (
     <div className="max-w-6xl">
@@ -18,6 +22,7 @@ export default async function ProductosNuevosPage() {
         initialProductos={productos}
         clearedAt={clearedAt}
         initialError={error}
+        allPairs={allPairs}
       />
     </div>
   );

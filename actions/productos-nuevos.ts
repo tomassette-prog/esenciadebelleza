@@ -139,3 +139,117 @@ export async function actualizarProductoNuevo(
   if (error) return { ok: false, error: error.message };
   return { ok: true };
 }
+
+/** Delete a single product + its variations. Next import will re-create it correctly. */
+export async function eliminarProducto(id: string): Promise<{ ok: boolean; error?: string }> {
+  try {
+    await verificarAdmin();
+  } catch {
+    return { ok: false, error: "No autorizado" };
+  }
+
+  const supa = adminClient();
+  // Delete variations first (no cascade assumed)
+  await supa.from("productos_variaciones").delete().eq("producto_padre_id", id);
+  const { error } = await supa.from("productos_padre").delete().eq("id", id);
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
+/** Bulk delete products + their variations */
+export async function eliminarProductos(ids: string[]): Promise<{ ok: number; error?: string }> {
+  try {
+    await verificarAdmin();
+  } catch {
+    return { ok: 0, error: "No autorizado" };
+  }
+
+  if (!ids.length) return { ok: 0 };
+
+  const supa = adminClient();
+  // Delete variations first
+  for (const id of ids) {
+    await supa.from("productos_variaciones").delete().eq("producto_padre_id", id);
+  }
+  const { error } = await supa.from("productos_padre").delete().in("id", ids);
+  if (error) return { ok: 0, error: error.message };
+  return { ok: ids.length };
+}
+
+/** Bulk update category/subcategory */
+export async function bulkActualizarCategoria(
+  ids: string[],
+  categoria: string,
+  subcategoria: string
+): Promise<{ ok: number; error?: string }> {
+  try {
+    await verificarAdmin();
+  } catch {
+    return { ok: 0, error: "No autorizado" };
+  }
+
+  if (!ids.length) return { ok: 0 };
+
+  const supa = adminClient();
+  const { error } = await supa.from("productos_padre")
+    .update({ categoria, subcategoria })
+    .in("id", ids);
+  if (error) return { ok: 0, error: error.message };
+  return { ok: ids.length };
+}
+
+/** Bulk update brand (marca_id) */
+export async function bulkActualizarMarca(
+  ids: string[],
+  marcaId: string | null
+): Promise<{ ok: number; error?: string }> {
+  try {
+    await verificarAdmin();
+  } catch {
+    return { ok: 0, error: "No autorizado" };
+  }
+
+  if (!ids.length) return { ok: 0 };
+
+  const supa = adminClient();
+  const { error } = await supa.from("productos_padre")
+    .update({ marca_id: marcaId })
+    .in("id", ids);
+  if (error) return { ok: 0, error: error.message };
+  return { ok: ids.length };
+}
+
+/** Bulk toggle active state */
+export async function bulkToggleActivo(
+  ids: string[],
+  activo: boolean
+): Promise<{ ok: number; error?: string }> {
+  try {
+    await verificarAdmin();
+  } catch {
+    return { ok: 0, error: "No autorizado" };
+  }
+
+  if (!ids.length) return { ok: 0 };
+
+  const supa = adminClient();
+  const { error } = await supa.from("productos_padre")
+    .update({ activo })
+    .in("id", ids);
+  if (error) return { ok: 0, error: error.message };
+  return { ok: ids.length };
+}
+
+/** List all brands for bulk assignment */
+export async function listarMarcasParaSelect(): Promise<{ marcas: Array<{ id: string; nombre: string }>; error?: string }> {
+  try {
+    await verificarAdmin();
+  } catch {
+    return { marcas: [], error: "No autorizado" };
+  }
+
+  const supa = adminClient();
+  const { data, error } = await supa.from("marcas").select("id, nombre").order("nombre");
+  if (error) return { marcas: [], error: error.message };
+  return { marcas: data ?? [] };
+}
