@@ -1,8 +1,8 @@
 ﻿import { cookies } from "next/headers";
 import { createClient as createSupabaseAdmin } from "@supabase/supabase-js";
 import { redirect } from "next/navigation";
-import Link from "next/link";
 import { type ReactNode } from "react";
+import { AdminSidebar } from "@/components/admin/AdminSidebar";
 
 // Emails con acceso admin
 const ADMIN_EMAILS = ["ziarresamot@gmail.com"];
@@ -66,77 +66,14 @@ export default async function AdminLayout({ children }: { children: ReactNode })
 
 
   return (
-    <div className="min-h-screen bg-neutral-50">
-      {/* Barra de navegación admin */}
-      <nav className="bg-neutral-900 text-white">
-        <div className="container-main flex items-center gap-8 h-12">
-          <Link
-            href="/"
-            className="text-xs tracking-widest uppercase text-neutral-400 hover:text-white transition-colors"
-          >
-            ← Tienda
-          </Link>
-          <div className="w-px h-4 bg-neutral-700" />
-          <span className="text-xs tracking-widest uppercase" style={{ color: "var(--color-oro)" }}>
-            Admin
-          </span>
-          <div className="flex items-center gap-6 ml-2">
-            <Link
-              href="/admin/carruseles"
-              className="text-xs tracking-widest uppercase text-neutral-300 hover:text-white transition-colors"
-            >
-              Carruseles
-            </Link>
-            <Link
-              href="/admin/productos"
-              className="text-xs tracking-widest uppercase text-neutral-300 hover:text-white transition-colors"
-            >
-              Productos
-            </Link>
-            <Link
-              href="/admin/productos-nuevos"
-              className="text-xs tracking-widest uppercase text-neutral-300 hover:text-white transition-colors"
-            >
-              Nuevos
-            </Link>
-            <Link
-              href="/admin/stock"
-              className="text-xs tracking-widest uppercase text-neutral-300 hover:text-white transition-colors"
-            >
-              Stock
-            </Link>
-            <Link
-              href="/admin/blog"
-              className="text-xs tracking-widest uppercase text-neutral-300 hover:text-white transition-colors"
-            >
-              Blog
-            </Link>
-            <Link
-              href="/admin/pedidos"
-              className="text-xs tracking-widest uppercase text-neutral-300 hover:text-white transition-colors"
-            >
-              Pedidos
-            </Link>
-            <Link
-              href="/admin/sincronizacion"
-              className="text-xs tracking-widest uppercase text-neutral-300 hover:text-white transition-colors"
-            >
-              Sincronización
-            </Link>
-            <Link
-              href="/admin/catalogo"
-              className="text-xs tracking-widest uppercase text-neutral-300 hover:text-white transition-colors"
-            >
-              Catálogo
-            </Link>
-          </div>
-        </div>
-      </nav>
+    <div className="min-h-screen bg-neutral-50 flex">
+      {/* Sidebar */}
+      <AdminSidebar />
 
       {/* Contenido */}
-      <div className="container-main py-8">
+      <main className="flex-1 min-w-0 py-8 px-8">
         {children}
-      </div>
+      </main>
     </div>
   );
 }
