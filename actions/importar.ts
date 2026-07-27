@@ -298,7 +298,7 @@ export async function calcularDiff(): Promise<{
 
     const tieneSnapshot = snapshotMap.size > 0;
 
-    // 4. Comparar WC actual vs snapshot
+    // 4. Comparar WC actual vs Esencia (para nuevos) y vs snapshot (para precios)
     const catMap = await getDbCatMap(supa);
     const brandMappingsCache = await getBrandMappingsCache(supa);
     const nuevos: ProductoDiff[] = [];
@@ -310,54 +310,38 @@ export async function calcularDiff(): Promise<{
       const wooPrice = parseFloat(p.regular_price || p.price) || 0;
       const snap = snapshotMap.get(p.id);
 
-      if (!snap) {
-        // Producto no en snapshot — verificar si ya existe en Esencia por slug
-        const existingInEsencia = supaMap.get(slug);
-        if (existingInEsencia) {
-          // Existe en Esencia pero sin woo_id → vincular automáticamente
-          // Tratar como existente y comparar precio
-          supaMapByWooId.set(p.id, slug);
-          if (wooPrice > 0) {
-            modificados.push({
-              slug,
-              nombre: p.name,
-              tipo: "modificado",
-              wooId: p.id,
-              wooCategories: p.categories.map(c => c.id),
-              precioCambio: { woo: wooPrice, actual: 0 } // precio actual desconocido
-            });
-          } else {
-            iguales++;
-          }
-          continue;
-        }
-        // Fallback: buscar por nombre normalizado
+      // ── Paso 1: ¿Existe en Esencia? (por woo_id → slug → nombre) ──────
+      let slugEnDB: string | undefined;
+      let existingInEsencia = false;
+
+      // Por woo_id
+      if (p.id && supaMapByWooId.has(p.id)) {
+        slugEnDB = supaMapByWooId.get(p.id);
+        existingInEsencia = true;
+      }
+      // Por slug
+      if (!existingInEsencia && supaMap.has(slug)) {
+        slugEnDB = slug;
+        existingInEsencia = true;
+      }
+      // Por nombre normalizado
+      if (!existingInEsencia) {
         const normName = p.name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").trim();
-        let foundByNombre = false;
         for (const [, info] of supaMap) {
           const infoName = (info as any).nombre?.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").trim();
           if (infoName === normName) {
-            // Encontrado por nombre → vincular y tratar como existente
-            const foundSlug = (info as any).slug;
-            supaMapByWooId.set(p.id, foundSlug);
-            if (wooPrice > 0) {
-              modificados.push({
-                slug: foundSlug,
-                nombre: p.name,
-                tipo: "modificado",
-                wooId: p.id,
-                wooCategories: p.categories.map(c => c.id),
-                precioCambio: { woo: wooPrice, actual: 0 }
-              });
-            } else {
-              iguales++;
-            }
-            foundByNombre = true;
+            slugEnDB = (info as any).slug;
+            existingInEsencia = true;
+            // Vincular woo_id automáticamente
+            supaMapByWooId.set(p.id, slugEnDB!);
             break;
           }
         }
-        if (foundByNombre) continue;
-        // No existe en Esencia → producto genuinamente nuevo
+      }
+
+      // ── Paso 2: Clasificar ─────────────────────────────────────────────
+      if (!existingInEsencia) {
+        // NO existe en Esencia → producto genuinamente nuevo
         const brandResolution = await resolveBrandFromWc(supa, p.name, p.attributes ?? [], brandMappingsCache);
         nuevos.push({
           slug, nombre: p.name, tipo: "nuevo", wooId: p.id, wooCategories: p.categories.map(c => c.id),
@@ -366,13 +350,10 @@ export async function calcularDiff(): Promise<{
         continue;
       }
 
-      // Producto existe en snapshot → comparar precio
-      if (wooPrice !== snap.precio && wooPrice > 0) {
-        // Precio cambió respecto al snapshot
-        // Buscar el slug actual en Supabase (por woo_id o por slug del snapshot)
-        const slugEnDB = supaMapByWooId.get(p.id) ?? snap.slug ?? slug;
+      // Existe en Esencia → comparar precio con snapshot
+      if (snap && wooPrice !== snap.precio && wooPrice > 0) {
         modificados.push({
-          slug: slugEnDB,
+          slug: slugEnDB!,
           nombre: p.name,
           tipo: "modificado",
           wooId: p.id,
@@ -384,7 +365,7 @@ export async function calcularDiff(): Promise<{
       }
     }
 
-    // 4. Detectar gaps: marcas pendientes de aprobación y categorías sin mapear
+    // 5. Detectar gaps: marcas pendientes de aprobación y categorías sin mapear
     const brandGroups = new Map<string, MarcaResolution>();
     for (const nuevo of nuevos) {
       const br = nuevo.brandResolution;

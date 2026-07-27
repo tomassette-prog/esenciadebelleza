@@ -19,3 +19,8 @@ CREATE TABLE IF NOT EXISTS woo_snapshot (
 CREATE INDEX IF NOT EXISTS idx_woo_snapshot_slug ON woo_snapshot(slug);
 
 COMMENT ON TABLE woo_snapshot IS 'Último snapshot de WooCommerce para comparación incremental de precios y productos nuevos';
+
+-- Permisos para los roles de Supabase
+GRANT ALL ON woo_snapshot TO service_role;
+GRANT ALL ON woo_snapshot TO authenticated;
+GRANT ALL ON woo_snapshot TO anon;
