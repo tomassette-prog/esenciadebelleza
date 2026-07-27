@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useRef } from "react";
 import {
   calcularDiff,
   aplicarCambios,
@@ -103,6 +103,7 @@ export function ImportarPanel({ allPairs }: { allPairs: CategoriaPair[] }) {
   // Backfill state
   const [backfillResult, setBackfillResult] = useState<{ ok: number; bySku: number; bySlug: number; byName: number; unmatched: number } | null>(null);
   const [backfillPending, setBackfillPending] = useState(false);
+  const backfillRunning = useRef(false);
   const [backfillProgress, setBackfillProgress] = useState<{ phase: string; current: number; total: number } | null>(null);
 
   // Snapshot state
@@ -242,31 +243,37 @@ export function ImportarPanel({ allPairs }: { allPairs: CategoriaPair[] }) {
   }
 
   function handleBackfill() {
-    if (backfillPending) return; // Evitar llamadas duplicadas
+    if (backfillRunning.current) return;
+    backfillRunning.current = true;
     setBackfillPending(true);
     setBackfillResult(null);
     setBackfillProgress({ phase: "Iniciando…", current: 0, total: 0 });
     setError(null);
 
-    // Lanzar backfill y hacer polling via API route
+    // Lanzar backfill
     backfillWooId().then(res => {
+      backfillRunning.current = false;
       if (res.error) setError(res.error);
       setBackfillResult({ ok: res.ok, bySku: res.bySku, bySlug: res.bySlug, byName: res.byName, unmatched: res.unmatched });
       setBackfillProgress(null);
       setBackfillPending(false);
     }).catch(e => {
+      backfillRunning.current = false;
       setError(String(e));
       setBackfillProgress(null);
       setBackfillPending(false);
     });
 
-    // Polling cada 2 segundos (solo mientras pending)
+    // Polling via API route (cada 2s)
     const poll = setInterval(async () => {
-      if (!backfillPending) { clearInterval(poll); return; }
+      if (!backfillRunning.current) { clearInterval(poll); return; }
       try {
         const res = await fetch("/api/backfill-progress");
         const prog = await res.json();
-        if (prog.done) { clearInterval(poll); return; }
+        if (prog.done) {
+          clearInterval(poll);
+          return;
+        }
         setBackfillProgress({ phase: prog.phase, current: prog.current, total: prog.total });
       } catch { /* ignore */ }
     }, 2000);
