@@ -94,16 +94,16 @@ export default async function AdminLayout({ children }: { children: ReactNode })
               Productos
             </Link>
             <Link
+              href="/admin/productos-nuevos"
+              className="text-xs tracking-widest uppercase text-neutral-300 hover:text-white transition-colors"
+            >
+              Nuevos
+            </Link>
+            <Link
               href="/admin/stock"
               className="text-xs tracking-widest uppercase text-neutral-300 hover:text-white transition-colors"
             >
               Stock
-            </Link>
-            <Link
-              href="/admin/envios"
-              className="text-xs tracking-widest uppercase text-neutral-300 hover:text-white transition-colors"
-            >
-              Envíos
             </Link>
             <Link
               href="/admin/blog"
@@ -118,46 +118,16 @@ export default async function AdminLayout({ children }: { children: ReactNode })
               Pedidos
             </Link>
             <Link
-              href="/admin/packs"
+              href="/admin/sincronizacion"
               className="text-xs tracking-widest uppercase text-neutral-300 hover:text-white transition-colors"
             >
-              Packs
+              Sincronización
             </Link>
             <Link
-              href="/admin/profesionales"
+              href="/admin/catalogo"
               className="text-xs tracking-widest uppercase text-neutral-300 hover:text-white transition-colors"
             >
-              Profesionales
-            </Link>
-            <Link
-              href="/admin/importar"
-              className="text-xs tracking-widest uppercase text-neutral-300 hover:text-white transition-colors"
-            >
-              Importar
-            </Link>
-            <Link
-              href="/admin/merchant-center"
-              className="text-xs tracking-widest uppercase text-neutral-300 hover:text-white transition-colors"
-            >
-              Merchant Center
-            </Link>
-            <Link
-              href="/admin/categorias"
-              className="text-xs tracking-widest uppercase text-neutral-300 hover:text-white transition-colors"
-            >
-              Categorías
-            </Link>
-            <Link
-              href="/admin/marcas"
-              className="text-xs tracking-widest uppercase text-neutral-300 hover:text-white transition-colors"
-            >
-              Marcas
-            </Link>
-            <Link
-              href="/admin/resenas"
-              className="text-xs tracking-widest uppercase text-neutral-300 hover:text-white transition-colors"
-            >
-              Reseñas
+              Catálogo
             </Link>
           </div>
         </div>
