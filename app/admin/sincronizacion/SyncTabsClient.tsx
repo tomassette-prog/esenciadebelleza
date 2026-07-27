@@ -4,6 +4,7 @@ import { useState, type ReactNode } from "react";
 
 const TABS = [
   { key: "importar", label: "Importar" },
+  { key: "precios", label: "Precios" },
   { key: "merchant", label: "Merchant Center" },
 ] as const;
 

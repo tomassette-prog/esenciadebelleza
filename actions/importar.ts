@@ -582,6 +582,9 @@ export async function aplicarCambios(slugsConId: Array<{ slug: string; wooId: nu
       }
 
       const nombreTruncado = p.name.trim().slice(0, maxNombre);
+      const precioRegular = parseFloat(p.regular_price || p.price) || 0;
+      const precioVenta = parseFloat(p.sale_price) || 0;
+      const isOferta = precioVenta > 0 && precioVenta < precioRegular;
 
       if (!existing) {
         // NEW product — create with all fields
@@ -598,14 +601,16 @@ export async function aplicarCambios(slugsConId: Array<{ slug: string; wooId: nu
           activo: true,
           destacado: false,
           nuevo: false,
+          oferta: isOferta,
           marca_id: marcaId ?? null,
         });
       } else {
-        // EXISTING — only update woo_id and marca_id
+        // EXISTING — update woo_id, marca_id, and oferta flag
         rowsActualizar.push({
           slug: existing.slug,
           marca_id: marcaId,
           woo_id: p.id,
+          oferta: isOferta,
         });
       }
     }
@@ -618,11 +623,12 @@ export async function aplicarCambios(slugsConId: Array<{ slug: string; wooId: nu
       }
     }
 
-    // 8. Update existing products (woo_id + marca_id)
+    // 8. Update existing products (woo_id + marca_id + oferta)
     for (const row of rowsActualizar) {
       const updates: any = {};
       if (row.marca_id) updates.marca_id = row.marca_id;
       if (row.woo_id) updates.woo_id = row.woo_id;
+      if (typeof row.oferta === "boolean") updates.oferta = row.oferta;
       if (Object.keys(updates).length > 0) {
         await supa.from("productos_padre").update(updates).eq("slug", row.slug);
       }
