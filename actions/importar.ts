@@ -285,21 +285,31 @@ export async function calcularDiff(): Promise<{
       offset += 1000;
     }
 
-    // Cargar precios actuales de variaciones
+    // Cargar precios actuales de variaciones + mapa SKU → padre
+    const skuToPadreSlug = new Map<string, string>();  // SKU → slug del padre
+    // Mapa inverso: producto_padre_id → slug (construido una sola vez)
+    const idToSlug = new Map<string, string>();
+    for (const [slug, info] of supaMap) {
+      idToSlug.set((info as any).id, slug);
+    }
     offset = 0;
     while (true) {
       const { data } = await supa
         .from("productos_variaciones")
-        .select("sku, precio_b2c")
+        .select("sku, precio_b2c, producto_padre_id")
         .range(offset, offset + 999);
       if (!data || data.length === 0) break;
-      for (const r of data) supaPrecios.set(r.sku, r.precio_b2c);
+      for (const r of data) {
+        supaPrecios.set(r.sku, r.precio_b2c);
+        const padreSlug = idToSlug.get(r.producto_padre_id);
+        if (padreSlug) skuToPadreSlug.set(r.sku, padreSlug);
+      }
       if (data.length < 1000) break;
       offset += 1000;
     }
 
-    // 3. Comparar SOLO precios (ignorar nombre, categoría, stock, etc.)
-    // Deduplicación: Buscar por woo_id primero (más confiable que slug)
+    // 3. Comparar precios (detectar nuevos y modificados)
+    // Matching por: woo_id → slug → SKU de variación
     const catMap = await getDbCatMap(supa);
     const brandMappingsCache = await getBrandMappingsCache(supa);
     const nuevos: ProductoDiff[] = [];
@@ -314,12 +324,21 @@ export async function calcularDiff(): Promise<{
       if (p.id) {
         slugEnDB = supaMapByWooId.get(p.id);
       }
-      // Fallback: buscar por slug si no hay woo_id match
+      // Fallback 1: buscar por slug
       if (!slugEnDB) {
         slugEnDB = slug;
       }
       
-      const existing = supaMap.get(slugEnDB);
+      let existing = supaMap.get(slugEnDB);
+
+      // Fallback 2: buscar por SKU del producto padre (para cuando el slug cambió en WC)
+      if (!existing && p.sku) {
+        const slugFromSku = skuToPadreSlug.get(p.sku);
+        if (slugFromSku) {
+          existing = supaMap.get(slugFromSku);
+          if (existing) slugEnDB = slugFromSku;
+        }
+      }
 
       if (!existing) {
         // Producto nuevo en WooCommerce
@@ -331,15 +350,31 @@ export async function calcularDiff(): Promise<{
         continue;
       }
 
-      // Producto existente — solo comparar PRECIO
+      // Producto existente — comparar PRECIO
+      // Para productos simples: comparar con la variación que tiene el SKU del padre
+      // Para productos variables: comparar con el precio del padre (mínimo)
       const wooPrice = parseFloat(p.price || p.regular_price) || 0;
-      const sku = p.sku || slug;  // Fallback al slug si no hay SKU
-      const precioActual = supaPrecios.get(sku) ?? 0;
+      let precioActual = 0;
+
+      if (p.sku) {
+        // Producto simple — buscar por SKU exacto
+        precioActual = supaPrecios.get(p.sku) ?? 0;
+      } else if (p.type === "variable") {
+        // Producto variable — buscar todas las variaciones de este padre y tomar el precio mínimo
+        const padreId = (existing as any).id as string;
+        let minPrecio = Infinity;
+        for (const [sku, precio] of supaPrecios) {
+          const padreSlug = skuToPadreSlug.get(sku);
+          if (padreSlug === slugEnDB && precio < minPrecio) {
+            minPrecio = precio;
+          }
+        }
+        precioActual = minPrecio === Infinity ? 0 : minPrecio;
+      }
 
       if (wooPrice !== precioActual && wooPrice > 0) {
-        // Precio cambió
         modificados.push({
-          slug: slugEnDB,  // Usar el slug encontrado en DB
+          slug: slugEnDB,
           nombre: p.name,
           tipo: "modificado",
           wooId: p.id,
@@ -347,7 +382,6 @@ export async function calcularDiff(): Promise<{
           precioCambio: { woo: wooPrice, actual: precioActual }
         });
       } else {
-        // Precio igual (ignora cualquier otro cambio)
         iguales++;
       }
     }
@@ -496,8 +530,16 @@ export async function aplicarCambios(slugsConId: Array<{ slug: string; wooId: nu
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    // IMPORTANTE: Solo actualizar PRECIOS, no tocar otros campos del producto
+    // Solo actualizar PRECIOS, no tocar otros campos del producto
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    // Cargar multiplicador para precio_b2b
+    let precioMultiplicador = 0.75;
+    try {
+      const { data: configMult } = await supa.from("config_tienda")
+        .select("valor").eq("clave", "precio_multiplicador_b2b").single();
+      if (configMult?.valor) precioMultiplicador = parseFloat(configMult.valor) || 0.75;
+    } catch { /* usar fallback */ }
 
     let actualizados = 0;
 
@@ -506,37 +548,38 @@ export async function aplicarCambios(slugsConId: Array<{ slug: string; wooId: nu
       if (p.type !== "simple" || !p.sku) continue;
       const { data: padre } = await supa.from("productos_padre").select("id").eq("slug", p.slug || slugify(p.name)).single();
       if (!padre) continue;
-      const precio = parseFloat(p.price || p.regular_price) || 0;
+      const precioRegular = parseFloat(p.regular_price || p.price) || 0;
+      const precioVenta   = parseFloat(p.sale_price) || 0;
       
-      // Primero intentar UPDATE (para productos existentes) — solo actualizar precio
-      const { data: existing, error: selectError } = await supa
+      const { data: existing } = await supa
         .from("productos_variaciones")
         .select("id")
         .eq("sku", p.sku)
         .single();
       
       if (existing) {
-        // Producto existente — actualizar SOLO precio
         const { error } = await supa
           .from("productos_variaciones")
           .update({
-            precio_b2c: precio,
-            precio_b2b: precio,
+            precio_b2c: precioRegular,
+            precio_b2b: parseFloat((precioRegular * precioMultiplicador).toFixed(2)),
+            precio_comparar: precioVenta > 0 && precioVenta < precioRegular ? precioRegular : null,
           })
           .eq("sku", p.sku);
         if (!error) actualizados++;
       } else {
-        // Producto nuevo — insertar con todos los campos
         const { error } = await supa
           .from("productos_variaciones")
           .insert({
-            producto_id: padre.id,
+            producto_padre_id: padre.id,
             sku: p.sku,
             nombre_variacion: "Unidad",
-            precio_b2c: precio,
-            precio_b2b: precio,
-            stock: 0,
-            activa: true,
+            precio_b2c: precioRegular,
+            precio_b2b: parseFloat((precioRegular * precioMultiplicador).toFixed(2)),
+            precio_comparar: precioVenta > 0 && precioVenta < precioRegular ? precioRegular : null,
+            stock: p.stock_quantity ?? 0,
+            activa: p.stock_status !== "outofstock",
+            imagen_url: p.images[0]?.src ?? null,
           });
         if (!error) actualizados++;
       }
@@ -749,13 +792,22 @@ export async function publicarAprobados(payload: ReviewPayload): Promise<SmartAp
       }
     }
 
-    // Step E — upsert variaciones for simple products (SOLO actualizar precio)
+    // Step E — upsert variaciones (SOLO actualizar precio para existentes, crear para nuevos)
+    // Cargar multiplicador de config_tienda para calcular precio_b2b
+    let precioMultiplicador = 0.75; // fallback
+    try {
+      const { data: configMult } = await supa.from("config_tienda")
+        .select("valor").eq("clave", "precio_multiplicador_b2b").single();
+      if (configMult?.valor) precioMultiplicador = parseFloat(configMult.valor) || 0.75;
+    } catch { /* usar fallback */ }
+
     for (const p of fetched) {
       if (p.type !== "simple" || !p.sku) continue;
       const { data: padre } = await supa.from("productos_padre")
         .select("id").eq("slug", p.slug || slugify(p.name)).single();
       if (!padre) continue;
-      const precio = parseFloat(p.price || p.regular_price) || 0;
+      const precioRegular = parseFloat(p.regular_price || p.price) || 0;
+      const precioVenta   = parseFloat(p.sale_price) || 0;
       
       // Primero intentar UPDATE (para productos existentes) — solo actualizar precio
       const { data: existing } = await supa
@@ -765,12 +817,13 @@ export async function publicarAprobados(payload: ReviewPayload): Promise<SmartAp
         .single();
       
       if (existing) {
-        // Producto existente — actualizar SOLO precio
+        // Producto existente — actualizar precio
         await supa
           .from("productos_variaciones")
           .update({
-            precio_b2c: precio,
-            precio_b2b: precio,
+            precio_b2c: precioRegular,
+            precio_b2b: parseFloat((precioRegular * precioMultiplicador).toFixed(2)),
+            precio_comparar: precioVenta > 0 && precioVenta < precioRegular ? precioRegular : null,
           })
           .eq("sku", p.sku);
       } else {
@@ -778,13 +831,15 @@ export async function publicarAprobados(payload: ReviewPayload): Promise<SmartAp
         await supa
           .from("productos_variaciones")
           .insert({
-            producto_id: padre.id,
+            producto_padre_id: padre.id,
             sku: p.sku,
             nombre_variacion: "Unidad",
-            precio_b2c: precio,
-            precio_b2b: precio,
-            stock: 0,
-            activa: true,
+            precio_b2c: precioRegular,
+            precio_b2b: parseFloat((precioRegular * precioMultiplicador).toFixed(2)),
+            precio_comparar: precioVenta > 0 && precioVenta < precioRegular ? precioRegular : null,
+            stock: p.stock_quantity ?? 0,
+            activa: p.stock_status !== "outofstock",
+            imagen_url: p.images[0]?.src ?? null,
           });
       }
     }
