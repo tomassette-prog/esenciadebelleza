@@ -468,7 +468,7 @@ export async function aplicarCambios(slugsConId: Array<{ slug: string; wooId: nu
       attributes: { name: string; options: string[] }[];
     };
 
-    // Buscar por ID de WooCommerce (lookup directo, siempre fiable)
+    // 1. Fetch products from WooCommerce by ID
     const PARALELO = 20;
     const seleccionados: WooProducto[] = [];
     const noEncontrados: string[] = [];
@@ -488,60 +488,17 @@ export async function aplicarCambios(slugsConId: Array<{ slug: string; wooId: nu
     }
 
     const supa = adminClient();
+
+    // 2. Load brand mappings from woo_brand_mappings
+    const brandMappingsCache = await getBrandMappingsCache(supa);
+    const resolvedBrandMap = new Map<string, string | null>(
+      [...brandMappingsCache.entries()].map(([name, m]) => [name, m.marca_id])
+    );
+
+    // 3. Load category mappings from woo_cat_mappings
     const catMap = await getDbCatMap(supa);
 
-    // Obtener slugs existentes para preservar flags y obtener producto_id
-    const slugsExistentes = seleccionados.map(p => p.slug || slugify(p.name));
-    const { data: existentes } = await supa
-      .from("productos_padre")
-      .select("id, slug, activo, destacado, nuevo")
-      .in("slug", slugsExistentes);
-    const existMap = new Map((existentes ?? []).map(e => [e.slug, e]));
-
-    // Separar productos nuevos de existentes para actualizar woo_id
-    const nuevosProds: any[] = [];
-    const actualizarProds: any[] = [];
-
-    for (const p of seleccionados) {
-      const slug = p.slug || slugify(p.name);
-      const exists = existMap.get(slug);
-      
-      if (!exists) {
-        // Nuevo producto — guardar con woo_id
-        nuevosProds.push({
-          nombre: p.name.trim(),
-          slug,
-          woo_id: p.id,
-          activo: false,
-          destacado: false,
-          nuevo: false,
-        });
-      } else {
-        // Existente — asegurar que tiene woo_id guardado
-        if (exists.id) {
-          actualizarProds.push({
-            id: exists.id,
-            woo_id: p.id,
-          });
-        }
-      }
-    }
-
-    // Insertar nuevos
-    if (nuevosProds.length > 0) {
-      await supa.from("productos_padre").insert(nuevosProds);
-    }
-
-    // Actualizar woo_id en existentes
-    for (const prod of actualizarProds) {
-      await supa.from("productos_padre").update({ woo_id: prod.woo_id }).eq("id", prod.id);
-    }
-
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    // Solo actualizar PRECIOS, no tocar otros campos del producto
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-    // Cargar multiplicador para precio_b2b
+    // 4. Load precio_multiplicador_b2b
     let precioMultiplicador = 0.75;
     try {
       const { data: configMult } = await supa.from("config_tienda")
@@ -549,51 +506,170 @@ export async function aplicarCambios(slugsConId: Array<{ slug: string; wooId: nu
       if (configMult?.valor) precioMultiplicador = parseFloat(configMult.valor) || 0.75;
     } catch { /* usar fallback */ }
 
-    let actualizados = 0;
+    // 5. Check which products already exist in Esencia (by slug, woo_id, or nombre)
+    const allSlugs = seleccionados.map(p => p.slug || slugify(p.name));
+    const { data: existentes } = await supa
+      .from("productos_padre")
+      .select("id, slug, woo_id, nombre")
+      .in("slug", allSlugs);
+    const existBySlug = new Map((existentes ?? []).map(e => [e.slug, e]));
 
-    // Actualizar variaciones para productos simples (SOLO actualizar precio)
+    // Also check by woo_id for products that might have a different slug
+    const existByWooId = new Map<number, { id: string; slug: string }>();
+    for (const e of (existentes ?? [])) {
+      if (e.woo_id) existByWooId.set(e.woo_id, { id: e.id, slug: e.slug });
+    }
+
+    // Fallback: check by normalized name
+    const existByNombre = new Map<string, { slug: string; id: string }>();
+    const { data: todosProductos } = await supa.from("productos_padre")
+      .select("id, slug, nombre")
+      .range(0, 4999);
+    for (const r of (todosProductos ?? [])) {
+      const key = r.nombre.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").trim();
+      existByNombre.set(key, { slug: r.slug, id: r.id });
+    }
+
+    // 6. Process each product
+    const suffix = " | Esencia de Belleza";
+    const maxNombre = 60 - suffix.length;
+    const rowsNuevos: any[] = [];
+    const rowsActualizar: any[] = [];
+
+    function brandNameForProduct(p: WooProducto): string {
+      const attrBrand = p.attributes?.find(a => a.name.toLowerCase().includes("marca"))?.options?.[0];
+      return (attrBrand?.trim() || extractBrandName(p.name)).trim();
+    }
+
+    for (const p of seleccionados) {
+      const slug = p.slug || slugify(p.name);
+      const cat = resolverCategoria(p.categories, catMap);
+      const marcaId = resolvedBrandMap.get(brandNameForProduct(p)) ?? null;
+
+      // Check existence: slug → woo_id → nombre
+      let existing = existBySlug.get(slug);
+      if (!existing && p.id) existing = existByWooId.get(p.id) ? { id: existByWooId.get(p.id)!.id, slug: existByWooId.get(p.id)!.slug } as any : undefined;
+      if (!existing) {
+        const normName = p.name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").trim();
+        const foundByName = existByNombre.get(normName);
+        if (foundByName) existing = { id: foundByName.id, slug: foundByName.slug } as any;
+      }
+
+      const nombreTruncado = p.name.trim().slice(0, maxNombre);
+
+      if (!existing) {
+        // NEW product — create with all fields
+        rowsNuevos.push({
+          nombre: p.name.trim(),
+          slug,
+          woo_id: p.id,
+          categoria: cat.categoria,
+          subcategoria: cat.subcategoria,
+          descripcion_general: p.description || p.short_description || null,
+          imagen_principal_url: p.images[0]?.src ?? null,
+          seo_title: `${nombreTruncado}${suffix}`,
+          seo_description: `Compra ${p.name.trim()} al mejor precio. Envío 24-48h a toda España.`,
+          activo: true,
+          destacado: false,
+          nuevo: false,
+          marca_id: marcaId ?? null,
+        });
+      } else {
+        // EXISTING — only update woo_id and marca_id
+        rowsActualizar.push({
+          slug: existing.slug,
+          marca_id: marcaId,
+          woo_id: p.id,
+        });
+      }
+    }
+
+    // 7. Insert new products
+    if (rowsNuevos.length > 0) {
+      const { error: insertError } = await supa.from("productos_padre").insert(rowsNuevos);
+      if (insertError && insertError.code !== "23505") {
+        return { ok: 0, noEncontrados, error: insertError.message };
+      }
+    }
+
+    // 8. Update existing products (woo_id + marca_id)
+    for (const row of rowsActualizar) {
+      const updates: any = {};
+      if (row.marca_id) updates.marca_id = row.marca_id;
+      if (row.woo_id) updates.woo_id = row.woo_id;
+      if (Object.keys(updates).length > 0) {
+        await supa.from("productos_padre").update(updates).eq("slug", row.slug);
+      }
+    }
+
+    // 9. Upsert variations (prices + stock)
+    const totalProcessed = rowsNuevos.length + rowsActualizar.length;
+
     for (const p of seleccionados) {
       if (p.type !== "simple" || !p.sku) continue;
-      const { data: padre } = await supa.from("productos_padre").select("id").eq("slug", p.slug || slugify(p.name)).single();
+      const { data: padre } = await supa.from("productos_padre")
+        .select("id").eq("slug", p.slug || slugify(p.name)).single();
       if (!padre) continue;
+
       const precioRegular = parseFloat(p.regular_price || p.price) || 0;
-      const precioVenta   = parseFloat(p.sale_price) || 0;
-      
-      const { data: existing } = await supa
+      const precioVenta = parseFloat(p.sale_price) || 0;
+
+      const { data: existingVar } = await supa
         .from("productos_variaciones")
         .select("id")
         .eq("sku", p.sku)
         .single();
-      
-      if (existing) {
-        const { error } = await supa
-          .from("productos_variaciones")
-          .update({
-            precio_b2c: precioRegular,
-            precio_b2b: parseFloat((precioRegular * precioMultiplicador).toFixed(2)),
-            precio_comparar: precioVenta > 0 && precioVenta < precioRegular ? precioRegular : null,
-          })
-          .eq("sku", p.sku);
-        if (!error) actualizados++;
+
+      if (existingVar) {
+        await supa.from("productos_variaciones").update({
+          precio_b2c: precioRegular,
+          precio_b2b: parseFloat((precioRegular * precioMultiplicador).toFixed(2)),
+          precio_comparar: precioVenta > 0 && precioVenta < precioRegular ? precioRegular : null,
+        }).eq("sku", p.sku);
       } else {
-        const { error } = await supa
-          .from("productos_variaciones")
-          .insert({
-            producto_padre_id: padre.id,
-            sku: p.sku,
-            nombre_variacion: "Unidad",
-            precio_b2c: precioRegular,
-            precio_b2b: parseFloat((precioRegular * precioMultiplicador).toFixed(2)),
-            precio_comparar: precioVenta > 0 && precioVenta < precioRegular ? precioRegular : null,
-            stock: p.stock_quantity ?? 0,
-            activa: p.stock_status !== "outofstock",
-            imagen_url: p.images[0]?.src ?? null,
-          });
-        if (!error) actualizados++;
+        await supa.from("productos_variaciones").insert({
+          producto_padre_id: padre.id,
+          sku: p.sku,
+          nombre_variacion: "Unidad",
+          precio_b2c: precioRegular,
+          precio_b2b: parseFloat((precioRegular * precioMultiplicador).toFixed(2)),
+          precio_comparar: precioVenta > 0 && precioVenta < precioRegular ? precioRegular : null,
+          stock: p.stock_quantity ?? 0,
+          activa: p.stock_status !== "outofstock",
+          imagen_url: p.images[0]?.src ?? null,
+        });
       }
     }
 
-    return { ok: actualizados, noEncontrados };
+    // 10. Generate SEO for new products
+    const newSlugs = rowsNuevos.map((r: any) => r.slug);
+    if (newSlugs.length > 0) {
+      try {
+        const { generarSeoProducto } = await import("@/lib/seo-generator");
+        const { data: needsSeo } = await supa.from("productos_padre")
+          .select("slug, nombre, categoria, subcategoria")
+          .in("slug", newSlugs)
+          .or("texto_enriquecido_seo.is.null,texto_enriquecido_seo.eq.");
+        for (const row of (needsSeo ?? [])) {
+          const seoOutput = generarSeoProducto({
+            nombre: row.nombre, marca: null,
+            categoria: row.categoria, subcategoria: row.subcategoria, descripcion: null,
+          });
+          await supa.from("productos_padre").update({
+            seo_title: seoOutput.seo_title,
+            seo_description: seoOutput.seo_description,
+            texto_enriquecido_seo: seoOutput.texto_enriquecido_seo,
+          }).eq("slug", row.slug);
+        }
+      } catch { /* SEO is optional */ }
+    }
+
+    // 11. Save snapshot for future incremental comparisons
+    try {
+      await guardarSnapshot();
+    } catch { /* snapshot is optional */ }
+
+    return { ok: totalProcessed, noEncontrados };
   } catch (e) {
     return { ok: 0, noEncontrados: [], error: String(e) };
   }
