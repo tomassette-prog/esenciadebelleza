@@ -89,7 +89,34 @@ const DESCRIPTOR_BLOCKLIST = new Set([
   "un", "una", "por", "en", "a",
 ]);
 
+// Marcas conocidas del sector (ordenadas de más largo a más corto para matching)
+const KNOWN_BRANDS = [
+  "L'Oréal","Loreal","Wella","Fanola","Schwarzkopf","Goldwell","Revlon",
+  "Kérastase","Kerastase","Matrix","Redken","Joico","Olaplex","Alfaparf",
+  "Balmain","Montibello","Risfort","Salerm","Celine","Periche","Keyra",
+  "Exitenn","Tahe","Hipertin","Liheto","Glossco","Yunsey","Valquer",
+  "Keen Strok","Hairtalk","Keler","Lendan","Arual","Vis Plantis","Dr. Sante",
+  "Novon","Hey Joe","Kuul","Karseell","Cantu","Candelahn","Coiffer","Don Algodon",
+  "Eurostil","Babyliss","Parlux","GHD","Cloud Nine","Corioliss","Ikoo",
+  "Tangle Teezer","Denman","Mason Pearson","Acca Kappa","Moroccanoil",
+  "Kevin Murphy","Davines","Tigi","Sebastian","Nioxin","Paul Mitchell",
+  "Aveda","KMS","Tec Italy","Lakme","Nevo","Surface","Sexy Hair",
+  "Kenra","Rusk","Scruples","Pravana","Rusk","Zotos","ISO",
+  "BaByliss PRO","Ermila","Moser","Wahl","Andis","Oster","Heidi",
+  "Jaguar","Kasho","Mizutaki","Joewell","Kamisori","Saki",
+].sort((a, b) => b.length - a.length);
+
 function extractBrandName(productName: string): string {
+  const nameLower = productName.toLowerCase();
+  
+  // 1. Buscar marca conocida en el nombre del producto
+  for (const brand of KNOWN_BRANDS) {
+    if (nameLower.includes(brand.toLowerCase())) {
+      return brand;
+    }
+  }
+  
+  // 2. Fallback: tomar las primeras 1-2 palabras
   const words = productName.trim().replace(/\s+/g, " ").split(" ");
   if (words.length === 0) return productName.trim();
   const first = words[0];

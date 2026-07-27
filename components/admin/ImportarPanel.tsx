@@ -33,6 +33,7 @@ type BrandState = {
   approved: boolean;
   isNewBrand: boolean;
   mappingToExisting?: string;
+  customBrandName?: string;
 };
 
 type ProductOverride = {
@@ -174,7 +175,7 @@ export function ImportarPanel({ allPairs }: { allPairs: CategoriaPair[] }) {
     const brandMappings = [...brandApprovals.entries()]
       .filter(([, state]) => state.approved)
       .map(([wooBrandName, state]) => ({
-        wooBrandName,
+        wooBrandName: state.customBrandName || wooBrandName,
         marcaId: state.isNewBrand ? null : (state.mappingToExisting ?? null),
         isNewBrand: state.isNewBrand,
       }));
@@ -720,6 +721,28 @@ export function ImportarPanel({ allPairs }: { allPairs: CategoriaPair[] }) {
                                 <option key={m.id} value={m.id}>{m.nombre}</option>
                               ))}
                             </select>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs text-neutral-400 shrink-0">O escribir marca:</span>
+                            <input
+                              type="text"
+                              placeholder="Ej: Eurostil"
+                              className="text-xs border border-neutral-200 px-2 py-1.5 bg-white flex-1"
+                              onKeyDown={e => {
+                                if (e.key === 'Enter' && e.currentTarget.value.trim()) {
+                                  const customName = e.currentTarget.value.trim();
+                                  setBrandApprovals(prev => {
+                                    const next = new Map(prev);
+                                    next.set(brand.wooBrandName, { approved: true, isNewBrand: true, mappingToExisting: undefined, customBrandName: customName });
+                                    return next;
+                                  });
+                                  e.currentTarget.value = '';
+                                }
+                              }}
+                            />
+                            {state?.customBrandName && (
+                              <span className="text-xs text-green-600 shrink-0">→ {state.customBrandName}</span>
+                            )}
                           </div>
                         </div>
                       );
