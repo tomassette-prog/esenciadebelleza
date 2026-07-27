@@ -7,6 +7,7 @@ import {
   publicarAprobados,
   listarMarcasExistentes,
   backfillWooId,
+  guardarSnapshot,
   type ProductoDiff,
   type DiffGaps,
   type ReviewGroup,
@@ -96,6 +97,11 @@ export function ImportarPanel({ allPairs }: { allPairs: CategoriaPair[] }) {
   const [backfillResult, setBackfillResult] = useState<{ ok: number; bySku: number; bySlug: number; byName: number; unmatched: number } | null>(null);
   const [backfillPending, setBackfillPending] = useState(false);
 
+  // Snapshot state
+  const [snapshotResult, setSnapshotResult] = useState<{ ok: number } | null>(null);
+  const [snapshotPending, setSnapshotPending] = useState(false);
+  const [snapshotExists, setSnapshotExists] = useState<boolean | null>(null);
+
   // ── Handlers ────────────────────────────────────────────────────────────────
 
   function handleDiff() {
@@ -110,6 +116,7 @@ export function ImportarPanel({ allPairs }: { allPairs: CategoriaPair[] }) {
       setModificados(res.modificados);
       setIguales(res.iguales);
       setGaps(res.gaps);
+      setSnapshotExists(res.snapshotExists ?? false);
       setMarcasExistentes(marcasRes.marcas);
       setBrandApprovals(new Map());
       setActiveTab("nuevos");
@@ -224,6 +231,18 @@ export function ImportarPanel({ allPairs }: { allPairs: CategoriaPair[] }) {
     });
   }
 
+  function handleSnapshot() {
+    setSnapshotPending(true);
+    setSnapshotResult(null);
+    setError(null);
+    startTransition(async () => {
+      const res = await guardarSnapshot();
+      if (res.error) { setError(res.error); }
+      setSnapshotResult({ ok: res.ok });
+      setSnapshotPending(false);
+    });
+  }
+
   function handleAplicar() {
     if (!seleccionados.size) return;
     setFase("aplicando");
@@ -321,6 +340,32 @@ export function ImportarPanel({ allPairs }: { allPairs: CategoriaPair[] }) {
         </div>
       )}
 
+      {/* Snapshot — guardar estado actual de WC */}
+      {fase === "idle" && (
+        <div className="border border-emerald-200 bg-emerald-50 p-4">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <p className="text-sm font-medium text-emerald-800">Snapshot de WooCommerce</p>
+              <p className="text-xs text-emerald-600 mt-0.5">
+                Guarda el estado actual de precios de WooCommerce para comparación incremental. Ejecutar antes de &ldquo;Calcular diff&rdquo;.
+              </p>
+            </div>
+            <button
+              onClick={handleSnapshot}
+              disabled={snapshotPending}
+              className="shrink-0 px-4 py-2 bg-emerald-700 text-white text-xs tracking-widest uppercase hover:bg-emerald-800 disabled:opacity-50 transition-colors"
+            >
+              {snapshotPending ? "Guardando…" : "Guardar snapshot"}
+            </button>
+          </div>
+          {snapshotResult && (
+            <div className="mt-3 p-3 bg-white border border-emerald-200 text-xs">
+              <p className="font-medium text-emerald-800">✅ Snapshot guardado: {snapshotResult.ok} productos</p>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Calculating */}
       {fase === "diff" && (
         <div className="text-center py-16 text-neutral-400 text-sm animate-pulse">
@@ -331,6 +376,17 @@ export function ImportarPanel({ allPairs }: { allPairs: CategoriaPair[] }) {
       {/* ── FASE: LISTO (diff result) ── */}
       {(fase === "listo" || fase === "aplicando" || fase === "publicando") && iguales !== null && (
         <>
+          {/* Snapshot warning */}
+          {snapshotExists === false && (
+            <div className="border border-amber-300 bg-amber-50 p-3 text-sm">
+              <p className="font-medium text-amber-800">⚠️ No hay snapshot previo</p>
+              <p className="text-amber-700 text-xs mt-1">
+                Todos los productos aparecen como nuevos porque no se ha ejecutado &ldquo;Guardar snapshot&rdquo; antes. 
+                Tras importar, el snapshot se guardará automáticamente para la próxima comparación.
+              </p>
+            </div>
+          )}
+
           {/* SmartApplyResult */}
           {smartResult && (
             <div className="border border-green-200 bg-green-50 p-3 text-sm space-y-1">

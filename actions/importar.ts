@@ -231,6 +231,7 @@ export async function calcularDiff(): Promise<{
   modificados: ProductoDiff[];
   iguales: number;
   gaps: DiffGaps;
+  snapshotExists?: boolean;
   error?: string;
 }> {
   try {
@@ -268,7 +269,6 @@ export async function calcularDiff(): Promise<{
       woo_id?: number | null;
     }>();
     const supaMapByWooId = new Map<number, string>();  // woo_id -> slug
-    const supaPrecios = new Map<string, number>();  // SKU -> precio_b2c actual
     
     let offset = 0;
     while (true) {
@@ -285,31 +285,20 @@ export async function calcularDiff(): Promise<{
       offset += 1000;
     }
 
-    // Cargar precios actuales de variaciones + mapa SKU → padre
-    const skuToPadreSlug = new Map<string, string>();  // SKU → slug del padre
-    // Mapa inverso: producto_padre_id → slug (construido una sola vez)
-    const idToSlug = new Map<string, string>();
-    for (const [slug, info] of supaMap) {
-      idToSlug.set((info as any).id, slug);
-    }
+    // 3. Cargar snapshot anterior (WC vs snapshot, NO WC vs Supabase)
+    const snapshotMap = new Map<number, { woo_id: number; slug: string; precio: number }>();
     offset = 0;
     while (true) {
-      const { data } = await supa
-        .from("productos_variaciones")
-        .select("sku, precio_b2c, producto_padre_id")
-        .range(offset, offset + 999);
+      const { data } = await supa.from("woo_snapshot").select("woo_id, slug, precio").range(offset, offset + 999);
       if (!data || data.length === 0) break;
-      for (const r of data) {
-        supaPrecios.set(r.sku, r.precio_b2c);
-        const padreSlug = idToSlug.get(r.producto_padre_id);
-        if (padreSlug) skuToPadreSlug.set(r.sku, padreSlug);
-      }
+      for (const r of data) snapshotMap.set(r.woo_id, r);
       if (data.length < 1000) break;
       offset += 1000;
     }
 
-    // 3. Comparar precios (detectar nuevos y modificados)
-    // Matching por: woo_id → slug → SKU de variación
+    const tieneSnapshot = snapshotMap.size > 0;
+
+    // 4. Comparar WC actual vs snapshot
     const catMap = await getDbCatMap(supa);
     const brandMappingsCache = await getBrandMappingsCache(supa);
     const nuevos: ProductoDiff[] = [];
@@ -318,30 +307,11 @@ export async function calcularDiff(): Promise<{
 
     for (const p of wooProductos) {
       const slug = p.slug || slugify(p.name);
-      
-      // Buscar por woo_id primero (deduplicación robusta)
-      let slugEnDB: string | undefined;
-      if (p.id) {
-        slugEnDB = supaMapByWooId.get(p.id);
-      }
-      // Fallback 1: buscar por slug
-      if (!slugEnDB) {
-        slugEnDB = slug;
-      }
-      
-      let existing = supaMap.get(slugEnDB);
+      const wooPrice = parseFloat(p.regular_price || p.price) || 0;
+      const snap = snapshotMap.get(p.id);
 
-      // Fallback 2: buscar por SKU del producto padre (para cuando el slug cambió en WC)
-      if (!existing && p.sku) {
-        const slugFromSku = skuToPadreSlug.get(p.sku);
-        if (slugFromSku) {
-          existing = supaMap.get(slugFromSku);
-          if (existing) slugEnDB = slugFromSku;
-        }
-      }
-
-      if (!existing) {
-        // Producto nuevo en WooCommerce
+      if (!snap) {
+        // Producto no estaba en el snapshot → es nuevo en WC
         const brandResolution = await resolveBrandFromWc(supa, p.name, p.attributes ?? [], brandMappingsCache);
         nuevos.push({
           slug, nombre: p.name, tipo: "nuevo", wooId: p.id, wooCategories: p.categories.map(c => c.id),
@@ -350,36 +320,18 @@ export async function calcularDiff(): Promise<{
         continue;
       }
 
-      // Producto existente — comparar PRECIO
-      // Para productos simples: comparar con la variación que tiene el SKU del padre
-      // Para productos variables: comparar con el precio del padre (mínimo)
-      const wooPrice = parseFloat(p.price || p.regular_price) || 0;
-      let precioActual = 0;
-
-      if (p.sku) {
-        // Producto simple — buscar por SKU exacto
-        precioActual = supaPrecios.get(p.sku) ?? 0;
-      } else if (p.type === "variable") {
-        // Producto variable — buscar todas las variaciones de este padre y tomar el precio mínimo
-        const padreId = (existing as any).id as string;
-        let minPrecio = Infinity;
-        for (const [sku, precio] of supaPrecios) {
-          const padreSlug = skuToPadreSlug.get(sku);
-          if (padreSlug === slugEnDB && precio < minPrecio) {
-            minPrecio = precio;
-          }
-        }
-        precioActual = minPrecio === Infinity ? 0 : minPrecio;
-      }
-
-      if (wooPrice !== precioActual && wooPrice > 0) {
+      // Producto existe en snapshot → comparar precio
+      if (wooPrice !== snap.precio && wooPrice > 0) {
+        // Precio cambió respecto al snapshot
+        // Buscar el slug actual en Supabase (por woo_id o por slug del snapshot)
+        const slugEnDB = supaMapByWooId.get(p.id) ?? snap.slug ?? slug;
         modificados.push({
           slug: slugEnDB,
           nombre: p.name,
           tipo: "modificado",
           wooId: p.id,
           wooCategories: p.categories.map(c => c.id),
-          precioCambio: { woo: wooPrice, actual: precioActual }
+          precioCambio: { woo: wooPrice, actual: snap.precio }
         });
       } else {
         iguales++;
@@ -431,7 +383,7 @@ export async function calcularDiff(): Promise<{
 
     const gaps: DiffGaps = { newBrands, unmappedCategories, pendingBrands };
 
-    return { nuevos, modificados, iguales, gaps };
+    return { nuevos, modificados, iguales, gaps, snapshotExists: tieneSnapshot };
   } catch (e) {
     return { nuevos: [], modificados: [], iguales: 0, gaps: { newBrands: [], unmappedCategories: [], pendingBrands: [] }, error: String(e) };
   }
@@ -457,7 +409,8 @@ export async function aplicarCambios(slugsConId: Array<{ slug: string; wooId: nu
       price: string; regular_price: string; sale_price: string;
       stock_quantity: number | null; stock_status: string;
       images: { src: string }[];
-      categories: { id: number }[];
+      categories: { id: number; name: string }[];
+      attributes: { name: string; options: string[] }[];
     };
 
     // Buscar por ID de WooCommerce (lookup directo, siempre fiable)
@@ -873,6 +826,14 @@ export async function publicarAprobados(payload: ReviewPayload): Promise<SmartAp
       .filter((r): r is PromiseFulfilledResult<string> => r.status === "fulfilled")
       .map(r => r.value);
 
+    // Guardar snapshot tras importación exitosa
+    try {
+      const snapResult = await guardarSnapshot();
+      if (snapResult.error) console.warn("[WARN] Snapshot guardado parcialmente:", snapResult.error);
+    } catch (e) {
+      console.warn("[WARN] No se pudo guardar snapshot:", e);
+    }
+
     return { ok: rowsNuevos.length + rowsActualizar.length, brandsCreated, seoTriggered, notFound };
   } catch (e) {
     return { ...empty, error: String(e) };
@@ -1023,3 +984,54 @@ export async function backfillWooId(): Promise<{
     return { ok: 0, bySku: 0, bySlug: 0, byName: 0, unmatched: 0, unmatchedList: [], error: String(e) };
   }
 }
+
+// ─── Snapshot: guardar estado actual de WC para comparación incremental ──────
+
+export async function guardarSnapshot(): Promise<{ ok: number; error?: string }> {
+  try {
+    await verificarAdmin();
+  } catch {
+    return { ok: 0, error: "No autorizado" };
+  }
+
+  try {
+    const supa = adminClient();
+
+    // 1. Descargar todos los productos de WC
+    const wooProductos: { id: number; name: string; slug: string; price: string; regular_price: string; stock_quantity: number | null; stock_status: string }[] = [];
+    let page = 1;
+    while (true) {
+      const batch = await fetchWoo(`/products?status=publish&per_page=100&page=${page}`);
+      if (!Array.isArray(batch) || batch.length === 0) break;
+      wooProductos.push(...batch);
+      if (batch.length < 100) break;
+      page++;
+    }
+
+    // 2. Construir filas para el snapshot
+    const rows = wooProductos.map(p => ({
+      woo_id: p.id,
+      slug: p.slug,
+      nombre: p.name,
+      precio: parseFloat(p.regular_price || p.price) || 0,
+      stock: p.stock_quantity ?? null,
+      activo: p.stock_status !== "outofstock",
+      snapshot_at: new Date().toISOString(),
+    }));
+
+    // 3. Upsert en lotes de 500
+    let upserted = 0;
+    for (let i = 0; i < rows.length; i += 500) {
+      const chunk = rows.slice(i, i + 500);
+      const { error } = await supa.from("woo_snapshot").upsert(chunk, { onConflict: "woo_id" });
+      if (error) return { ok: upserted, error: error.message };
+      upserted += chunk.length;
+    }
+
+    return { ok: upserted };
+  } catch (e) {
+    return { ok: 0, error: String(e) };
+  }
+}
+
+// ─── calcularDiff: comparar WC actual vs snapshot ────────────────────────────
