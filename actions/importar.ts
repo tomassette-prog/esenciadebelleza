@@ -1016,14 +1016,20 @@ export async function backfillWooId(): Promise<BackfillResult> {
     setBfProgress("Guardando vínculos…", 0, updates.size);
     const pares = Array.from(updates.entries()).map(([id, woo_id]) => ({ id, woo_id }));
     let actualizados = 0;
+    let lastError = "";
     for (let i = 0; i < pares.length; i += 50) {
       const chunk = pares.slice(i, i + 50);
       const { error } = await supa.from("productos_padre").upsert(chunk, { onConflict: "id" });
-      if (!error) actualizados += chunk.length;
+      if (error) {
+        lastError = error.message;
+        console.error(`[backfill] Upsert error at ${i}:`, error.message);
+      } else {
+        actualizados += chunk.length;
+      }
       setBfProgress("Guardando vínculos…", actualizados, pares.length);
     }
 
-    const result: BackfillResult = { ok: actualizados, bySku, bySlug, byName, unmatched: unmatched.length, unmatchedList: unmatched.slice(0, 50) };
+    const result: BackfillResult = { ok: actualizados, bySku, bySlug, byName, unmatched: unmatched.length, unmatchedList: unmatched.slice(0, 50), error: lastError || undefined };
     _backfillProgress = { phase: "Completado", current: actualizados, total: actualizados, done: true, result };
     return result;
   } catch (e) {
