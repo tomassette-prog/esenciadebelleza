@@ -118,7 +118,7 @@ export function ImportarPanel({ allPairs }: { allPairs: CategoriaPair[] }) {
       setIguales(res.iguales);
       setGaps(res.gaps);
       setSnapshotExists(res.snapshotExists ?? false);
-      setMarcasExistentes(marcasRes.marcas);
+      setMarcasExistentes(marcasRes?.marcas ?? []);
       setBrandApprovals(new Map());
       setActiveTab("nuevos");
       setSeleccionados(new Set(res.nuevos.map(p => p.slug)));
