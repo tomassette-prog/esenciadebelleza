@@ -35,6 +35,12 @@ type BrandState = {
   mappingToExisting?: string;
 };
 
+type ProductOverride = {
+  categoria: string;
+  subcategoria: string;
+  targetGroupKey?: string; // moved to this group
+};
+
 // ─── Pure helpers (outside component) ─────────────────────────────────────────
 
 function buildReviewGroups(nuevos: ProductoDiff[], gaps: DiffGaps): ReviewGroup[] {
@@ -85,6 +91,7 @@ export function ImportarPanel({ allPairs }: { allPairs: CategoriaPair[] }) {
   const [gaps, setGaps]             = useState<DiffGaps>({ newBrands: [], unmappedCategories: [], pendingBrands: [] });
   const [reviewGroups, setReviewGroups] = useState<ReviewGroup[]>([]);
   const [groupApprovals, setGroupApprovals] = useState<Map<string, GroupState>>(new Map());
+  const [productOverrides, setProductOverrides] = useState<Map<string, ProductOverride>>(new Map());
   const [smartResult, setSmartResult] = useState<SmartApplyResult | null>(null);
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
 
@@ -120,6 +127,7 @@ export function ImportarPanel({ allPairs }: { allPairs: CategoriaPair[] }) {
       setSnapshotExists(res.snapshotExists ?? false);
       setMarcasExistentes(marcasRes?.marcas ?? []);
       setBrandApprovals(new Map());
+      setProductOverrides(new Map());
       setActiveTab("nuevos");
       setSeleccionados(new Set(res.nuevos.map(p => p.slug)));
       setFase("listo");
@@ -139,16 +147,29 @@ export function ImportarPanel({ allPairs }: { allPairs: CategoriaPair[] }) {
   }
 
   function handlePublicarAprobados() {
-    const approvedGroups = [...groupApprovals.entries()]
-      .filter(([, state]) => state.approved)
-      .map(([groupKey, state]) => {
-        const group = reviewGroups.find(g => g.groupKey === groupKey)!;
-        return {
-          slugsConId: group.products.map(p => ({ slug: p.slug, wooId: p.wooId })),
-          categoria: state.overrideCategoria ?? group.suggestedCategoria,
-          subcategoria: state.overrideSubcategoria ?? group.suggestedSubcategoria,
-        };
-      });
+    // Build groups, splitting products with individual overrides
+    const groupMap = new Map<string, { slugsConId: Array<{ slug: string; wooId: number }>; categoria: string; subcategoria: string }>();
+
+    for (const [groupKey, state] of groupApprovals.entries()) {
+      if (!state.approved) continue;
+      const group = reviewGroups.find(g => g.groupKey === groupKey);
+      if (!group) continue;
+
+      for (const p of group.products) {
+        // Check for individual product override
+        const override = productOverrides.get(p.slug);
+        const cat = override?.categoria ?? state.overrideCategoria ?? group.suggestedCategoria;
+        const sub = override?.subcategoria ?? state.overrideSubcategoria ?? group.suggestedSubcategoria;
+        const key = `${cat}/${sub}`;
+
+        if (!groupMap.has(key)) {
+          groupMap.set(key, { slugsConId: [], categoria: cat, subcategoria: sub });
+        }
+        groupMap.get(key)!.slugsConId.push({ slug: p.slug, wooId: p.wooId });
+      }
+    }
+
+    const approvedGroups = [...groupMap.values()];
     const brandMappings = [...brandApprovals.entries()]
       .filter(([, state]) => state.approved)
       .map(([wooBrandName, state]) => ({
@@ -837,12 +858,47 @@ export function ImportarPanel({ allPairs }: { allPairs: CategoriaPair[] }) {
                       </div>
 
                       {/* Product list */}
-                      <div className="space-y-1 max-h-48 overflow-y-auto">
-                        {group.products.slice(0, 10).map(p => (
-                          <div key={p.slug} className="text-xs text-neutral-600 py-0.5">{p.nombre}</div>
-                        ))}
-                        {group.products.length > 10 && (
-                          <p className="text-xs text-neutral-400">+ {group.products.length - 10} más</p>
+                      <div className="space-y-1 max-h-64 overflow-y-auto">
+                        {group.products.slice(0, 20).map(p => {
+                          const override = productOverrides.get(p.slug);
+                          const hasOverride = !!override;
+                          return (
+                            <div key={p.slug} className={`flex items-center gap-2 py-1 ${hasOverride ? "bg-amber-50 -mx-2 px-2" : ""}`}>
+                              <span className="text-xs text-neutral-600 flex-1 truncate">{p.nombre}</span>
+                              {hasOverride && (
+                                <span className="text-xs text-amber-600 shrink-0">
+                                  → {override.categoria} › {override.subcategoria}
+                                </span>
+                              )}
+                              <select
+                                value={hasOverride ? `${override.categoria}/${override.subcategoria}` : ""}
+                                onChange={e => {
+                                  const val = e.target.value;
+                                  setProductOverrides(prev => {
+                                    const next = new Map(prev);
+                                    if (!val) {
+                                      next.delete(p.slug);
+                                    } else {
+                                      const [cat, sub] = val.split("/");
+                                      next.set(p.slug, { categoria: cat, subcategoria: sub });
+                                    }
+                                    return next;
+                                  });
+                                }}
+                                className="text-xs border border-neutral-200 px-1 py-0.5 bg-white w-40 shrink-0"
+                              >
+                                <option value="">Por defecto</option>
+                                {allPairs.map(pair => (
+                                  <option key={`${pair.categoria}/${pair.subcategoria}`} value={`${pair.categoria}/${pair.subcategoria}`}>
+                                    {pair.label}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                          );
+                        })}
+                        {group.products.length > 20 && (
+                          <p className="text-xs text-neutral-400">+ {group.products.length - 20} más</p>
                         )}
                       </div>
                     </div>
