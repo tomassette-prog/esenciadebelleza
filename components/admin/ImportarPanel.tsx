@@ -155,7 +155,7 @@ export function ImportarPanel({ allPairs }: { allPairs: CategoriaPair[] }) {
     setFase("revisando");
   }
 
-  function handlePublicarAprobados() {
+  async function handlePublicarAprobados() {
     // Build groups, splitting products with individual overrides
     const groupMap = new Map<string, { slugsConId: Array<{ slug: string; wooId: number }>; categoria: string; subcategoria: string }>();
 
