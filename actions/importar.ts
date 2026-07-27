@@ -1012,20 +1012,23 @@ export async function backfillWooId(): Promise<BackfillResult> {
       if (i % 500 === 0) setBfProgress("Emparejando productos…", i, wooProducts.length);
     }
 
-    // 6. Batch update
+    // 6. Batch update (usar UPDATE directo en vez de upsert)
     setBfProgress("Guardando vínculos…", 0, updates.size);
     const pares = Array.from(updates.entries()).map(([id, woo_id]) => ({ id, woo_id }));
     let actualizados = 0;
     let lastError = "";
     for (let i = 0; i < pares.length; i += 50) {
       const chunk = pares.slice(i, i + 50);
-      const { error } = await supa.from("productos_padre").upsert(chunk, { onConflict: "id" });
-      if (error) {
-        lastError = error.message;
-        console.error(`[backfill] Upsert error at ${i}:`, error.message);
-      } else {
-        actualizados += chunk.length;
+      // Update individual por cada producto (más seguro que upsert)
+      const results = await Promise.all(chunk.map(({ id, woo_id }) =>
+        supa.from("productos_padre").update({ woo_id }).eq("id", id)
+      ));
+      const errors = results.filter(r => r.error);
+      if (errors.length > 0) {
+        lastError = errors[0].error!.message;
+        console.error(`[backfill] Update errors:`, errors.map(e => e.error!.message));
       }
+      actualizados += chunk.length - errors.length;
       setBfProgress("Guardando vínculos…", actualizados, pares.length);
     }
 
