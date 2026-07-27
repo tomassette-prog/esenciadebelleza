@@ -178,12 +178,13 @@ export async function construirNavItems(): Promise<NavItem[]> {
   const navItems: NavItem[] = [];
 
   // Orden de categorías
-  const ORDEN_CATEGORIAS = ["peluqueria", "estetica", "barberia", "perfumeria", "marcas", "blog"];
+  const ORDEN_CATEGORIAS = ["peluqueria", "estetica", "barberia", "perfumeria", "ofertas", "marcas", "blog"];
   const NOMBRES_CATEGORIAS: Record<string, string> = {
     peluqueria: "Peluquería",
     estetica: "Estética",
     barberia: "Barbería",
     perfumeria: "Perfumería",
+    ofertas: "Ofertas",
     marcas: "Marcas",
     blog: "Blog",
   };
@@ -200,6 +201,11 @@ export async function construirNavItems(): Promise<NavItem[]> {
       navItems.push({
         label: "Blog",
         href: "/blog",
+      });
+    } else if (cat === "ofertas") {
+      navItems.push({
+        label: "Ofertas",
+        href: "/ofertas",
       });
     } else if (byCategory[cat]) {
       // Construir columnas agrupadas
