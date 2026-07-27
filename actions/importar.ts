@@ -612,7 +612,7 @@ export async function publicarAprobados(payload: ReviewPayload): Promise<SmartAp
     type WooProducto = {
       id: number; name: string; slug: string; type: string;
       description: string; short_description: string; sku: string;
-      price: string; regular_price: string;
+      price: string; regular_price: string; sale_price: string;
       stock_quantity: number | null; stock_status: string;
       images: { src: string }[];
       categories: { id: number; name: string }[];
