@@ -530,11 +530,14 @@ export async function aplicarCambios(slugsConId: Array<{ slug: string; wooId: nu
       existByNombre.set(key, { slug: r.slug, id: r.id });
     }
 
-    // 6. Process each product
+    // 6. Process each product — resolve categories (with suggester for unmapped) and brands
     const suffix = " | Esencia de Belleza";
     const maxNombre = 60 - suffix.length;
     const rowsNuevos: any[] = [];
     const rowsActualizar: any[] = [];
+    // Track unmapped categories to persist them after import
+    const newCatMappings: Array<{ woo_cat_id: number; woo_cat_name: string; categoria: string; subcategoria: string }> = [];
+    const seenUnmappedCatIds = new Set<number>();
 
     function brandNameForProduct(p: WooProducto): string {
       const attrBrand = p.attributes?.find(a => a.name.toLowerCase().includes("marca"))?.options?.[0];
@@ -543,8 +546,31 @@ export async function aplicarCambios(slugsConId: Array<{ slug: string; wooId: nu
 
     for (const p of seleccionados) {
       const slug = p.slug || slugify(p.name);
-      const cat = resolverCategoria(p.categories, catMap);
       const marcaId = resolvedBrandMap.get(brandNameForProduct(p)) ?? null;
+
+      // Resolve category: first try catMap, then use AI suggester
+      let cat = resolverCategoria(p.categories, catMap);
+      const hasMappedCategory = p.categories.some(c => catMap.has(c.id));
+      if (!hasMappedCategory && p.categories.length > 0) {
+        // Use AI suggester for unmapped categories
+        const wooCatName = p.categories[0]?.name ?? "";
+        try {
+          const suggestion = await suggestCategory(wooCatName, p.name);
+          cat = { categoria: suggestion.categoria, subcategoria: suggestion.subcategoria };
+          // Track for persistence
+          for (const wc of p.categories) {
+            if (!catMap.has(wc.id) && !seenUnmappedCatIds.has(wc.id)) {
+              seenUnmappedCatIds.add(wc.id);
+              newCatMappings.push({
+                woo_cat_id: wc.id,
+                woo_cat_name: wc.name,
+                categoria: suggestion.categoria,
+                subcategoria: suggestion.subcategoria,
+              });
+            }
+          }
+        } catch { /* keep fallback */ }
+      }
 
       // Check existence: slug → woo_id → nombre
       let existing = existBySlug.get(slug);
@@ -602,6 +628,12 @@ export async function aplicarCambios(slugsConId: Array<{ slug: string; wooId: nu
       }
     }
 
+    // 8b. Persist new category mappings so future imports benefit
+    if (newCatMappings.length > 0) {
+      await supa.from("woo_cat_mappings").upsert(newCatMappings, { onConflict: "woo_cat_id" });
+      _dbCatMap = null; // Reset cache
+    }
+
     // 9. Upsert variations (prices + stock)
     const totalProcessed = rowsNuevos.length + rowsActualizar.length;
 
@@ -641,18 +673,19 @@ export async function aplicarCambios(slugsConId: Array<{ slug: string; wooId: nu
       }
     }
 
-    // 10. Generate SEO for new products
+    // 10. Generate SEO for new products (with brand name)
     const newSlugs = rowsNuevos.map((r: any) => r.slug);
     if (newSlugs.length > 0) {
       try {
         const { generarSeoProducto } = await import("@/lib/seo-generator");
         const { data: needsSeo } = await supa.from("productos_padre")
-          .select("slug, nombre, categoria, subcategoria")
+          .select("slug, nombre, categoria, subcategoria, marca:marcas(nombre)")
           .in("slug", newSlugs)
           .or("texto_enriquecido_seo.is.null,texto_enriquecido_seo.eq.");
         for (const row of (needsSeo ?? [])) {
+          const brandName = (row as any).marca?.nombre ?? null;
           const seoOutput = generarSeoProducto({
-            nombre: row.nombre, marca: null,
+            nombre: row.nombre, marca: brandName,
             categoria: row.categoria, subcategoria: row.subcategoria, descripcion: null,
           });
           await supa.from("productos_padre").update({
