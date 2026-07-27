@@ -84,7 +84,7 @@ export async function sincronizarPrecios(): Promise<{
       wooProducts.push(...batch);
       if (batch.length < 100) break;
       page++;
-      await new Promise(r => setTimeout(r, 500));
+      await new Promise(r => setTimeout(r, 200));
     }
 
     // 2. Build lookup maps from WC
@@ -95,8 +95,7 @@ export async function sincronizarPrecios(): Promise<{
       wooByWooId.set(wp.id, wp);
     }
 
-    // 3. Load Esencia products WITHOUT price or with 0 price
-    // Get all products
+    // 3. Load ALL Esencia products
     const esenciaProducts: Array<{ id: string; slug: string; woo_id: number | null }> = [];
     let offset = 0;
     while (true) {
@@ -110,26 +109,40 @@ export async function sincronizarPrecios(): Promise<{
       offset += 1000;
     }
 
-    // Find products without valid price
+    // 4. Load ALL variations in bulk to find which products have prices
+    const allVars: Array<{ producto_padre_id: string; precio_b2c: number | null }> = [];
+    offset = 0;
+    while (true) {
+      const { data } = await supa
+        .from("productos_variaciones")
+        .select("producto_padre_id, precio_b2c")
+        .range(offset, offset + 999);
+      if (!data || data.length === 0) break;
+      allVars.push(...data);
+      if (data.length < 1000) break;
+      offset += 1000;
+    }
+
+    // Build set of product IDs that already have valid prices
+    const hasValidPrice = new Set<string>();
+    for (const v of allVars) {
+      if (v.precio_b2c && v.precio_b2c > 0) {
+        hasValidPrice.add(v.producto_padre_id);
+      }
+    }
+
+    // 5. Find products that need prices
     const needsPrice: Array<{ id: string; slug: string; woo: WooProduct }> = [];
 
     for (const ep of esenciaProducts) {
-      // Check if has a variation with price
-      const { data: vars } = await supa
-        .from("productos_variaciones")
-        .select("precio_b2c")
-        .eq("producto_padre_id", ep.id)
-        .limit(1);
-
-      const hasPrice = vars && vars.length > 0 && vars[0].precio_b2c && vars[0].precio_b2c > 0;
-      if (hasPrice) continue;
+      if (hasValidPrice.has(ep.id)) continue;
 
       // Find matching WC product
       const woo = (ep.woo_id && wooByWooId.get(ep.woo_id)) || wooBySlug.get(ep.slug);
       if (!woo) continue;
 
       const precioRegular = parseFloat(woo.regular_price || woo.price) || 0;
-      if (precioRegular <= 0) continue; // WC also has no price
+      if (precioRegular <= 0) continue;
 
       needsPrice.push({ id: ep.id, slug: ep.slug, woo });
     }
@@ -142,7 +155,18 @@ export async function sincronizarPrecios(): Promise<{
       if (configMult?.valor) precioMultiplicador = parseFloat(configMult.valor) || 0.75;
     } catch { /* usar fallback */ }
 
-    // 5. Update prices
+    // 5. Load all existing variation SKUs in bulk for matching
+    const existingSkus = new Set<string>();
+    offset = 0;
+    while (true) {
+      const { data } = await supa.from("productos_variaciones").select("sku").range(offset, offset + 999);
+      if (!data || data.length === 0) break;
+      for (const v of data) { if (v.sku) existingSkus.add(v.sku); }
+      if (data.length < 1000) break;
+      offset += 1000;
+    }
+
+    // 6. Update prices
     let actualizados = 0;
     let sinMatch = 0;
 
@@ -150,50 +174,34 @@ export async function sincronizarPrecios(): Promise<{
       const precioRegular = parseFloat(woo.regular_price || woo.price) || 0;
       const precioVenta = parseFloat(woo.sale_price) || 0;
       const imagenUrl = woo.images?.[0]?.src ?? null;
-
-      // Get or create parent product reference
-      const { data: padre } = await supa.from("productos_padre")
-        .select("id").eq("id", id).single();
-      if (!padre) { sinMatch++; continue; }
-
-      // Update product image if missing
-      if (imagenUrl) {
-        await supa.from("productos_padre")
-          .update({ imagen_principal_url: imagenUrl })
-          .eq("id", id)
-          .is("imagen_principal_url", null);
-      }
-
-      // Update oferta flag
       const isOferta = precioVenta > 0 && precioVenta < precioRegular;
-      await supa.from("productos_padre")
-        .update({ oferta: isOferta })
-        .eq("id", id);
+
+      // Update product fields
+      const prodUpdates: any = { oferta: isOferta };
+      if (imagenUrl) prodUpdates.imagen_principal_url = imagenUrl;
+      await supa.from("productos_padre").update(prodUpdates).eq("id", id);
 
       // Update or create variation
       if (woo.type === "simple" && woo.sku) {
-        const { data: existingVar } = await supa
-          .from("productos_variaciones")
-          .select("id")
-          .eq("sku", woo.sku)
-          .single();
+        const precioB2b = parseFloat((precioRegular * precioMultiplicador).toFixed(2));
+        const precioComparar = precioVenta > 0 && precioVenta < precioRegular ? precioRegular : null;
 
-        if (existingVar) {
+        if (existingSkus.has(woo.sku)) {
           await supa.from("productos_variaciones").update({
             precio_b2c: precioRegular,
-            precio_b2b: parseFloat((precioRegular * precioMultiplicador).toFixed(2)),
-            precio_comparar: precioVenta > 0 && precioVenta < precioRegular ? precioRegular : null,
+            precio_b2b: precioB2b,
+            precio_comparar: precioComparar,
             stock: woo.stock_quantity ?? 0,
             activa: woo.stock_status !== "outofstock",
           }).eq("sku", woo.sku);
         } else {
           await supa.from("productos_variaciones").insert({
-            producto_padre_id: padre.id,
+            producto_padre_id: id,
             sku: woo.sku,
             nombre_variacion: "Unidad",
             precio_b2c: precioRegular,
-            precio_b2b: parseFloat((precioRegular * precioMultiplicador).toFixed(2)),
-            precio_comparar: precioVenta > 0 && precioVenta < precioRegular ? precioRegular : null,
+            precio_b2b: precioB2b,
+            precio_comparar: precioComparar,
             stock: woo.stock_quantity ?? 0,
             activa: woo.stock_status !== "outofstock",
             imagen_url: imagenUrl,
@@ -245,7 +253,7 @@ export async function sincronizarTodosPrecios(): Promise<{
       wooProducts.push(...batch);
       if (batch.length < 100) break;
       page++;
-      await new Promise(r => setTimeout(r, 500));
+      await new Promise(r => setTimeout(r, 200));
     }
 
     // Load multiplicador
