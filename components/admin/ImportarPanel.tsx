@@ -121,19 +121,24 @@ export function ImportarPanel({ allPairs }: { allPairs: CategoriaPair[] }) {
     setSmartResult(null);
     setFase("diff");
     startTransition(async () => {
-      const [res, marcasRes] = await Promise.all([calcularDiff(), listarMarcasExistentes()]);
-      if (res.error) { setError(res.error); setFase("idle"); return; }
-      setNuevos(res.nuevos);
-      setModificados(res.modificados);
-      setIguales(res.iguales);
-      setGaps(res.gaps);
-      setSnapshotExists(res.snapshotExists ?? false);
-      setMarcasExistentes(marcasRes?.marcas ?? []);
-      setBrandApprovals(new Map());
-      setProductOverrides(new Map());
-      setActiveTab("nuevos");
-      setSeleccionados(new Set(res.nuevos.map(p => p.slug)));
-      setFase("listo");
+      try {
+        const [res, marcasRes] = await Promise.all([calcularDiff(), listarMarcasExistentes()]);
+        if (!res || res.error) { setError(res?.error ?? "Error al calcular diff"); setFase("idle"); return; }
+        setNuevos(res.nuevos);
+        setModificados(res.modificados);
+        setIguales(res.iguales);
+        setGaps(res.gaps);
+        setSnapshotExists(res.snapshotExists ?? false);
+        setMarcasExistentes(marcasRes?.marcas ?? []);
+        setBrandApprovals(new Map());
+        setProductOverrides(new Map());
+        setActiveTab("nuevos");
+        setSeleccionados(new Set(res.nuevos.map(p => p.slug)));
+        setFase("listo");
+      } catch (e) {
+        setError(String(e));
+        setFase("idle");
+      }
     });
   }
 

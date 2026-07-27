@@ -285,7 +285,7 @@ export async function calcularDiff(): Promise<{
       wooProductos.push(...batch);
       if (batch.length < 100) break;
       page++;
-      await new Promise(r => setTimeout(r, 1000)); // Delay para evitar 503 de WC
+      await new Promise(r => setTimeout(r, 500)); // Delay para evitar 503 de WC
     }
 
     // 2. Cargar Supabase (productos + variaciones)
@@ -968,7 +968,7 @@ export async function backfillWooId(): Promise<BackfillResult> {
       setBfProgress(`Descargando WC… ${wooProducts.length} productos`, wooProducts.length, 0);
       if (batch.length < 100) break;
       page++;
-      await new Promise(r => setTimeout(r, 1000)); // Delay para evitar 503
+      await new Promise(r => setTimeout(r, 500)); // Delay para evitar 503
     }
 
     // 2. Cargar productos sin woo_id
@@ -1089,7 +1089,7 @@ export async function guardarSnapshot(): Promise<{ ok: number; error?: string }>
       wooProductos.push(...batch);
       if (batch.length < 100) break;
       page++;
-      await new Promise(r => setTimeout(r, 1000)); // Delay para evitar 503
+      await new Promise(r => setTimeout(r, 500)); // Delay para evitar 503
     }
 
     // 2. Construir filas para el snapshot
