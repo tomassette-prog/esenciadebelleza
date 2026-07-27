@@ -842,58 +842,81 @@ export async function publicarAprobados(payload: ReviewPayload): Promise<SmartAp
 
 // ─────────────────────────────────────────────────────────────────────────────
 // backfillWooId — Vincula productos existentes con sus IDs de WooCommerce
+// Optimizado: lotes paralelos, Maps O(1), progreso en tiempo real
 // ─────────────────────────────────────────────────────────────────────────────
 
-export async function backfillWooId(): Promise<{
-  ok: number;
-  bySku: number;
-  bySlug: number;
-  byName: number;
-  unmatched: number;
-  unmatchedList: Array<{ id: number; name: string; slug: string }>;
-  error?: string;
-}> {
-  try {
-    await verificarAdmin();
-  } catch {
+// Progreso global para polling desde el cliente
+let _backfillProgress: { phase: string; current: number; total: number; done: boolean; result?: BackfillResult } | null = null;
+
+type BackfillResult = {
+  ok: number; bySku: number; bySlug: number; byName: number;
+  unmatched: number; unmatchedList: Array<{ id: number; name: string; slug: string }>; error?: string;
+};
+
+export async function getBackfillProgress() {
+  return _backfillProgress ?? { phase: "idle", current: 0, total: 0, done: true };
+}
+
+function setBfProgress(phase: string, current: number, total: number) {
+  _backfillProgress = { phase, current, total, done: false };
+}
+
+export async function backfillWooId(): Promise<BackfillResult> {
+  try { await verificarAdmin(); } catch {
     return { ok: 0, bySku: 0, bySlug: 0, byName: 0, unmatched: 0, unmatchedList: [], error: "No autorizado" };
   }
-
   try {
     const supa = adminClient();
-    const auth = Buffer.from(`${CK}:${CS}`).toString("base64");
 
-    // 1. Fetch ALL WC products (paginated)
+    // 1. Fetch WC products
+    setBfProgress("Descargando productos de WooCommerce…", 0, 0);
     const wooProducts: { id: number; name: string; slug: string; type: string; sku: string; variations: number[] }[] = [];
     let page = 1;
     while (true) {
-      const res = await fetch(`${WOO_URL}/wp-json/wc/v3/products?status=publish&per_page=100&page=${page}`, {
-        headers: { Authorization: `Basic ${auth}` },
-        cache: "no-store",
-      });
-      if (!res.ok) break;
-      const batch = await res.json();
+      const batch = await fetchWoo(`/products?status=publish&per_page=100&page=${page}`) as { id: number; name: string; slug: string; type: string; sku: string; variations: number[] }[];
       if (!Array.isArray(batch) || batch.length === 0) break;
       wooProducts.push(...batch);
+      setBfProgress(`Descargando WC… ${wooProducts.length} productos`, wooProducts.length, 0);
       if (batch.length < 100) break;
       page++;
-      await new Promise(r => setTimeout(r, 2000));
     }
 
-    // 2. Load all Supabase products (only those without woo_id)
+    // 2. Fetch variaciones EN PARALELO (lotes de 20)
+    const wooSkuMap = new Map<number, string[]>();
+    for (const p of wooProducts) {
+      if (p.type !== "variable" && p.sku) wooSkuMap.set(p.id, [p.sku.trim().toLowerCase()]);
+    }
+    const variables = wooProducts.filter(p => p.type === "variable" && p.variations?.length);
+    if (variables.length > 0) {
+      setBfProgress(`Descargando variaciones de ${variables.length} productos…`, 0, variables.length);
+      for (let i = 0; i < variables.length; i += 20) {
+        const chunk = variables.slice(i, i + 20);
+        const results = await Promise.all(chunk.map(async p => {
+          try {
+            const vars = await fetchWoo(`/products/${p.id}/variations?per_page=100`) as Array<{ sku: string }>;
+            const skus = Array.isArray(vars) ? vars.map(v => v.sku?.trim().toLowerCase()).filter(Boolean) : [];
+            if (p.sku) skus.push(p.sku.trim().toLowerCase());
+            return { id: p.id, skus };
+          } catch { return { id: p.id, skus: p.sku ? [p.sku.trim().toLowerCase()] : [] }; }
+        }));
+        for (const r of results) { if (r.skus.length > 0) wooSkuMap.set(r.id, r.skus); }
+        setBfProgress(`Descargando variaciones…`, i + chunk.length, variables.length);
+      }
+    }
+
+    // 3. Cargar Supabase
+    setBfProgress("Cargando catálogo de Esencia…", 0, 0);
     const sinWooId: { id: string; nombre: string; slug: string }[] = [];
-    const todos: { id: string; nombre: string; slug: string; woo_id: number | null }[] = [];
     let offset = 0;
     while (true) {
       const { data } = await supa.from("productos_padre").select("id, nombre, slug, woo_id").range(offset, offset + 999);
       if (!data || data.length === 0) break;
-      todos.push(...data);
       for (const r of data) { if (!r.woo_id) sinWooId.push(r); }
       if (data.length < 1000) break;
       offset += 1000;
     }
 
-    // 3. Load SKUs from variations
+    // 4. SKUs de variaciones de Supabase
     const skuToParentId = new Map<string, string>();
     offset = 0;
     while (true) {
@@ -904,84 +927,61 @@ export async function backfillWooId(): Promise<{
       offset += 1000;
     }
 
-    // 4. Build indexes from Supabase
-    const slugToPadre = new Map<string, typeof sinWooId[0]>();
+    // 5. Índices O(1)
+    const idToPadre = new Map(sinWooId.map(p => [p.id, p]));
+    const slugToPadre = new Map(sinWooId.map(p => [slugify(p.slug), p]));
     const nombreToPadre = new Map<string, typeof sinWooId[0]>();
     for (const p of sinWooId) {
-      slugToPadre.set(slugify(p.slug), p);
       const key = p.nombre.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").trim();
       if (!nombreToPadre.has(key)) nombreToPadre.set(key, p);
     }
 
-    // 5. Match WC products → Supabase
+    // 6. Matching
+    setBfProgress("Emparejando productos…", 0, wooProducts.length);
     const updates = new Map<string, number>();
     const unmatched: { id: number; name: string; slug: string }[] = [];
     let bySku = 0, bySlug = 0, byName = 0;
 
-    for (const wp of wooProducts) {
+    for (let i = 0; i < wooProducts.length; i++) {
+      const wp = wooProducts[i];
       let matched: typeof sinWooId[0] | undefined;
       let metodo: "sku" | "slug" | "nombre" | undefined;
 
-      // By SKU
-      const skus = [wp.sku];
-      if (wp.type === "variable" && wp.variations?.length) {
-        try {
-          const varRes = await fetch(`${WOO_URL}/wp-json/wc/v3/products/${wp.id}/variations?per_page=100`, {
-            headers: { Authorization: `Basic ${auth}` }, cache: "no-store",
-          });
-          if (varRes.ok) {
-            const vars = await varRes.json();
-            if (Array.isArray(vars)) skus.push(...vars.map((v: { sku: string }) => v.sku).filter(Boolean));
-          }
-        } catch { /* skip */ }
-        await new Promise(r => setTimeout(r, 300));
+      for (const sku of (wooSkuMap.get(wp.id) ?? [])) {
+        const parentId = skuToParentId.get(sku);
+        if (parentId) { matched = idToPadre.get(parentId); if (matched) { metodo = "sku"; break; } }
       }
-      for (const sku of skus) {
-        const parentId = skuToParentId.get(sku.trim().toLowerCase());
-        if (parentId) { matched = sinWooId.find(p => p.id === parentId); if (matched) { metodo = "sku"; break; } }
-      }
-
-      // By slug
-      if (!matched) {
-        const found = slugToPadre.get(slugify(wp.slug));
-        if (found) { matched = found; metodo = "slug"; }
-      }
-
-      // By name
+      if (!matched) { matched = slugToPadre.get(slugify(wp.slug)); if (matched) metodo = "slug"; }
       if (!matched) {
         const key = wp.name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").trim();
-        const found = nombreToPadre.get(key);
-        if (found) { matched = found; metodo = "nombre"; }
+        matched = nombreToPadre.get(key); if (matched) metodo = "nombre";
       }
 
-      if (!matched) {
-        unmatched.push({ id: wp.id, name: wp.name, slug: wp.slug });
-        continue;
-      }
+      if (!matched) { unmatched.push({ id: wp.id, name: wp.name, slug: wp.slug }); continue; }
       if (updates.has(matched.id)) continue;
       updates.set(matched.id, wp.id);
-      if (metodo === "sku") bySku++;
-      else if (metodo === "slug") bySlug++;
-      else byName++;
+      if (metodo === "sku") bySku++; else if (metodo === "slug") bySlug++; else byName++;
+      if (i % 200 === 0) setBfProgress("Emparejando productos…", i, wooProducts.length);
     }
 
-    // 6. Batch update
+    // 7. Batch update
+    setBfProgress("Guardando vínculos…", 0, updates.size);
     const pares = Array.from(updates.entries()).map(([id, woo_id]) => ({ id, woo_id }));
     let actualizados = 0;
     for (let i = 0; i < pares.length; i += 50) {
       const chunk = pares.slice(i, i + 50);
       const { error } = await supa.from("productos_padre").upsert(chunk, { onConflict: "id" });
       if (!error) actualizados += chunk.length;
+      setBfProgress("Guardando vínculos…", actualizados, pares.length);
     }
 
-    return {
-      ok: actualizados,
-      bySku, bySlug, byName,
-      unmatched: unmatched.length,
-      unmatchedList: unmatched.slice(0, 50),
-    };
+    const result: BackfillResult = { ok: actualizados, bySku, bySlug, byName, unmatched: unmatched.length, unmatchedList: unmatched.slice(0, 50) };
+    _backfillProgress = { phase: "Completado", current: actualizados, total: actualizados, done: true, result };
+    return result;
   } catch (e) {
-    return { ok: 0, bySku: 0, bySlug: 0, byName: 0, unmatched: 0, unmatchedList: [], error: String(e) };
+    const result: BackfillResult = { ok: 0, bySku: 0, bySlug: 0, byName: 0, unmatched: 0, unmatchedList: [], error: String(e) };
+    _backfillProgress = { phase: "Error", current: 0, total: 0, done: true, result };
+    return result;
   }
 }
 

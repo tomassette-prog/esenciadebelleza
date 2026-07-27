@@ -7,6 +7,7 @@ import {
   publicarAprobados,
   listarMarcasExistentes,
   backfillWooId,
+  getBackfillProgress,
   guardarSnapshot,
   type ProductoDiff,
   type DiffGaps,
@@ -96,6 +97,7 @@ export function ImportarPanel({ allPairs }: { allPairs: CategoriaPair[] }) {
   // Backfill state
   const [backfillResult, setBackfillResult] = useState<{ ok: number; bySku: number; bySlug: number; byName: number; unmatched: number } | null>(null);
   const [backfillPending, setBackfillPending] = useState(false);
+  const [backfillProgress, setBackfillProgress] = useState<{ phase: string; current: number; total: number } | null>(null);
 
   // Snapshot state
   const [snapshotResult, setSnapshotResult] = useState<{ ok: number } | null>(null);
@@ -222,11 +224,30 @@ export function ImportarPanel({ allPairs }: { allPairs: CategoriaPair[] }) {
   function handleBackfill() {
     setBackfillPending(true);
     setBackfillResult(null);
+    setBackfillProgress(null);
     setError(null);
+
+    // Lanzar backfill en background y hacer polling del progreso
     startTransition(async () => {
-      const res = await backfillWooId();
+      const resPromise = backfillWooId();
+
+      // Polling cada 500ms
+      const poll = setInterval(async () => {
+        try {
+          const prog = await getBackfillProgress();
+          if (prog.done) {
+            clearInterval(poll);
+            return;
+          }
+          setBackfillProgress({ phase: prog.phase, current: prog.current, total: prog.total });
+        } catch { /* ignore */ }
+      }, 500);
+
+      const res = await resPromise;
+      clearInterval(poll);
       if (res.error) { setError(res.error); }
       setBackfillResult({ ok: res.ok, bySku: res.bySku, bySlug: res.bySlug, byName: res.byName, unmatched: res.unmatched });
+      setBackfillProgress(null);
       setBackfillPending(false);
     });
   }
@@ -328,6 +349,21 @@ export function ImportarPanel({ allPairs }: { allPairs: CategoriaPair[] }) {
               {backfillPending ? "Vinculando…" : "Vincular IDs"}
             </button>
           </div>
+          {/* Progress bar */}
+          {backfillPending && backfillProgress && (
+            <div className="mt-3 space-y-1">
+              <div className="flex justify-between text-xs text-amber-700">
+                <span>{backfillProgress.phase}</span>
+                {backfillProgress.total > 0 && <span>{backfillProgress.current}/{backfillProgress.total}</span>}
+              </div>
+              <div className="w-full bg-amber-200 rounded-full h-2">
+                <div
+                  className="bg-amber-600 h-2 rounded-full transition-all duration-300"
+                  style={{ width: backfillProgress.total > 0 ? `${Math.min(100, Math.round(backfillProgress.current / backfillProgress.total * 100))}%` : "100%" }}
+                />
+              </div>
+            </div>
+          )}
           {backfillResult && (
             <div className="mt-3 p-3 bg-white border border-amber-200 text-xs space-y-1">
               <p className="font-medium text-amber-800">✅ {backfillResult.ok} productos vinculados</p>
