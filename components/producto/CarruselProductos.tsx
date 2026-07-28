@@ -17,43 +17,47 @@ export function CarruselProductos({ productos, titulo, subtitulo, verTodosHref =
   const containerRef = useRef<HTMLDivElement>(null);
   const trackRef = useRef<HTMLDivElement>(null);
   const [paused, setPaused] = useState(false);
-  const [isDragging, setIsDragging] = useState(false);
   const pointerStartX = useRef(0);
   const scrollStartX = useRef(0);
   const didDrag = useRef(false);
+  const isPointerDown = useRef(false);
 
+  // Sincronizar estado pausado con la animación CSS
   useEffect(() => {
     const el = trackRef.current;
-    if (el) el.style.animationPlayState = (paused || isDragging) ? "paused" : "running";
-  }, [paused, isDragging]);
+    if (el) el.style.animationPlayState = paused ? "paused" : "running";
+  }, [paused]);
 
   const handlePointerDown = (e: React.PointerEvent) => {
+    isPointerDown.current = true;
     pointerStartX.current = e.clientX;
     scrollStartX.current = containerRef.current?.scrollLeft ?? 0;
     didDrag.current = false;
-    // NO activar isDragging aquí — solo cuando el usuario mueva el ratón.
-    // Esto permite que los clicks en los productos funcionen normalmente.
+    // Pausar animación inmediatamente para que el usuario pueda arrastrar
+    setPaused(true);
   };
 
   const handlePointerMove = (e: React.PointerEvent) => {
-    if (!containerRef.current) return;
+    if (!isPointerDown.current || !containerRef.current) return;
     const delta = e.clientX - pointerStartX.current;
     if (Math.abs(delta) > 5) {
-      if (!isDragging) {
-        setIsDragging(true);
-        setPaused(true);
-      }
       didDrag.current = true;
+      // Deshabilitar pointer events en las tarjetas para que no intercepten el drag
+      if (trackRef.current) {
+        trackRef.current.style.pointerEvents = "none";
+      }
       containerRef.current.scrollLeft = scrollStartX.current - delta;
     }
   };
 
-  const handlePointerUp = (e: React.PointerEvent) => {
-    if (isDragging) {
-      setIsDragging(false);
-      setPaused(false);
+  const handlePointerUp = () => {
+    isPointerDown.current = false;
+    // Rehabilitar pointer events en las tarjetas
+    if (trackRef.current) {
+      trackRef.current.style.pointerEvents = "auto";
     }
-    // Si el usuario hizo click sin arrastrar, dejar que el Link navegue
+    // Reanudar animación solo si el ratón ya no está sobre el carrusel
+    // (onMouseLeave se encargará si sigue encima)
   };
 
   if (!productos.length) return null;
@@ -87,7 +91,7 @@ export function CarruselProductos({ productos, titulo, subtitulo, verTodosHref =
       <div
         className="relative"
         onMouseEnter={() => setPaused(true)}
-        onMouseLeave={() => { if (!isDragging) setPaused(false); }}
+        onMouseLeave={() => { if (!isPointerDown.current) setPaused(false); }}
       >
         {/* Gradientes laterales */}
         <div className="pointer-events-none absolute top-0 left-0 h-full w-16 z-10 bg-gradient-to-r from-white to-transparent" />
@@ -110,13 +114,13 @@ export function CarruselProductos({ productos, titulo, subtitulo, verTodosHref =
           >
             {/* Primera pasada */}
             {productos.map((p, i) => (
-              <div key={`${p.id}-1`} className="flex-shrink-0 w-52 sm:w-60 select-none" style={{ pointerEvents: isDragging ? "none" : "auto" }}>
+              <div key={`${p.id}-1`} className="flex-shrink-0 w-52 sm:w-60 select-none">
                 <ProductoCard producto={p} priority={i < 3} />
               </div>
             ))}
             {/* Segunda pasada (loop) */}
             {productos.map((p) => (
-              <div key={`${p.id}-2`} className="flex-shrink-0 w-52 sm:w-60 select-none" style={{ pointerEvents: isDragging ? "none" : "auto" }}>
+              <div key={`${p.id}-2`} className="flex-shrink-0 w-52 sm:w-60 select-none">
                 <ProductoCard producto={p} priority={false} />
               </div>
             ))}

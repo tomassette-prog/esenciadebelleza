@@ -49,7 +49,7 @@ export default async function HomePage() {
   const posts = postsDestacados?.length ? postsDestacados : (postsRecientes ?? []);
 
   // Ofertas destacadas para el carrusel entre marcas
-  const { data: ofertasRaw } = await supabase
+  const { data: ofertasRaw } = await adminClient
     .from("productos_padre")
     .select(
       `id, nombre, slug, categoria, subcategoria, oferta,
@@ -63,7 +63,7 @@ export default async function HomePage() {
     .limit(12);
 
   // Novedades / destacados para la home (solo con stock)
-  const { data: destacadosRaw } = await supabase
+  const { data: destacadosRaw } = await adminClient
     .from("productos_padre")
     .select(
       `id, nombre, slug, categoria, subcategoria, oferta,
@@ -76,7 +76,7 @@ export default async function HomePage() {
     .eq("variaciones.activa", true)
     .limit(12);
 
-  const { data: nuevosRaw } = await supabase
+  const { data: nuevosRaw } = await adminClient
     .from("productos_padre")
     .select(
       `id, nombre, slug, categoria, subcategoria, oferta,
@@ -92,7 +92,7 @@ export default async function HomePage() {
   // Fallback: cualquier producto activo con stock si no hay ninguno marcado
   const necesitaFallback = !ofertasRaw?.length && !destacadosRaw?.length && !nuevosRaw?.length;
   const { data: fallbackRaw } = necesitaFallback
-    ? await supabase
+    ? await adminClient
         .from("productos_padre")
         .select(
           `id, nombre, slug, categoria, subcategoria, oferta,
@@ -113,10 +113,10 @@ export default async function HomePage() {
       productos:carrusel_productos(
         orden,
         producto:productos_padre(
-          id, nombre, slug, categoria, subcategoria,
+          id, nombre, slug, categoria, subcategoria, oferta,
           imagen_principal_url, destacado, nuevo,
           marca:marcas(nombre),
-          variaciones:productos_variaciones(precio_b2c, activa, stock)
+          variaciones:productos_variaciones(precio_b2c, precio_comparar, activa, stock)
         )
       )
     `)
