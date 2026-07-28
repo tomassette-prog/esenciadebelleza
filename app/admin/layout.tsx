@@ -4,6 +4,8 @@ import { redirect } from "next/navigation";
 import { type ReactNode } from "react";
 import { AdminSidebar } from "@/components/admin/AdminSidebar";
 
+export const maxDuration = 300;
+
 // Emails con acceso admin
 const ADMIN_EMAILS = ["ziarresamot@gmail.com"];
 
