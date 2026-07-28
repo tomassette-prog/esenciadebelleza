@@ -391,7 +391,7 @@ export function ImportarPanel({ allPairs }: { allPairs: CategoriaPair[] }) {
           customBrandName: state.customBrandName,
         }));
 
-      const LOTE = 100;
+      const LOTE = 25;
       let totalOk = 0;
       const totalNoEncontrados: string[] = [];
       const allBrandsCreated: string[] = [];
