@@ -107,11 +107,64 @@ export async function POST(req: NextRequest) {
       }
 
       // ── Pedido creado / actualizado ────────────────────────────────────────
-      // Usamos esto para descontar stock cuando se crea un pedido en WC
-      // (venta directa en depeluqueriaproductos.com, no desde Esencia)
       case "order.created":
       case "order.updated": {
+        // 1. Sincronizar stock (para ventas directas en WC)
         await sincronizarStockPorPedido(supabase, payload);
+
+        // 2. Si el pedido viene de esenciadebelleza y fue pagado, marcar como pagado
+        const origen = (payload.meta_data as { key: string; value: string }[] | undefined)
+          ?.find((m) => m.key === "_origen_tienda")?.value;
+        const esenciaPedidoId = (payload.meta_data as { key: string; value: string }[] | undefined)
+          ?.find((m) => m.key === "_esencia_pedido_id")?.value;
+        const wcStatus = payload.status as string;
+
+        if (origen === "esenciadebelleza.es" && (wcStatus === "processing" || wcStatus === "completed")) {
+          const pedidoId = esenciaPedidoId ?? null;
+          const wcOrderId = String(payload.id);
+
+          // Buscar pedido por ID directo o por WC order ID
+          let pedido;
+          if (pedidoId) {
+            const { data } = await supabase.from("pedidos")
+              .select("id, estado, email_cliente, direccion_envio, gastos_envio, total, tipo_precio")
+              .eq("id", pedidoId).single();
+            pedido = data;
+          }
+          if (!pedido) {
+            const { data } = await supabase.from("pedidos")
+              .select("id, estado, email_cliente, direccion_envio, gastos_envio, total, tipo_precio")
+              .eq("stripe_payment_id", wcOrderId).single();
+            pedido = data;
+          }
+
+          if (pedido && pedido.estado === "pagado") {
+            console.log(`[WC Webhook] Pedido Esencia ${pedido.id} ya estaba pagado`);
+          } else if (pedido) {
+            await supabase.from("pedidos").update({ estado: "pagado" }).eq("id", pedido.id);
+            console.log(`[WC Webhook] Pedido Esencia ${pedido.id} marcado como pagado (WC #${wcOrderId})`);
+
+            // Enviar email de confirmación
+            const dir = pedido.direccion_envio as Record<string, string>;
+            const { data: lineas } = await supabase
+              .from("pedidos_lineas")
+              .select("nombre_producto, nombre_variacion, cantidad, precio_unitario")
+              .eq("pedido_id", pedido.id);
+
+            const { enviarNotificacionPedido } = await import("@/lib/email");
+            void enviarNotificacionPedido({
+              pedidoId: pedido.id, email: pedido.email_cliente,
+              nombre: dir?.nombre ?? "", apellidos: dir?.apellidos ?? "",
+              total: pedido.total, gastoEnvio: pedido.gastos_envio,
+              metodoPago: "WooCommerce", tipoPrecio: pedido.tipo_precio,
+              provincia: dir?.provincia ?? "", ciudad: dir?.ciudad ?? "",
+              lineas: (lineas ?? []).map((l) => ({
+                nombre: l.nombre_producto, nombre_variacion: l.nombre_variacion,
+                cantidad: l.cantidad, precio: l.precio_unitario,
+              })),
+            });
+          }
+        }
         break;
       }
 

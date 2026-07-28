@@ -268,6 +268,141 @@ export async function confirmarPedidoCeca(
 }
 
 // ── Crear pedido en WooCommerce ───────────────────────────────────────────────
+
+export async function iniciarPagoWooCommerce(
+  lineas: LineaCarrito[],
+  datosEnvio: {
+    email: string; nombre: string; apellidos: string; telefono: string;
+    direccion: string; ciudad: string; provincia: string; codigo_postal: string;
+    notas?: string;
+  }
+): Promise<{ pagoUrl: string | null; pedidoId: string | null; gastoEnvio: number; error: string | null }> {
+  if (!lineas.length) return { pagoUrl: null, pedidoId: null, gastoEnvio: 0, error: "El carrito está vacío" };
+
+  const supabase   = createAdminClient();
+  const authClient = await createClient();
+  const { data: { user } } = await authClient.auth.getUser();
+
+  let tipoPrecio: "b2c" | "b2b" = "b2c";
+  if (user) {
+    const { data: perfil } = await authClient
+      .from("perfiles_usuario")
+      .select("b2b_aprobado, tipo_cliente").eq("id", user.id).single();
+    if (perfil?.tipo_cliente === "b2b" && perfil?.b2b_aprobado === true) tipoPrecio = "b2b";
+  }
+
+  const totalProductos = lineas.reduce((acc, l) => acc + l.precio * l.cantidad, 0);
+  const gastoEnvio     = calcularGastoEnvio(totalProductos, datosEnvio.provincia);
+  if (gastoEnvio === -1) return { pagoUrl: null, pedidoId: null, gastoEnvio: 0, error: "No realizamos envíos a esa provincia." };
+
+  const totalFinal = totalProductos + gastoEnvio;
+
+  // 1. Guardar pedido pendiente en Supabase
+  const { data: pedido, error: errPedido } = await supabase
+    .from("pedidos")
+    .insert({
+      usuario_id:       user?.id ?? null,
+      estado:           "pendiente",
+      subtotal:         totalProductos,
+      gastos_envio:     gastoEnvio,
+      total:            totalFinal,
+      tipo_precio:      tipoPrecio,
+      metodo_pago:      "woocommerce",
+      email_cliente:    datosEnvio.email,
+      notas:            datosEnvio.notas ?? "",
+      direccion_envio:  {
+        nombre: datosEnvio.nombre, apellidos: datosEnvio.apellidos,
+        telefono: datosEnvio.telefono, direccion: datosEnvio.direccion,
+        ciudad: datosEnvio.ciudad, provincia: datosEnvio.provincia,
+        codigo_postal: datosEnvio.codigo_postal,
+      },
+    })
+    .select("id")
+    .single();
+
+  if (errPedido || !pedido) {
+    return { pagoUrl: null, pedidoId: null, gastoEnvio, error: "Error al preparar el pedido" };
+  }
+
+  // Guardar líneas
+  await supabase.from("pedidos_lineas").insert(
+    lineas.map((l) => ({
+      pedido_id: pedido.id, variacion_id: l.variacion_id,
+      sku: l.sku, nombre_producto: l.nombre, nombre_variacion: l.nombre_variacion,
+      imagen_url: l.imagen_url, precio_unitario: l.precio,
+      cantidad: l.cantidad, subtotal: l.precio * l.cantidad,
+    }))
+  );
+
+  // 2. Crear pedido en WooCommerce como PENDING (no pagado)
+  const WOO_URL = process.env.WOO_URL!;
+  const CK      = process.env.WOO_CONSUMER_KEY!;
+  const CS      = process.env.WOO_CONSUMER_SECRET!;
+  const auth    = Buffer.from(`${CK}:${CS}`).toString("base64");
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://esenciadebelleza.es";
+
+  const wcBody = {
+    payment_method:       "",
+    payment_method_title: "",
+    set_paid:             false,
+    status:               "pending",
+    billing: {
+      first_name: datosEnvio.nombre, last_name: datosEnvio.apellidos,
+      address_1: datosEnvio.direccion, city: datosEnvio.ciudad,
+      state: datosEnvio.provincia, postcode: datosEnvio.codigo_postal,
+      country: "ES", email: datosEnvio.email, phone: datosEnvio.telefono,
+    },
+    shipping: {
+      first_name: datosEnvio.nombre, last_name: datosEnvio.apellidos,
+      address_1: datosEnvio.direccion, city: datosEnvio.ciudad,
+      state: datosEnvio.provincia, postcode: datosEnvio.codigo_postal,
+      country: "ES",
+    },
+    line_items: lineas.map((l) => ({ sku: l.sku, quantity: l.cantidad })),
+    shipping_lines: gastoEnvio > 0 ? [{
+      method_id: "flat_rate", method_title: "Envío estándar",
+      total: gastoEnvio.toFixed(2),
+    }] : [],
+    meta_data: [
+      { key: "_origen_tienda", value: "esenciadebelleza.es" },
+      { key: "_esencia_pedido_id", value: pedido.id },
+    ],
+    customer_note: datosEnvio.notas ?? "",
+  };
+
+  try {
+    const res = await fetch(`${WOO_URL}/wp-json/wc/v3/orders`, {
+      method: "POST",
+      headers: {
+        Authorization: `Basic ${auth}`,
+        "Content-Type": "application/json",
+        "User-Agent": "EsenciaBelleza/1.0",
+      },
+      body: JSON.stringify(wcBody),
+    });
+
+    if (!res.ok) {
+      const texto = await res.text();
+      console.error("[iniciarPagoWoo] WC error:", res.status, texto);
+      return { pagoUrl: null, pedidoId: pedido.id, gastoEnvio, error: `WooCommerce error ${res.status}` };
+    }
+
+    const wcOrder = await res.json() as { id: number; order_key: string };
+
+    // Actualizar pedido en Supabase con el WC order ID
+    await supabase.from("pedidos")
+      .update({ stripe_payment_id: String(wcOrder.id) })
+      .eq("id", pedido.id);
+
+    // 3. URL de pago de WooCommerce (pay-for-order page)
+    const pagoUrl = `${WOO_URL}/checkout/order-pay/${wcOrder.id}/?pay_for_order=true&key=${wcOrder.order_key}`;
+
+    return { pagoUrl, pedidoId: pedido.id, gastoEnvio, error: null };
+  } catch (err) {
+    console.error("[iniciarPagoWoo] Excepción:", err);
+    return { pagoUrl: null, pedidoId: pedido.id, gastoEnvio, error: "No se pudo conectar con WooCommerce" };
+  }
+}
 export async function crearPedidoWooCommerce(params: {
   email:          string;
   nombre:         string;
