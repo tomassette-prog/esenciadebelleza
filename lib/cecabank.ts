@@ -30,20 +30,23 @@ function pad(value: string, length: number): string {
 }
 
 function firma(partes: string[]): string {
-  const clave   = process.env.CECA_SECRET_KEY!;
+  const claveRaw = process.env.CECA_SECRET_KEY!;
+  const clave = claveRaw.trim(); // Remove any trailing whitespace/newlines
   const cifrado = process.env.CECA_CIFRADO ?? "SHA2"; // SHA1 o SHA2
-  // React renderiza & como &amp; en HTML — Cecabank recibe &amp; en los campos del formulario.
-  // El plugin oficial de WooCommerce firma los valores PHP (con &) y el HTML también tiene &amp;.
-  // Cecabank compara contra los valores raw del POST (con &amp;), así que necesitamos firmar con &amp;.
   const joined  = partes.join("");
 
   if (cifrado === "SHA2") {
-    // SHA2: el plugin oficial reemplaza &amp; → & antes de firmar
     const raw = clave + joined.replace(/&amp;/g, "&");
     return crypto.createHash("sha256").update(raw, "utf8").digest("hex");
   }
-  // SHA1: firmamos tal cual (sin reemplazar &amp;)
-  return crypto.createHash("sha1").update(clave + joined, "utf8").digest("hex");
+  // SHA1: firmamos tal cual
+  console.log("[DEBUG FIRMA] clave bytes:", Buffer.from(clave).toString('hex'));
+  console.log("[DEBUG FIRMA] clave length:", clave.length, "raw length:", claveRaw.length);
+  const rawInput = clave + joined;
+  console.log("[DEBUG FIRMA] rawInput first 50 chars:", rawInput.substring(0, 50));
+  const hash = crypto.createHash("sha1").update(rawInput, "utf8").digest("hex");
+  console.log("[DEBUG FIRMA] hash:", hash);
+  return hash;
 }
 
 // ── Generar campos para el formulario POST al TPV ─────────────────────────────
