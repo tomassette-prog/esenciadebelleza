@@ -4,10 +4,9 @@ import { useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useCarrito } from "@/context/CarritoContext";
-import { iniciarPagoCeca, iniciarPagoWooCommerce } from "@/actions/checkout";
+import { iniciarPagoCeca } from "@/actions/checkout";
 import { calcularGastoEnvio, getZonaEnvio } from "@/lib/envio";
 import PaypalSmartButtons from "@/components/checkout/PaypalSmartButtons";
-import WooPaymentModal from "@/components/checkout/WooPaymentModal";
 
 type Paso = "direccion" | "pago";
 
@@ -45,10 +44,7 @@ export function CheckoutCliente({
   const [cecaUrl, setCecaUrl]         = useState<string>("");
   const [gastoEnvioConf, setGastoEnvioConf] = useState(0);
   const [cargando, setCargando]       = useState(false);
-  const [cargandoStripe, setCargandoStripe] = useState(false);
-  const [cargandoWoo, setCargandoWoo] = useState(false);
   const [error, setError]             = useState<string | null>(null);
-  const [wooPagoUrl, setWooPagoUrl]   = useState<string | null>(null);
 
   const formCecaRef = useRef<HTMLFormElement>(null);
 
@@ -103,58 +99,6 @@ export function CheckoutCliente({
     if (formCecaRef.current) formCecaRef.current.submit();
   }
 
-  async function pagarConStripe() {
-    setCargandoStripe(true);
-    setError(null);
-    try {
-      const res = await fetch("/api/stripe/checkout", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ lineas, datosEnvio: datos }),
-      });
-      const json = await res.json();
-      if (!res.ok || !json.url) {
-        setError(json.error ?? `Error ${res.status} al conectar con Stripe`);
-        setCargandoStripe(false);
-        return;
-      }
-      // Redirigir a Stripe Checkout
-      window.location.assign(json.url);
-    } catch (e) {
-      setError("Error de red. Comprueba tu conexión e inténtalo de nuevo.");
-      setCargandoStripe(false);
-      console.error("[pagarConStripe]", e);
-    }
-  }
-
-  async function pagarConWoo() {
-    setCargandoWoo(true);
-    setError(null);
-    try {
-      const res = await iniciarPagoWooCommerce(lineas, datos);
-      if (res.error || !res.pagoUrl) {
-        setError(res.error ?? "Error al preparar el pago");
-        setCargandoWoo(false);
-        return;
-      }
-      // Abrir modal con iframe (sin redirect)
-      setWooPagoUrl(res.pagoUrl);
-      setCargandoWoo(false);
-    } catch (e) {
-      setError("Error de red. Comprueba tu conexión e inténtalo de nuevo.");
-      setCargandoWoo(false);
-      console.error("[pagarConWoo]", e);
-    }
-  }
-
-  function handleWooPagoCompletado() {
-    setWooPagoUrl(null);
-    window.location.href = "/checkout/confirmacion?metodo=woocommerce&resultado=ok";
-  }
-
-  function handleWooCancelar() {
-    setWooPagoUrl(null);
-  }
 
   if (!lineas.length) {
     return (
@@ -369,33 +313,19 @@ export function CheckoutCliente({
               Elige tu método de pago
             </h2>
 
-            {/* ── Stripe — pago principal ── */}
+            {/* ── Cecabank — pago con tarjeta (mismas credenciales que depeluqueriaproductos) ── */}
             <button
-              onClick={pagarConStripe}
-              disabled={cargandoStripe || cargandoWoo}
+              onClick={pagarConTarjeta}
+              disabled={cargando}
               className="w-full py-4 bg-neutral-900 text-white text-xs tracking-widest uppercase hover:bg-neutral-700 disabled:opacity-50 transition-colors flex items-center justify-center gap-3 mb-3"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
                   d="M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h3m-3.75 3h15a2.25 2.25 0 002.25-2.25V6.75A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25v10.5A2.25 2.25 0 004.5 19.5z" />
               </svg>
-              {cargandoStripe
-                ? "Redirigiendo…"
+              {cargando
+                ? "Procesando…"
                 : `Pagar ${(totalPrecio + gastoEnvioConf).toLocaleString("es-ES", { style: "currency", currency: "EUR" })} con tarjeta`}
-            </button>
-
-            {/* ── WooCommerce — pago alternativo (mismas pasarelas que depeluqueriaproductos) ── */}
-            <button
-              onClick={pagarConWoo}
-              disabled={cargandoStripe || cargandoWoo}
-              className="w-full py-4 bg-[#7F54B3] text-white text-xs tracking-widest uppercase hover:bg-[#6A4599] disabled:opacity-50 transition-colors flex items-center justify-center gap-3 mb-3"
-            >
-              <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/>
-              </svg>
-              {cargandoWoo
-                ? "Redirigiendo…"
-                : `Pagar con otras opciones`}
             </button>
 
             <p className="text-xs text-neutral-400 text-center mb-5 flex items-center justify-center gap-2">
@@ -403,14 +333,14 @@ export function CheckoutCliente({
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
                   d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
               </svg>
-              Pago seguro Visa / Mastercard · Cifrado SSL
+              Pago seguro con tarjeta · Cecabank TPV
             </p>
 
             {/* ── PayPal — alternativa de pago ── */}
             <PaypalSmartButtons
               lineas={lineas}
               datosEnvio={datos}
-              disabled={cargandoStripe}
+              disabled={cargando}
             />
 
             {/* Formulario oculto que se envía a Cecabank (oculto, pendiente de resolver) */}
@@ -493,14 +423,6 @@ export function CheckoutCliente({
         </div>
       </div>
 
-      {/* Modal de pago WooCommerce (iframe fullscreen) */}
-      {wooPagoUrl && (
-        <WooPaymentModal
-          pagoUrl={wooPagoUrl}
-          onPagoCompletado={handleWooPagoCompletado}
-          onCancelar={handleWooCancelar}
-        />
-      )}
     </div>
   );
 }
