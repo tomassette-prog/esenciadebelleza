@@ -1,10 +1,10 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useCarrito } from "@/context/CarritoContext";
-import { iniciarPagoCeca, iniciarPagoWooCommerce } from "@/actions/checkout";
+import { iniciarPagoWooCommerce } from "@/actions/checkout";
 import { calcularGastoEnvio, getZonaEnvio } from "@/lib/envio";
 import PaypalSmartButtons from "@/components/checkout/PaypalSmartButtons";
 
@@ -40,16 +40,11 @@ export function CheckoutCliente({
 }) {
   const { lineas, packs, totalPrecio } = useCarrito();
   const [paso, setPaso]               = useState<Paso>("direccion");
-  const [cecaCampos, setCecaCampos]   = useState<Record<string, string> | null>(null);
-  const [cecaUrl, setCecaUrl]         = useState<string>("");
   const [gastoEnvioConf, setGastoEnvioConf] = useState(0);
   const [cargando, setCargando]       = useState(false);
   const [cargandoStripe, setCargandoStripe] = useState(false);
   const [cargandoWoo, setCargandoWoo]     = useState(false);
-  const [wooPagoUrl, setWooPagoUrl]       = useState<string | null>(null);
   const [error, setError]                 = useState<string | null>(null);
-
-  const formCecaRef = useRef<HTMLFormElement>(null);
 
   const [datos, setDatos] = useState<DatosEnvio>({
     email:         emailInicial ?? "",
@@ -82,24 +77,21 @@ export function CheckoutCliente({
     setCargando(true);
     setError(null);
 
-    const { gatewayUrl, campos, gastoEnvio: ge, error: err } =
-      await iniciarPagoCeca(lineas, packs, datos);
-
-    if (err || !campos || !gatewayUrl) {
-      setError(err ?? "Error al preparar el pago");
+    // Solo validar dirección y calcular gasto de envío (sin crear pedido aún)
+    const envioCalc = calcularGastoEnvio(totalPrecio, datos.provincia);
+    if (envioCalc === -1) {
+      setError("No realizamos envíos a esa provincia.");
       setCargando(false);
       return;
     }
 
-    setCecaCampos(campos);
-    setCecaUrl(gatewayUrl);
-    setGastoEnvioConf(ge);
+    setGastoEnvioConf(envioCalc);
     setPaso("pago");
     setCargando(false);
   }
 
   function pagarConTarjeta() {
-    if (formCecaRef.current) formCecaRef.current.submit();
+    // Deprecated — Cecabank direct disabled, use WooCommerce proxy
   }
 
   async function pagarConStripe() {
@@ -332,8 +324,8 @@ export function CheckoutCliente({
           </form>
         )}
 
-        {/* PASO 2 — Confirmar y pagar con Cecabank */}
-        {paso === "pago" && cecaCampos && (
+        {/* PASO 2 — Confirmar y pagar */}
+        {paso === "pago" && (
           <div>
             <button onClick={() => setPaso("direccion")}
               className="text-xs text-neutral-400 hover:text-neutral-700 transition-colors mb-6 block"
@@ -404,6 +396,10 @@ export function CheckoutCliente({
                 Serás redirigido a nuestra pasarela de pago segura
               </p>
             </div>
+
+            {error && (
+              <div className="mt-4 p-3 bg-red-50 border border-red-200 text-red-700 text-sm rounded">{error}</div>
+            )}
           </div>
         )}
       </div>
