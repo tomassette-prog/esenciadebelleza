@@ -78,8 +78,9 @@ export default async function ProductoPage({ params, searchParams }: PageProps) 
   const { tono } = await searchParams;
 
   const supabase = await createClient();
+  const supabaseAdmin = createAdminClient();
   const [{ data: producto, error }, { data: { user } }] = await Promise.all([
-    supabase
+    supabaseAdmin
       .from("productos_padre")
       .select("*, marca:marcas(*), variaciones:productos_variaciones(*)")
       .eq("slug", slug)

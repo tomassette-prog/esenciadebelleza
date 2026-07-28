@@ -31,22 +31,29 @@ export function CarruselProductos({ productos, titulo, subtitulo, verTodosHref =
     pointerStartX.current = e.clientX;
     scrollStartX.current = containerRef.current?.scrollLeft ?? 0;
     didDrag.current = false;
-    setIsDragging(true);
-    setPaused(true);
+    // NO activar isDragging aquí — solo cuando el usuario mueva el ratón.
+    // Esto permite que los clicks en los productos funcionen normalmente.
   };
 
   const handlePointerMove = (e: React.PointerEvent) => {
     if (!containerRef.current) return;
     const delta = e.clientX - pointerStartX.current;
     if (Math.abs(delta) > 5) {
+      if (!isDragging) {
+        setIsDragging(true);
+        setPaused(true);
+      }
       didDrag.current = true;
       containerRef.current.scrollLeft = scrollStartX.current - delta;
     }
   };
 
-  const handlePointerUp = () => {
-    setIsDragging(false);
-    setPaused(false);
+  const handlePointerUp = (e: React.PointerEvent) => {
+    if (isDragging) {
+      setIsDragging(false);
+      setPaused(false);
+    }
+    // Si el usuario hizo click sin arrastrar, dejar que el Link navegue
   };
 
   if (!productos.length) return null;
