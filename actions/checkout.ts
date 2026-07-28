@@ -371,6 +371,9 @@ export async function iniciarPagoWooCommerce(
   };
 
   try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8000); // 8s timeout for Vercel Hobby
+
     const res = await fetch(`${WOO_URL}/wp-json/wc/v3/orders`, {
       method: "POST",
       headers: {
@@ -379,7 +382,10 @@ export async function iniciarPagoWooCommerce(
         "User-Agent": "EsenciaBelleza/1.0",
       },
       body: JSON.stringify(wcBody),
+      signal: controller.signal,
     });
+
+    clearTimeout(timeout);
 
     if (!res.ok) {
       const texto = await res.text();
@@ -400,7 +406,10 @@ export async function iniciarPagoWooCommerce(
     return { pagoUrl, pedidoId: pedido.id, gastoEnvio, error: null };
   } catch (err) {
     console.error("[iniciarPagoWoo] Excepción:", err);
-    return { pagoUrl: null, pedidoId: pedido.id, gastoEnvio, error: "No se pudo conectar con WooCommerce" };
+    const msg = err instanceof Error && err.name === 'AbortError'
+      ? "WooCommerce tardó demasiado en responder. Intentá de nuevo."
+      : "No se pudo conectar con WooCommerce";
+    return { pagoUrl: null, pedidoId: pedido?.id ?? null, gastoEnvio, error: msg };
   }
 }
 export async function crearPedidoWooCommerce(params: {
