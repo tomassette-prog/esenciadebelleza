@@ -101,7 +101,7 @@ export async function crearOrdenPaypal(
     }
 
     const supabase = createAdminClient();
-    await supabase.from("pedidos").insert({
+    const { data: pedido, error: pedidoErr } = await supabase.from("pedidos").insert({
       usuario_id:       user?.id ?? null,
       estado:           "pendiente",
       subtotal:         totalProductos,
@@ -121,19 +121,22 @@ export async function crearOrdenPaypal(
         provincia:     datosEnvio.provincia,
         codigo_postal: datosEnvio.codigo_postal,
       },
-    });
+    }).select("id").single();
 
-    await supabase.from("pedidos_lineas").insert(
-      lineas.map((l) => ({
-        pedido_id:        null, // Se actualiza al capturar
-        variacion_id:     l.variacion_id,
-        sku:              l.sku,
-        nombre_producto:  l.nombre,
-        nombre_variacion: l.nombre_variacion,
-        cantidad:         l.cantidad,
-        precio_unitario:  l.precio,
-      }))
-    );
+    if (pedido && !pedidoErr) {
+      await supabase.from("pedidos_lineas").insert(
+        lineas.map((l) => ({
+          pedido_id:        pedido.id,
+          variacion_id:     l.variacion_id,
+          sku:              l.sku,
+          nombre_producto:  l.nombre,
+          nombre_variacion: l.nombre_variacion,
+          cantidad:         l.cantidad,
+          precio_unitario:  l.precio,
+          subtotal:         l.precio * l.cantidad,
+        }))
+      );
+    }
 
     // Devolver el order.id para que el SDK de PayPal lo gestione en el frontend
     const approveLink = order.links?.find((l: { rel: string; href: string }) => l.rel === "payer-action")?.href;
@@ -164,10 +167,66 @@ export async function capturarPagoPaypal(
     if (data.status === "COMPLETED") {
       // Actualizar estado del pedido en Supabase
       const supabase = createAdminClient();
-      await supabase
+      const { data: pedido } = await supabase
         .from("pedidos")
         .update({ estado: "pagado" })
-        .eq("stripe_payment_id", orderId);
+        .eq("stripe_payment_id", orderId)
+        .select("id, email_cliente, direccion_envio, gastos_envio, total, tipo_precio")
+        .single();
+
+      if (pedido) {
+        // Obtener líneas del pedido
+        const { data: lineas } = await supabase
+          .from("pedidos_lineas")
+          .select("sku, cantidad, precio_unitario, nombre_producto, nombre_variacion")
+          .eq("pedido_id", pedido.id);
+
+        const dir = pedido.direccion_envio as Record<string, string>;
+
+        // Enviar notificación email
+        const { enviarNotificacionPedido } = await import("@/lib/email");
+        void enviarNotificacionPedido({
+          pedidoId:   pedido.id,
+          email:      pedido.email_cliente,
+          nombre:     dir?.nombre    ?? "",
+          apellidos:  dir?.apellidos ?? "",
+          total:      pedido.total,
+          gastoEnvio: pedido.gastos_envio,
+          metodoPago: "PayPal",
+          tipoPrecio: pedido.tipo_precio,
+          provincia:  dir?.provincia ?? "",
+          ciudad:     dir?.ciudad    ?? "",
+          lineas: (lineas ?? []).map((l) => ({
+            nombre:           l.nombre_producto,
+            nombre_variacion: l.nombre_variacion,
+            cantidad:         l.cantidad,
+            precio:           l.precio_unitario,
+          })),
+        });
+
+        // Crear pedido en WooCommerce
+        const { crearPedidoWooCommerce } = await import("@/actions/checkout");
+        try {
+          const lineasNormales = (lineas ?? []).filter((l) => !l.sku.startsWith("PACK-"));
+          const { wc_order_id, error } = await crearPedidoWooCommerce({
+            email:         pedido.email_cliente,
+            nombre:        dir?.nombre        ?? "",
+            apellidos:     dir?.apellidos     ?? "",
+            telefono:      dir?.telefono      ?? "",
+            direccion:     dir?.direccion     ?? "",
+            ciudad:        dir?.ciudad        ?? "",
+            provincia:     dir?.provincia     ?? "",
+            codigo_postal: dir?.codigo_postal ?? "",
+            lineas:        lineasNormales.map((l) => ({ sku: l.sku, cantidad: l.cantidad })),
+            gasto_envio:   pedido.gastos_envio,
+          });
+          if (error) console.error("[PayPal] Error creando pedido WC:", error);
+          else console.log(`[PayPal] Pedido WooCommerce #${wc_order_id} creado para ${pedido.id}`);
+        } catch (err) {
+          console.error("[PayPal] Excepción creando pedido WC:", err);
+        }
+      }
+
       return { ok: true };
     }
     return { ok: false, error: `Estado inesperado: ${data.status}` };
