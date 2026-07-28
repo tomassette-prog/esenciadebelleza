@@ -15,6 +15,9 @@ export const metadata: Metadata = {
 function toProductoCatalogo(p: any): ProductoCatalogo {
   const variaciones = (p.variaciones ?? []).filter((v: any) => v.activa);
   const precio_desde = Math.min(...variaciones.map((v: any) => v.precio_b2c).filter((x: any) => x > 0), Infinity);
+  const precioCompararDesde = variaciones
+    .map((v: any) => v.precio_comparar)
+    .filter((pc: any) => pc != null && pc > 0);
   return {
     id: p.id,
     nombre: p.nombre,
@@ -26,6 +29,8 @@ function toProductoCatalogo(p: any): ProductoCatalogo {
     nuevo: p.nuevo,
     marca_nombre: p.marca?.nombre ?? null,
     precio_desde: precio_desde === Infinity ? 0 : precio_desde,
+    precio_comparar_desde: precioCompararDesde.length > 0 ? Math.min(...precioCompararDesde) : null,
+    oferta: p.oferta ?? false,
     total_variaciones: variaciones.length,
   };
 }

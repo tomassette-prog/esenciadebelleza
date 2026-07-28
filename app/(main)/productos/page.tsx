@@ -64,10 +64,10 @@ export default async function ProductosPage() {
   const { data: destacadosRaw } = await supabase
     .from("productos_padre")
     .select(
-      `id, nombre, slug, categoria, subcategoria,
+      `id, nombre, slug, categoria, subcategoria, oferta,
        imagen_principal_url, destacado, nuevo,
        marca:marcas(nombre),
-       variaciones:productos_variaciones(precio_b2c, activa, stock)`
+       variaciones:productos_variaciones(precio_b2c, precio_comparar, activa, stock)`
     )
     .eq("activo", true)
     .eq("destacado", true)
@@ -76,6 +76,9 @@ export default async function ProductosPage() {
 
   const destacados: ProductoCatalogo[] = (destacadosRaw ?? []).map((p) => {
     const vars = (p.variaciones ?? []).filter((v: { activa: boolean }) => v.activa);
+    const precioCompararDesde = vars
+      .map((v: { precio_comparar: number | null }) => v.precio_comparar)
+      .filter((pc): pc is number => pc != null && pc > 0);
     return {
       id: p.id,
       nombre: p.nombre,
@@ -87,6 +90,8 @@ export default async function ProductosPage() {
       nuevo: p.nuevo,
       marca_nombre: (p.marca as unknown as { nombre: string } | null)?.nombre ?? null,
       precio_desde: vars.length > 0 ? Math.min(...vars.map((v: { precio_b2c: number }) => v.precio_b2c)) : 0,
+      precio_comparar_desde: precioCompararDesde.length > 0 ? Math.min(...precioCompararDesde) : null,
+      oferta: p.oferta ?? false,
       total_variaciones: vars.length,
     };
   });

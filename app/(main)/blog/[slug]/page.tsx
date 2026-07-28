@@ -5,19 +5,10 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { Breadcrumb } from "@/components/layout/Breadcrumb";
 import { BotonesCompartir } from "@/components/layout/BotonesCompartir";
 
-export const revalidate = 3600;
+export const dynamic = "force-dynamic";
 
 interface PageProps {
   params: Promise<{ slug: string }>;
-}
-
-export async function generateStaticParams() {
-  const supabase = createAdminClient();
-  const { data } = await supabase
-    .from("posts")
-    .select("slug")
-    .eq("publicado", true);
-  return (data ?? []).map((p) => ({ slug: p.slug }));
 }
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {

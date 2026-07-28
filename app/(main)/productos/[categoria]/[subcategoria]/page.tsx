@@ -100,10 +100,10 @@ export default async function SubcategoriaPage({ params, searchParams }: PagePro
   let query = supabase
     .from("productos_padre")
     .select(`
-      id, nombre, slug, categoria, subcategoria,
+      id, nombre, slug, categoria, subcategoria, oferta,
       imagen_principal_url, destacado, nuevo,
       marca:marcas(nombre),
-      variaciones:productos_variaciones(precio_b2c, activa, stock)
+      variaciones:productos_variaciones(precio_b2c, precio_comparar, activa, stock)
     `, { count: "exact" })
     .eq("activo", true)
     .eq("variaciones.activa", true)
@@ -139,6 +139,9 @@ export default async function SubcategoriaPage({ params, searchParams }: PagePro
     const precioDesde = variacionesActivas.length > 0
       ? Math.min(...variacionesActivas.map((v: { precio_b2c: number }) => v.precio_b2c))
       : 0;
+    const precioCompararDesde = variacionesActivas
+      .map((v: { precio_comparar: number | null }) => v.precio_comparar)
+      .filter((pc): pc is number => pc != null && pc > 0);
     return {
       id: p.id,
       nombre: p.nombre,
@@ -150,6 +153,8 @@ export default async function SubcategoriaPage({ params, searchParams }: PagePro
       nuevo: p.nuevo,
       marca_nombre: (p.marca as unknown as { nombre: string } | null)?.nombre ?? null,
       precio_desde: precioDesde,
+      precio_comparar_desde: precioCompararDesde.length > 0 ? Math.min(...precioCompararDesde) : null,
+      oferta: p.oferta ?? false,
       total_variaciones: variacionesActivas.length,
     };
   });
