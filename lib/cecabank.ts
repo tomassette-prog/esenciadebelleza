@@ -31,13 +31,15 @@ function pad(value: string, length: number): string {
 
 function firma(partes: string[]): string {
   const clave   = process.env.CECA_SECRET_KEY!;
-  const cifrado = process.env.CECA_CIFRADO ?? "SHA2"; // SHA o SHA2
-  const raw     = clave + partes.join("").replace(/&amp;/g, "&");
+  const cifrado = process.env.CECA_CIFRADO ?? "SHA2"; // SHA1 o SHA2
+  const joined  = partes.join("");
 
-  if (cifrado === "SHA") {
-    return crypto.createHash("sha1").update(raw, "utf8").digest("hex");
+  if (cifrado === "SHA2") {
+    const raw = clave + joined.replace(/&amp;/g, "&");
+    return crypto.createHash("sha256").update(raw, "utf8").digest("hex");
   }
-  return crypto.createHash("sha256").update(raw, "utf8").digest("hex");
+  // SHA1: NO se reemplaza &amp; (igual que el plugin oficial de Cecabank)
+  return crypto.createHash("sha1").update(clave + joined, "utf8").digest("hex");
 }
 
 // ── Generar campos para el formulario POST al TPV ─────────────────────────────
