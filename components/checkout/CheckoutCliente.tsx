@@ -7,6 +7,7 @@ import { useCarrito } from "@/context/CarritoContext";
 import { iniciarPagoCeca, iniciarPagoWooCommerce } from "@/actions/checkout";
 import { calcularGastoEnvio, getZonaEnvio } from "@/lib/envio";
 import PaypalSmartButtons from "@/components/checkout/PaypalSmartButtons";
+import WooPaymentModal from "@/components/checkout/WooPaymentModal";
 
 type Paso = "direccion" | "pago";
 
@@ -47,6 +48,7 @@ export function CheckoutCliente({
   const [cargandoStripe, setCargandoStripe] = useState(false);
   const [cargandoWoo, setCargandoWoo] = useState(false);
   const [error, setError]             = useState<string | null>(null);
+  const [wooPagoUrl, setWooPagoUrl]   = useState<string | null>(null);
 
   const formCecaRef = useRef<HTMLFormElement>(null);
 
@@ -135,13 +137,23 @@ export function CheckoutCliente({
         setCargandoWoo(false);
         return;
       }
-      // Redirigir a la página de pago de WooCommerce
-      window.location.assign(res.pagoUrl);
+      // Abrir modal con iframe (sin redirect)
+      setWooPagoUrl(res.pagoUrl);
+      setCargandoWoo(false);
     } catch (e) {
       setError("Error de red. Comprueba tu conexión e inténtalo de nuevo.");
       setCargandoWoo(false);
       console.error("[pagarConWoo]", e);
     }
+  }
+
+  function handleWooPagoCompletado() {
+    setWooPagoUrl(null);
+    window.location.href = "/checkout/confirmacion?metodo=woocommerce&resultado=ok";
+  }
+
+  function handleWooCancelar() {
+    setWooPagoUrl(null);
   }
 
   if (!lineas.length) {
@@ -480,6 +492,15 @@ export function CheckoutCliente({
           </div>
         </div>
       </div>
+
+      {/* Modal de pago WooCommerce (iframe fullscreen) */}
+      {wooPagoUrl && (
+        <WooPaymentModal
+          pagoUrl={wooPagoUrl}
+          onPagoCompletado={handleWooPagoCompletado}
+          onCancelar={handleWooCancelar}
+        />
+      )}
     </div>
   );
 }
