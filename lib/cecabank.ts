@@ -30,8 +30,7 @@ function pad(value: string, length: number): string {
 }
 
 function firma(partes: string[]): string {
-  const claveRaw = process.env.CECA_SECRET_KEY!;
-  const clave = claveRaw.trim(); // Remove any trailing whitespace/newlines
+  const clave   = process.env.CECA_SECRET_KEY!.trim();
   const cifrado = process.env.CECA_CIFRADO ?? "SHA2"; // SHA1 o SHA2
   const joined  = partes.join("");
 
@@ -39,14 +38,8 @@ function firma(partes: string[]): string {
     const raw = clave + joined.replace(/&amp;/g, "&");
     return crypto.createHash("sha256").update(raw, "utf8").digest("hex");
   }
-  // SHA1: firmamos tal cual
-  console.log("[DEBUG FIRMA] clave bytes:", Buffer.from(clave).toString('hex'));
-  console.log("[DEBUG FIRMA] clave length:", clave.length, "raw length:", claveRaw.length);
-  const rawInput = clave + joined;
-  console.log("[DEBUG FIRMA] rawInput first 50 chars:", rawInput.substring(0, 50));
-  const hash = crypto.createHash("sha1").update(rawInput, "utf8").digest("hex");
-  console.log("[DEBUG FIRMA] hash:", hash);
-  return hash;
+  // SHA1: tal cual, igual que el plugin oficial de Cecabank
+  return crypto.createHash("sha1").update(clave + joined, "utf8").digest("hex");
 }
 
 // ── Generar campos para el formulario POST al TPV ─────────────────────────────
