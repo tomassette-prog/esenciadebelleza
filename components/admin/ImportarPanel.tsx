@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import {
   calcularDiff,
   aplicarCambios,
@@ -73,6 +73,44 @@ function buildReviewGroups(nuevos: ProductoDiff[], gaps: DiffGaps): ReviewGroup[
 
   const order: Record<string, number> = { low: 0, medium: 1, high: 2 };
   return [...groupMap.values()].sort((a, b) => order[a.confidence] - order[b.confidence]);
+}
+
+// ─── Diff progress helpers ───────────────────────────────────────────────────
+
+function DiffTimer() {
+  const [seconds, setSeconds] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setSeconds(s => s + 1), 1000);
+    return () => clearInterval(id);
+  }, []);
+  return (
+    <p className="text-xs text-neutral-400 tabular-nums">
+      {seconds < 5 ? "Iniciando…" : `${seconds}s transcurridos`}
+    </p>
+  );
+}
+
+function DiffStepIndicator({ label, delay }: { label: string; delay: number }) {
+  const [active, setActive] = useState(false);
+  useEffect(() => {
+    const id = setTimeout(() => setActive(true), delay * 1000);
+    return () => clearTimeout(id);
+  }, [delay]);
+
+  return (
+    <div className="flex items-center gap-3">
+      <div className="shrink-0 w-5 h-5 flex items-center justify-center">
+        {active ? (
+          <div className="w-3.5 h-3.5 rounded-full border-2 border-neutral-900 border-t-transparent animate-spin" />
+        ) : (
+          <div className="w-2 h-2 rounded-full bg-neutral-300" />
+        )}
+      </div>
+      <span className={`text-xs transition-colors duration-500 ${active ? "text-neutral-800" : "text-neutral-400"}`}>
+        {label}
+      </span>
+    </div>
+  );
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -500,10 +538,27 @@ export function ImportarPanel({ allPairs }: { allPairs: CategoriaPair[] }) {
         </div>
       )}
 
-      {/* Calculating */}
+      {/* Calculating — enhanced progress indicator */}
       {fase === "diff" && (
-        <div className="text-center py-16 text-neutral-400 text-sm animate-pulse">
-          Descargando y comparando {">"}3000 productos… esto tarda ~30 segundos
+        <div className="py-12 space-y-6">
+          {/* Spinner + timer */}
+          <div className="flex flex-col items-center gap-4">
+            <div className="relative w-12 h-12">
+              <div className="absolute inset-0 rounded-full border-2 border-neutral-200" />
+              <div className="absolute inset-0 rounded-full border-2 border-transparent border-t-neutral-900 animate-spin" />
+            </div>
+            <div className="text-center space-y-1">
+              <p className="text-sm font-medium text-neutral-800">Comparando catálogo con WooCommerce</p>
+              <DiffTimer />
+            </div>
+          </div>
+
+          {/* Step progress */}
+          <div className="max-w-md mx-auto space-y-3">
+            <DiffStepIndicator label="Descargando productos de WooCommerce" delay={0} />
+            <DiffStepIndicator label="Cargando catálogo de Supabase" delay={8} />
+            <DiffStepIndicator label="Comparando y generando diff" delay={16} />
+          </div>
         </div>
       )}
 
