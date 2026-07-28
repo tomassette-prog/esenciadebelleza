@@ -13,9 +13,15 @@ import * as crypto from "crypto";
 
 const CECA_GATEWAY_URL = "https://pgw.ceca.es/tpvweb/tpv/compra.action";
 
-/** 9 dígitos numéricos únicos para Num_operacion (algunos contratos no aceptan letras) */
+/** Código numérico legible para Num_operacion: MMDDHHmmss (10 dígitos) */
 export function generarNumOper(): string {
-  return String(Date.now()).slice(-9);
+  const now = new Date();
+  const mm = String(now.getMonth() + 1).padStart(2, "0");
+  const dd = String(now.getDate()).padStart(2, "0");
+  const hh = String(now.getHours()).padStart(2, "0");
+  const min = String(now.getMinutes()).padStart(2, "0");
+  const ss = String(now.getSeconds()).padStart(2, "0");
+  return `${mm}${dd}${hh}${min}${ss}`;
 }
 
 /** Rellena con ceros a la izquierda, igual que PHP str_pad($v, $len, '0', STR_PAD_LEFT) */
