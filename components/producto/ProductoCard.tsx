@@ -33,6 +33,11 @@ export function ProductoCard({ producto, priority = false }: Props) {
 
         {/* Badges */}
         <div className="absolute top-2 left-2 flex flex-col gap-1">
+          {producto.oferta && (
+            <span className="inline-block bg-red-600 text-white text-[10px] tracking-widest uppercase px-2 py-0.5 font-medium">
+              Oferta
+            </span>
+          )}
           {producto.nuevo && (
             <span className="badge-nuevo">Nuevo</span>
           )}
@@ -53,12 +58,22 @@ export function ProductoCard({ producto, priority = false }: Props) {
           {producto.nombre}
         </h3>
         <div className="flex items-baseline gap-2">
-          <span className="text-sm font-medium text-neutral-900">
+          {producto.precio_comparar_desde && producto.precio_comparar_desde > producto.precio_desde && (
+            <span className="text-xs text-neutral-400 line-through">
+              {formatPrice(producto.precio_comparar_desde)}
+            </span>
+          )}
+          <span className={`text-sm font-medium ${producto.oferta ? "text-red-600" : "text-neutral-900"}`}>
             {producto.precio_desde > 0
               ? formatPrice(producto.precio_desde)
               : "Consultar precio"}
           </span>
-          {producto.total_variaciones > 1 && (
+          {producto.precio_comparar_desde && producto.precio_comparar_desde > producto.precio_desde && (
+            <span className="text-[10px] text-red-600 font-medium">
+              -{Math.round((1 - producto.precio_desde / producto.precio_comparar_desde) * 100)}%
+            </span>
+          )}
+          {producto.total_variaciones > 1 && !producto.oferta && (
             <span className="text-xs text-neutral-400">
               {producto.total_variaciones} opciones
             </span>

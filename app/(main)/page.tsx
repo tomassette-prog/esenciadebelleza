@@ -52,10 +52,10 @@ export default async function HomePage() {
   const { data: ofertasRaw } = await supabase
     .from("productos_padre")
     .select(
-      `id, nombre, slug, categoria, subcategoria,
+      `id, nombre, slug, categoria, subcategoria, oferta,
        imagen_principal_url, destacado, nuevo,
        marca:marcas(nombre),
-       variaciones:productos_variaciones!inner(precio_b2c, activa, stock)`
+       variaciones:productos_variaciones!inner(precio_b2c, precio_comparar, activa, stock)`
     )
     .eq("activo", true)
     .eq("oferta", true)
@@ -66,10 +66,10 @@ export default async function HomePage() {
   const { data: destacadosRaw } = await supabase
     .from("productos_padre")
     .select(
-      `id, nombre, slug, categoria, subcategoria,
+      `id, nombre, slug, categoria, subcategoria, oferta,
        imagen_principal_url, destacado, nuevo,
        marca:marcas(nombre),
-       variaciones:productos_variaciones!inner(precio_b2c, activa, stock)`
+       variaciones:productos_variaciones!inner(precio_b2c, precio_comparar, activa, stock)`
     )
     .eq("activo", true)
     .eq("destacado", true)
@@ -79,10 +79,10 @@ export default async function HomePage() {
   const { data: nuevosRaw } = await supabase
     .from("productos_padre")
     .select(
-      `id, nombre, slug, categoria, subcategoria,
+      `id, nombre, slug, categoria, subcategoria, oferta,
        imagen_principal_url, destacado, nuevo,
        marca:marcas(nombre),
-       variaciones:productos_variaciones!inner(precio_b2c, activa, stock)`
+       variaciones:productos_variaciones!inner(precio_b2c, precio_comparar, activa, stock)`
     )
     .eq("activo", true)
     .eq("nuevo", true)
@@ -95,10 +95,10 @@ export default async function HomePage() {
     ? await supabase
         .from("productos_padre")
         .select(
-          `id, nombre, slug, categoria, subcategoria,
+          `id, nombre, slug, categoria, subcategoria, oferta,
            imagen_principal_url, destacado, nuevo,
            marca:marcas(nombre),
-           variaciones:productos_variaciones!inner(precio_b2c, activa, stock)`
+           variaciones:productos_variaciones!inner(precio_b2c, precio_comparar, activa, stock)`
         )
         .eq("activo", true)
         .eq("variaciones.activa", true)
@@ -143,6 +143,12 @@ export default async function HomePage() {
 
   function toProductoCatalogo(p: ReturnType<typeof Object.assign>): ProductoCatalogo {
     const vars = (p.variaciones ?? []).filter((v: { activa: boolean }) => v.activa);
+    const precios = vars.map((v: { precio_b2c: number }) => v.precio_b2c);
+    const comparar = vars
+      .map((v: { precio_comparar: number | null }) => v.precio_comparar)
+      .filter((n: number | null): n is number => n != null && n > 0);
+    const precioDesde = precios.length > 0 ? Math.min(...precios) : 0;
+    const compararDesde = comparar.length > 0 ? Math.min(...comparar) : null;
     return {
       id: p.id,
       nombre: p.nombre,
@@ -153,7 +159,9 @@ export default async function HomePage() {
       destacado: p.destacado,
       nuevo: p.nuevo,
       marca_nombre: (p.marca as { nombre: string } | null)?.nombre ?? null,
-      precio_desde: vars.length > 0 ? Math.min(...vars.map((v: { precio_b2c: number }) => v.precio_b2c)) : 0,
+      precio_desde: precioDesde,
+      precio_comparar_desde: compararDesde != null && compararDesde > precioDesde ? compararDesde : null,
+      oferta: p.oferta === true || (compararDesde != null && compararDesde > precioDesde),
       total_variaciones: vars.length,
     };
   }

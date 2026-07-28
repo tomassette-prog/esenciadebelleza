@@ -79,6 +79,8 @@ export type ProductoCatalogo = Pick<
 > & {
   marca_nombre: string | null;
   precio_desde: number;        // precio mínimo B2C entre variaciones
+  precio_comparar_desde: number | null; // precio original tachado (si hay oferta)
+  oferta: boolean;             // true si al menos una variación tiene precio_comparar
   total_variaciones: number;
 };
 
