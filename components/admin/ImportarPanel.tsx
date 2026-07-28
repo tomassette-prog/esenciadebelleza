@@ -85,7 +85,7 @@ export function ImportarPanel({ allPairs }: { allPairs: CategoriaPair[] }) {
   const [error, setError]           = useState<string | null>(null);
   const [fase, setFase]             = useState<Fase>("idle");
   const [progreso, setProgreso]     = useState<{ ok: number; total: number } | null>(null);
-  const [resumen, setResumen]       = useState<{ ok: number; noEncontrados: string[] } | null>(null);
+  const [resumen, setResumen]       = useState<{ ok: number; noEncontrados: string[]; brandsCreated?: string[]; details?: string[] } | null>(null);
 
   // Smart import state
   const [gaps, setGaps]             = useState<DiffGaps>({ newBrands: [], unmappedCategories: [], pendingBrands: [] });
@@ -186,12 +186,19 @@ export function ImportarPanel({ allPairs }: { allPairs: CategoriaPair[] }) {
         marcaId: state.isNewBrand ? null : (state.mappingToExisting ?? null),
         isNewBrand: state.isNewBrand,
       }));
-    if (!approvedGroups.length && !brandMappings.length) return;
-    const total = approvedGroups.reduce((s, g) => s + g.slugsConId.length, 0);
+
+    // Include ALL selected new products not already in review groups → server auto-resolves category
+    const slugsInGroups = new Set(approvedGroups.flatMap(g => g.slugsConId.map(s => s.slug)));
+    const autoResolveProducts = nuevos
+      .filter(p => seleccionados.has(p.slug) && !slugsInGroups.has(p.slug))
+      .map(p => ({ slug: p.slug, wooId: p.wooId }));
+
+    if (!approvedGroups.length && !brandMappings.length && !autoResolveProducts.length) return;
+    const total = approvedGroups.reduce((s, g) => s + g.slugsConId.length, 0) + autoResolveProducts.length;
     setProgreso(total > 0 ? { ok: 0, total } : null);
     setFase("publicando");
     try {
-      const result = await publicarAprobados({ approvedGroups, brandMappings });
+      const result = await publicarAprobados({ approvedGroups, brandMappings, autoResolveProducts });
       setSmartResult(result);
       if (result.error) {
         setError(result.error);
@@ -335,18 +342,34 @@ export function ImportarPanel({ allPairs }: { allPairs: CategoriaPair[] }) {
       const todosDiff = [...nuevos, ...modificados];
       const slugToWooId = new Map(todosDiff.map(p => [p.slug, p.wooId]));
       const todos = [...seleccionados].map(slug => ({ slug, wooId: slugToWooId.get(slug) ?? 0 }));
+
+      // Build brand overrides from UI state (approved brands from Marcas tab)
+      const brandOverrides = [...brandApprovals.entries()]
+        .filter(([, state]) => state.approved)
+        .map(([wooBrandName, state]) => ({
+          wooBrandName,
+          marcaId: state.isNewBrand ? null : (state.mappingToExisting ?? null),
+          isNewBrand: state.isNewBrand,
+          customBrandName: state.customBrandName,
+        }));
+
       const LOTE = 100;
       let totalOk = 0;
       const totalNoEncontrados: string[] = [];
+      const allBrandsCreated: string[] = [];
       for (let i = 0; i < todos.length; i += LOTE) {
         const lote = todos.slice(i, i + LOTE);
-        const res = await aplicarCambios(lote);
+        const res = await aplicarCambios(lote, brandOverrides.length > 0 ? brandOverrides : undefined);
         if (res.error) { setError(res.error); setFase("listo"); setProgreso(null); return; }
         totalOk += res.ok;
         totalNoEncontrados.push(...res.noEncontrados);
+        allBrandsCreated.push(...(res.brandsCreated ?? []));
         setProgreso({ ok: totalOk, total: seleccionados.size });
       }
-      setResumen({ ok: totalOk, noEncontrados: totalNoEncontrados });
+      const details: string[] = [];
+      if (totalOk > 0) details.push(`${totalOk} productos procesados`);
+      if (allBrandsCreated.length > 0) details.push(`Marcas creadas: ${allBrandsCreated.join(", ")}`);
+      setResumen({ ok: totalOk, noEncontrados: totalNoEncontrados, brandsCreated: allBrandsCreated, details });
     } finally {
       setFase("listo");
       setProgreso(null);
@@ -535,6 +558,11 @@ export function ImportarPanel({ allPairs }: { allPairs: CategoriaPair[] }) {
                   <span className="ml-2 text-amber-700">{resumen.noEncontrados.length} no encontrados.</span>
                 )}
               </div>
+              {resumen.brandsCreated && resumen.brandsCreated.length > 0 && (
+                <div className="p-3 bg-blue-50 border border-blue-200 text-blue-700 text-sm">
+                  🏷️ Marcas creadas: {resumen.brandsCreated.join(", ")}
+                </div>
+              )}
               {resumen.noEncontrados.length > 0 && (
                 <details className="text-xs border border-amber-200 bg-amber-50">
                   <summary className="px-3 py-2 cursor-pointer text-amber-700 font-medium">
@@ -807,13 +835,16 @@ export function ImportarPanel({ allPairs }: { allPairs: CategoriaPair[] }) {
                       );
                     })}
                   </div>
-                  <div className="flex justify-end">
+                  <div className="flex justify-end gap-3 items-center">
+                    <span className="text-xs text-neutral-400">
+                      + {seleccionados.size} productos nuevos seleccionados
+                    </span>
                     <button
                       onClick={handlePublicarAprobados}
-                      disabled={brandApprovalCount === 0 || busy}
+                      disabled={(brandApprovalCount === 0 && seleccionados.size === 0) || busy}
                       className="px-6 py-2.5 bg-[#3D2018] text-white text-xs tracking-widest uppercase hover:bg-neutral-900 disabled:opacity-40 transition-colors"
                     >
-                      Guardar {brandApprovalCount > 0 ? `${brandApprovalCount} decisiones` : "decisiones"} de marca
+                      Publicar {brandApprovalCount > 0 ? `${brandApprovalCount} marcas` : "marcas"} + {seleccionados.size} productos
                     </button>
                   </div>
                 </>

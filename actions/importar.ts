@@ -223,6 +223,8 @@ export interface ReviewPayload {
     marcaId: string | null;
     isNewBrand: boolean;
   }>;
+  /** Productos nuevos cuya categoría ya está mapeada — el server resuelve la categoría automáticamente */
+  autoResolveProducts?: Array<{ slug: string; wooId: number }>;
 }
 
 export interface MarcaExistente {
@@ -444,18 +446,27 @@ export async function calcularDiff(): Promise<{
   }
 }
 
-export async function aplicarCambios(slugsConId: Array<{ slug: string; wooId: number }>): Promise<{
+export async function aplicarCambios(
+  slugsConId: Array<{ slug: string; wooId: number }>,
+  brandOverrides?: Array<{
+    wooBrandName: string;
+    marcaId: string | null;
+    isNewBrand: boolean;
+    customBrandName?: string;
+  }>,
+): Promise<{
   ok: number;
   noEncontrados: string[];
+  brandsCreated: string[];
   error?: string;
 }> {
   try {
     await verificarAdmin();
   } catch {
-    return { ok: 0, noEncontrados: [], error: "No autorizado" };
+    return { ok: 0, noEncontrados: [], brandsCreated: [], error: "No autorizado" };
   }
 
-  if (!slugsConId.length) return { ok: 0, noEncontrados: [] };
+  if (!slugsConId.length) return { ok: 0, noEncontrados: [], brandsCreated: [] };
 
   try {
     type WooProducto = {
@@ -489,11 +500,49 @@ export async function aplicarCambios(slugsConId: Array<{ slug: string; wooId: nu
 
     const supa = adminClient();
 
-    // 2. Load brand mappings from woo_brand_mappings
+    // 2. Load brand mappings from woo_brand_mappings + apply UI overrides
     const brandMappingsCache = await getBrandMappingsCache(supa);
     const resolvedBrandMap = new Map<string, string | null>(
       [...brandMappingsCache.entries()].map(([name, m]) => [name, m.marca_id])
     );
+
+    // Process brand overrides from UI (create new brands + persist mappings)
+    const brandsCreated: string[] = [];
+    const brandMappingUpserts: Array<{ woo_brand_name: string; marca_id: string | null; is_new_brand: boolean }> = [];
+    const { data: marcasExisting } = await supa.from("marcas").select("id, slug, nombre");
+    const marcaSlugToId = new Map<string, string>(
+      (marcasExisting ?? []).map((m: { id: string; slug: string }) => [m.slug, m.id])
+    );
+
+    if (brandOverrides?.length) {
+      for (const bm of brandOverrides) {
+        const resolvedName = bm.customBrandName || bm.wooBrandName;
+        if (bm.isNewBrand) {
+          const brandSlug = slugify(resolvedName);
+          let marcaId = marcaSlugToId.get(brandSlug);
+          if (!marcaId) {
+            const { data: inserted, error: insertErr } = await supa
+              .from("marcas")
+              .insert({ nombre: resolvedName, slug: brandSlug, logo_url: null })
+              .select("id")
+              .single();
+            if (insertErr || !inserted) continue;
+            marcaId = inserted.id as string;
+            marcaSlugToId.set(brandSlug, marcaId);
+            brandsCreated.push(resolvedName);
+          }
+          resolvedBrandMap.set(bm.wooBrandName, marcaId);
+          brandMappingUpserts.push({ woo_brand_name: bm.wooBrandName, marca_id: marcaId, is_new_brand: true });
+        } else if (bm.marcaId) {
+          resolvedBrandMap.set(bm.wooBrandName, bm.marcaId);
+          brandMappingUpserts.push({ woo_brand_name: bm.wooBrandName, marca_id: bm.marcaId, is_new_brand: false });
+        }
+      }
+      if (brandMappingUpserts.length > 0) {
+        await supa.from("woo_brand_mappings")
+          .upsert(brandMappingUpserts, { onConflict: "woo_brand_name" });
+      }
+    }
 
     // 3. Load category mappings from woo_cat_mappings
     const catMap = await getDbCatMap(supa);
@@ -619,7 +668,7 @@ export async function aplicarCambios(slugsConId: Array<{ slug: string; wooId: nu
     if (rowsNuevos.length > 0) {
       const { error: insertError } = await supa.from("productos_padre").insert(rowsNuevos);
       if (insertError && insertError.code !== "23505") {
-        return { ok: 0, noEncontrados, error: insertError.message };
+        return { ok: 0, noEncontrados, brandsCreated, error: insertError.message };
       }
     }
 
@@ -708,9 +757,9 @@ export async function aplicarCambios(slugsConId: Array<{ slug: string; wooId: nu
       await guardarSnapshot();
     } catch { /* snapshot is optional */ }
 
-    return { ok: totalProcessed, noEncontrados };
+    return { ok: totalProcessed, noEncontrados, brandsCreated };
   } catch (e) {
-    return { ok: 0, noEncontrados: [], error: String(e) };
+    return { ok: 0, noEncontrados: [], brandsCreated: [], error: String(e) };
   }
 }
 
@@ -747,13 +796,23 @@ export async function publicarAprobados(payload: ReviewPayload): Promise<SmartAp
       return (attrBrand?.trim() || extractBrandName(p.name)).trim();
     }
 
-    const allSlugsConId = payload.approvedGroups.flatMap(g => g.slugsConId);
+    const allSlugsConId = [
+      ...payload.approvedGroups.flatMap(g => g.slugsConId),
+      ...(payload.autoResolveProducts ?? []),
+    ];
+    // Deduplicate by slug to avoid fetching the same product twice
+    const seenSlugs = new Set<string>();
+    const dedupedSlugsConId = allSlugsConId.filter(({ slug }) => {
+      if (seenSlugs.has(slug)) return false;
+      seenSlugs.add(slug);
+      return true;
+    });
     const PARALELO = 20;
     const fetched: WooProducto[] = [];
     const notFound: string[] = [];
 
-    for (let i = 0; i < allSlugsConId.length; i += PARALELO) {
-      const lote = allSlugsConId.slice(i, i + PARALELO);
+    for (let i = 0; i < dedupedSlugsConId.length; i += PARALELO) {
+      const lote = dedupedSlugsConId.slice(i, i + PARALELO);
       const results = await Promise.all(
         lote.map(({ slug, wooId }) =>
           (fetchWoo(`/products/${wooId}`) as Promise<WooProducto>)
@@ -887,7 +946,10 @@ export async function publicarAprobados(payload: ReviewPayload): Promise<SmartAp
 
       const marcaId = resolvedBrandMap.get(brandNameForProduct(p)) ?? null;
       const nombreTruncado = p.name.trim().slice(0, maxNombre);
-      
+      const precioRegular = parseFloat(p.regular_price || p.price) || 0;
+      const precioVenta = parseFloat(p.sale_price) || 0;
+      const isOferta = precioVenta > 0 && precioVenta < precioRegular;
+
       // Si es nuevo (no existe en Esencia), crear con todos los campos
       if (!ex) {
         rowsNuevos.push({
@@ -903,14 +965,16 @@ export async function publicarAprobados(payload: ReviewPayload): Promise<SmartAp
           activo: true,
           destacado: false,
           nuevo: false,
+          oferta: isOferta,
           marca_id: marcaId ?? null,
         });
       } else {
-        // Si ya existe, guardar marca_id y woo_id para actualizar después
+        // Si ya existe, guardar marca_id, woo_id y oferta para actualizar después
         rowsActualizar.push({
           slug,
           marca_id: marcaId,
           woo_id: p.id,
+          oferta: isOferta,
         });
       }
     }
@@ -924,11 +988,12 @@ export async function publicarAprobados(payload: ReviewPayload): Promise<SmartAp
       }
     }
 
-    // Actualizar marca_id y woo_id en existentes
+    // Actualizar marca_id, woo_id y oferta en existentes
     for (const row of rowsActualizar) {
       const updates: any = {};
       if (row.marca_id) updates.marca_id = row.marca_id;
       if (row.woo_id) updates.woo_id = row.woo_id;
+      if (typeof row.oferta === "boolean") updates.oferta = row.oferta;
       if (Object.keys(updates).length > 0) {
         await supa.from("productos_padre")
           .update(updates)
