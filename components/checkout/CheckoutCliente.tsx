@@ -122,7 +122,6 @@ export function CheckoutCliente({
     try {
       const { pagoUrl, error: err } = await iniciarPagoWooCommerce(lineas, datos);
       if (pagoUrl) {
-        setWooPagoUrl(pagoUrl);
         window.location.href = pagoUrl;
       } else {
         setError(err ?? "Error al conectar con WooCommerce");
