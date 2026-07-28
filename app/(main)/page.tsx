@@ -11,7 +11,7 @@ import type { ProductoCatalogo } from "@/types/producto";
 import MarcasCarrusel from "@/components/layout/MarcasCarrusel";
 import { getPacksDestacados } from "@/actions/packs";
 
-export const revalidate = 3600;
+export const revalidate = 60; // 1 minuto — para que cambios de precios/ofertas se reflejen rápido
 
 export const metadata: Metadata = {
   title: "Esencia de Belleza | Productos Profesionales de Peluquería y Estética",
@@ -168,7 +168,9 @@ export default async function HomePage() {
 
   const destacados: ProductoCatalogo[] = (destacadosRaw ?? []).map(toProductoCatalogo);
   const nuevos: ProductoCatalogo[] = (nuevosRaw ?? []).map(toProductoCatalogo);
-  const ofertas: ProductoCatalogo[] = (ofertasRaw ?? []).map(toProductoCatalogo);
+  const ofertasTodas: ProductoCatalogo[] = (ofertasRaw ?? []).map(toProductoCatalogo);
+  // Solo mostrar ofertas que tengan precio tachado real
+  const ofertas: ProductoCatalogo[] = ofertasTodas.filter(p => p.precio_comparar_desde != null && p.precio_comparar_desde > p.precio_desde);
   const fallback: ProductoCatalogo[] = (fallbackRaw ?? []).map(toProductoCatalogo);
 
   // Carrusel 1: Ofertas → Destacados → Fallback
