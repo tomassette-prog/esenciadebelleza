@@ -61,7 +61,7 @@ export function buildCategoriaMetadata(categoria: string, subcategoria?: string)
     ? `${formatCategoryName(subcategoria)} — ${formatCategoryName(categoria)}`
     : formatCategoryName(categoria);
   const title = `${nombre}`.slice(0, 60);
-  const description = `Descubre toda la gama de ${nombre.toLowerCase()} en ${SITE_NAME}. Productos profesionales con los mejores precios.`.slice(0, 155);
+  const description = `Descubre toda la gama de ${nombre.toLowerCase()} profesional en ${SITE_NAME}. Tintes, champús, tratamientos y más con los mejores precios y envío rápido a toda España.`.slice(0, 155);
 
   return { title, description };
 }
