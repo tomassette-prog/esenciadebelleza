@@ -147,6 +147,22 @@ export async function POST(req: NextRequest) {
   if (event.type === "checkout.session.expired") {
     const session = event.data.object as Stripe.Checkout.Session;
     console.log(`[Stripe] Sesión expirada: ${session.id}`);
+
+    // Marcar pedido como cancelado si sigue pendiente
+    const supabase = createAdminClient();
+    const { data: pedido } = await supabase
+      .from("pedidos")
+      .select("id, estado")
+      .eq("stripe_payment_id", session.id)
+      .single();
+
+    if (pedido && pedido.estado === "pendiente") {
+      await supabase
+        .from("pedidos")
+        .update({ estado: "cancelado", notas: "Checkout expirado — cliente no completó el pago" })
+        .eq("id", pedido.id);
+      console.log(`[Stripe] Pedido ${pedido.id} cancelado por sesión expirada`);
+    }
   }
 
   return NextResponse.json({ received: true });
