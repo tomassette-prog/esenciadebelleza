@@ -99,7 +99,7 @@ export default function WooPaymentModal({ pagoUrl, onPagoCompletado, onCancelar 
         onLoad={() => setCargando(false)}
         onError={() => setError("No se pudo cargar la pasarela de pago. Intentá de nuevo.")}
         allow="payment"
-        sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+        sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-top-navigation-by-user-activation"
       />
 
       {/* Error state */}

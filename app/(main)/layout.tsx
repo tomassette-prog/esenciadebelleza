@@ -7,6 +7,7 @@ import type { ReactNode } from "react";
 // Forzar que el layout se regenere dinámicamente (no usar caché estático)
 export const revalidate = 0;
 export const dynamic = 'force-dynamic';
+export const maxDuration = 300;
 
 export default function MainLayout({ children }: { children: ReactNode }) {
   return (
