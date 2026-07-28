@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useCarrito } from "@/context/CarritoContext";
 import { iniciarPagoCeca } from "@/actions/checkout";
 import { calcularGastoEnvio, getZonaEnvio } from "@/lib/envio";
+import PaypalSmartButtons from "@/components/checkout/PaypalSmartButtons";
 
 type Paso = "direccion" | "pago";
 
@@ -358,6 +359,13 @@ export function CheckoutCliente({
               </svg>
               Pago seguro Visa / Mastercard · Cifrado SSL
             </p>
+
+            {/* ── PayPal — alternativa de pago ── */}
+            <PaypalSmartButtons
+              lineas={lineas}
+              datosEnvio={datos}
+              disabled={cargandoStripe}
+            />
 
             {/* Formulario oculto que se envía a Cecabank (oculto, pendiente de resolver) */}
             <form ref={formCecaRef} action={cecaUrl} method="POST" className="hidden">
