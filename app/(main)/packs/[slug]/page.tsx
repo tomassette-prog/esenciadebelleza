@@ -13,7 +13,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   const pack = await getPackBySlug(slug);
   if (!pack) return { title: "Pack no encontrado" };
   return {
-    title: `${pack.nombre} | Packs de regalo | Esencia de Belleza`,
+    title: `${pack.nombre} | Packs de regalo`,
     description: pack.descripcion ?? `Pack de regalo: ${pack.nombre}. ${pack.items.length} productos incluidos por ${pack.precio_pack.toFixed(2)} €.`,
     openGraph: pack.imagen_url ? { images: [pack.imagen_url] } : undefined,
   };

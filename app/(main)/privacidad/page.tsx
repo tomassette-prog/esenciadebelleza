@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Política de Privacidad | Esencia de Belleza",
+  title: "Política de Privacidad",
   description: "Política de privacidad de Esencia de Belleza. Información sobre el tratamiento de sus datos personales conforme al RGPD.",
 };
 

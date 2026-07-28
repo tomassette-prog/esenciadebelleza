@@ -2,7 +2,7 @@
 import Link from "next/link";
 
 export const metadata: Metadata = {
-  title: "Área Profesional | Esencia de Belleza",
+  title: "Área Profesional",
   description:
     "Precios exclusivos para peluquerías, centros de estética, barberías y clínicas de belleza. Regístrate como profesional y accede a tarifas especiales en todo el catálogo.",
   alternates: { canonical: "https://esenciadebelleza.es/profesionales" },

@@ -9,7 +9,7 @@ import { slugifyCategoria } from "@/lib/seo";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Packs de regalo | Esencia de Belleza",
+  title: "Packs de regalo",
   description: "Descubre nuestros packs de productos de peluquería y estética, ideales para regalo. Ahorra comprando en pack.",
 };
 

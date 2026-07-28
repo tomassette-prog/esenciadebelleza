@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Política de Envíos | Esencia de Belleza",
+  title: "Política de Envíos",
   description: "Información sobre plazos de entrega, gastos de envío y condiciones de transporte de Esencia de Belleza.",
 };
 

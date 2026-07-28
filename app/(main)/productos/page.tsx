@@ -16,7 +16,7 @@ export const metadata: Metadata = {
     canonical: "https://esenciadebelleza.es/productos",
   },
   openGraph: {
-    title: "Productos | Esencia de Belleza",
+    title: "Productos",
     description: "Catálogo completo de productos profesionales de peluquería y estética.",
     url: "https://esenciadebelleza.es/productos",
   },

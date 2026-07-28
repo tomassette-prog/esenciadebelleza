@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Devoluciones | Esencia de Belleza",
+  title: "Devoluciones",
   description: "Política de devoluciones y derecho de desistimiento de Esencia de Belleza. 14 días para devolver tu pedido.",
 };
 

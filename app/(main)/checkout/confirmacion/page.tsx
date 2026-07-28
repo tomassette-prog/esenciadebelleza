@@ -5,7 +5,7 @@ import ConfirmacionInner from "./confirmacion-inner";
 import { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Confirmación de pedido — Esencia de Belleza",
+  title: "Confirmación de pedido",
   robots: "noindex, nofollow",
 };
 

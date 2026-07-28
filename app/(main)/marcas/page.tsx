@@ -7,7 +7,7 @@ import { buildBreadcrumbJsonLdItems } from "@/lib/seo";
 export const revalidate = 3600;
 
 export const metadata: Metadata = {
-  title: "Marcas de Peluquería y Estética | Esencia de Belleza",
+  title: "Marcas de Peluquería y Estética",
   description:
     "Descubre todas las marcas profesionales de peluquería, estética y perfumería disponibles en Esencia de Belleza. L'Oréal, Wella, Fanola y muchas más.",
   alternates: { canonical: "https://esenciadebelleza.es/marcas" },

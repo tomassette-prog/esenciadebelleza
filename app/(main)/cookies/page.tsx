@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Política de Cookies | Esencia de Belleza",
+  title: "Política de Cookies",
   description: "Política de cookies de Esencia de Belleza. Información sobre el uso de cookies conforme al RGPD.",
 };
 

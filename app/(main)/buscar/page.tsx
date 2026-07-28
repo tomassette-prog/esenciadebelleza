@@ -13,7 +13,7 @@ interface PageProps {
 export async function generateMetadata({ searchParams }: PageProps): Promise<Metadata> {
   const { q } = await searchParams;
   return {
-    title: q ? `Resultados para "${q}" | Esencia de Belleza` : "Buscador | Esencia de Belleza",
+    title: q ? `Resultados para "${q}"` : "Buscador",
     description: "Busca entre más de 3000 productos profesionales de peluquería, estética y barbería.",
     robots: { index: false, follow: true },
   };

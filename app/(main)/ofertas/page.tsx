@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 export const metadata: Metadata = {
-  title: "Ofertas | Esencia de Belleza",
+  title: "Ofertas",
   description: "Productos en oferta con los mejores precios. Descuentos en marcas profesionales de peluquería, estética y perfumería.",
 };
 

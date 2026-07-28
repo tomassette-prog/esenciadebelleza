@@ -6,11 +6,11 @@ import { Breadcrumb } from "@/components/layout/Breadcrumb";
 export const revalidate = 3600;
 
 export const metadata: Metadata = {
-  title: "Blog de Belleza y Peluquería | Esencia de Belleza",
+  title: "Blog de Belleza y Peluquería",
   description: "Consejos, tendencias y tutoriales de peluquería y estética profesional. Aprende los mejores tratamientos capilares y técnicas de belleza.",
   alternates: { canonical: "https://esenciadebelleza.es/blog" },
   openGraph: {
-    title: "Blog de Belleza y Peluquería | Esencia de Belleza",
+    title: "Blog de Belleza y Peluquería",
     description: "Consejos, tendencias y tutoriales de peluquería y estética profesional. Aprende los mejores tratamientos capilares y técnicas de belleza.",
     url: "https://esenciadebelleza.es/blog",
     siteName: "Esencia de Belleza",

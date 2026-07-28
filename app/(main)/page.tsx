@@ -14,7 +14,7 @@ import { getPacksDestacados } from "@/actions/packs";
 export const revalidate = 60; // 1 minuto — para que cambios de precios/ofertas se reflejen rápido
 
 export const metadata: Metadata = {
-  title: "Esencia de Belleza | Productos Profesionales de Peluquería y Estética",
+  title: "Productos Profesionales de Peluquería, Estética y Perfumería",
   description:
     "Tienda online de productos profesionales de peluquería, estética y perfumería. Precios para particulares y tarifas especiales para profesionales. Envío rápido en España.",
   robots: { index: true, follow: true },

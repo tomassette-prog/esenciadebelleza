@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Sobre Nosotros | Esencia de Belleza",
+  title: "Sobre Nosotros",
   description:
     "Conoce Esencia de Belleza, tienda especializada en productos profesionales de peluquería, estética y perfumería con precios especiales para profesionales del sector.",
 };
