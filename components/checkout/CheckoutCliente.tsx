@@ -4,7 +4,7 @@ import { useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useCarrito } from "@/context/CarritoContext";
-import { iniciarPagoCeca } from "@/actions/checkout";
+import { iniciarPagoCeca, iniciarPagoWooCommerce } from "@/actions/checkout";
 import { calcularGastoEnvio, getZonaEnvio } from "@/lib/envio";
 import PaypalSmartButtons from "@/components/checkout/PaypalSmartButtons";
 
@@ -45,7 +45,9 @@ export function CheckoutCliente({
   const [gastoEnvioConf, setGastoEnvioConf] = useState(0);
   const [cargando, setCargando]       = useState(false);
   const [cargandoStripe, setCargandoStripe] = useState(false);
-  const [error, setError]             = useState<string | null>(null);
+  const [cargandoWoo, setCargandoWoo]     = useState(false);
+  const [wooPagoUrl, setWooPagoUrl]       = useState<string | null>(null);
+  const [error, setError]                 = useState<string | null>(null);
 
   const formCecaRef = useRef<HTMLFormElement>(null);
 
@@ -119,6 +121,24 @@ export function CheckoutCliente({
     } catch {
       setError("Error al conectar con Stripe");
       setCargandoStripe(false);
+    }
+  }
+
+  async function pagarConWoo() {
+    setCargandoWoo(true);
+    setError(null);
+    try {
+      const { pagoUrl, error: err } = await iniciarPagoWooCommerce(lineas, datos);
+      if (pagoUrl) {
+        setWooPagoUrl(pagoUrl);
+        window.location.href = pagoUrl;
+      } else {
+        setError(err ?? "Error al conectar con WooCommerce");
+        setCargandoWoo(false);
+      }
+    } catch {
+      setError("Error al conectar con WooCommerce");
+      setCargandoWoo(false);
     }
   }
 
@@ -365,6 +385,25 @@ export function CheckoutCliente({
               datosEnvio={datos}
               disabled={cargando}
             />
+
+            {/* ── Tarjeta (Cecabank vía depeluqueriaproductos) ── */}
+            <div className="mt-4">
+              <p className="text-xs text-neutral-400 text-center mb-2">o paga con tarjeta a través de nuestro TPV</p>
+              <button
+                onClick={pagarConWoo}
+                disabled={cargandoWoo}
+                className="w-full py-3 bg-emerald-700 text-white text-xs tracking-widest uppercase hover:bg-emerald-800 disabled:opacity-50 transition-colors flex items-center justify-center gap-3"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+                    d="M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h3m-3.75 3h15a2.25 2.25 0 002.25-2.25V6.75A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25v10.5A2.25 2.25 0 004.5 19.5z" />
+                </svg>
+                {cargandoWoo ? "Preparando…" : "Pagar con tarjeta (Cecabank)"}
+              </button>
+              <p className="text-[11px] text-neutral-400 text-center mt-2">
+                Serás redirigido a nuestra pasarela de pago segura
+              </p>
+            </div>
           </div>
         )}
       </div>
