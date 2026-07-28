@@ -584,24 +584,27 @@ export async function sincronizarTodo(): Promise<{
   const brandMappingsCache = await getBrandMappingsCache(supa);
   const marcasPendientes: string[] = [];
 
-  // 5. Descargar TODOS los productos de WooCommerce (UNA sola vez)
-  const wooProductos: any[] = [];
-  let page = 1;
-  while (true) {
-    const batch = await fetchWoo(`/products?status=publish&per_page=100&page=${page}`);
-    if (!Array.isArray(batch) || batch.length === 0) break;
-    wooProductos.push(...batch);
-    if (batch.length < 100) break;
-    page++;
-  }
+  // 5. Descargar productos de WooCommerce — incremental si hay última sync
+  const { data: lastSyncRow } = await supa.from("config_tienda").select("valor").eq("clave", "ultima_sync_wc").single();
+  const lastSync = lastSyncRow?.valor ?? null;
+  const now = new Date().toISOString();
 
+  let page = 1;
   let preciosActualizados = 0;
   let ofertasActualizadas = 0;
   let nuevosCount = 0;
   let sinCambios = 0;
+  let procesados = 0;
 
-  // 6. Procesar cada producto de WC
-  for (const wp of wooProductos) {
+  // Procesar por página — no acumulamos todo en memoria
+  while (true) {
+    const url = lastSync
+      ? `/products?status=publish&per_page=100&page=${page}&modified_after=${lastSync}`
+      : `/products?status=publish&per_page=100&page=${page}`;
+    const batch = await fetchWoo(url);
+    if (!Array.isArray(batch) || batch.length === 0) break;
+
+    for (const wp of batch) {
     const slug = wp.slug || slugify(wp.name);
     const wooPrice = parseFloat(wp.regular_price || wp.price) || 0;
     const wooSalePrice = parseFloat(wp.sale_price) || 0;
@@ -683,7 +686,18 @@ export async function sincronizarTodo(): Promise<{
         }
       } catch (e: any) { errores.push(`${wp.name}: ${e.message}`); }
     }
+    }
+
+    procesados += batch.length;
+    if (batch.length < 100) break;
+    page++;
   }
+
+  // Guardar timestamp de última sincronización
+  await supa.from("config_tienda").upsert(
+    { clave: "ultima_sync_wc", valor: now },
+    { onConflict: "clave" }
+  );
 
   try { await guardarSnapshot(); } catch {}
 
