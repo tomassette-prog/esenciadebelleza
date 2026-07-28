@@ -290,13 +290,15 @@ export async function calcularDiff(): Promise<{
       await new Promise(r => setTimeout(r, 500)); // Delay para evitar 503 de WC
     }
 
-    // 2. Cargar Supabase (productos + variaciones)
+    // 2. Cargar Supabase (productos + precios actuales de variaciones)
     const supa = adminClient();
     const supaMap = new Map<string, {
       id: string;
       nombre: string; categoria: string; subcategoria: string | null;
       imagen_principal_url: string | null; descripcion_general: string | null;
       woo_id?: number | null;
+      precio_b2c?: number | null;
+      oferta?: boolean | null;
     }>();
     const supaMapByWooId = new Map<number, string>();  // woo_id -> slug
     
@@ -304,7 +306,7 @@ export async function calcularDiff(): Promise<{
     while (true) {
       const { data } = await supa
         .from("productos_padre")
-        .select("id, slug, nombre, categoria, subcategoria, imagen_principal_url, descripcion_general, woo_id")
+        .select("id, slug, nombre, categoria, subcategoria, imagen_principal_url, descripcion_general, woo_id, oferta")
         .range(offset, offset + 999);
       if (!data || data.length === 0) break;
       for (const r of data) {
@@ -312,6 +314,27 @@ export async function calcularDiff(): Promise<{
         if (r.woo_id) supaMapByWooId.set(r.woo_id, r.slug);
       }
       if (data.length < 1000) break;
+      offset += 1000;
+    }
+
+    // Cargar precios actuales de variaciones y vincularlos al padre
+    offset = 0;
+    while (true) {
+      const { data: vars } = await supa
+        .from("productos_variaciones")
+        .select("producto_padre_id, precio_b2c, sku")
+        .range(offset, offset + 999);
+      if (!vars || vars.length === 0) break;
+      for (const v of vars) {
+        // Encontrar el padre por id
+        for (const [, padre] of supaMap) {
+          if ((padre as any).id === v.producto_padre_id) {
+            if (v.precio_b2c != null) padre.precio_b2c = v.precio_b2c;
+            break;
+          }
+        }
+      }
+      if (vars.length < 1000) break;
       offset += 1000;
     }
 
@@ -328,7 +351,7 @@ export async function calcularDiff(): Promise<{
 
     const tieneSnapshot = snapshotMap.size > 0;
 
-    // 4. Comparar WC actual vs Esencia (para nuevos) y vs snapshot (para precios)
+    // 4. Comparar WC actual vs Esencia (nuevos) y vs precios actuales + snapshot (modificados)
     const catMap = await getDbCatMap(supa);
     const brandMappingsCache = await getBrandMappingsCache(supa);
     const nuevos: ProductoDiff[] = [];
@@ -338,6 +361,8 @@ export async function calcularDiff(): Promise<{
     for (const p of wooProductos) {
       const slug = p.slug || slugify(p.name);
       const wooPrice = parseFloat(p.regular_price || p.price) || 0;
+      const wooSalePrice = parseFloat(p.sale_price) || 0;
+      const wooOferta = wooSalePrice > 0 && wooSalePrice < wooPrice;
       const snap = snapshotMap.get(p.id);
 
       // ── Paso 1: ¿Existe en Esencia? (por woo_id → slug → nombre) ──────
@@ -380,15 +405,32 @@ export async function calcularDiff(): Promise<{
         continue;
       }
 
-      // Existe en Esencia → comparar precio con snapshot
-      if (snap && wooPrice !== snap.precio && wooPrice > 0) {
+      // ── Existe en Esencia → comparar precio actual Y oferta ───────────
+      const supaProduct = supaMap.get(slugEnDB!);
+      const supaPrice = supaProduct?.precio_b2c ?? null;
+      const supaOferta = supaProduct?.oferta ?? false;
+
+      // Detectar cambio de precio: contra precio actual de Supabase (prioridad) o snapshot
+      const precioRef = supaPrice ?? snap?.precio ?? null;
+      const precioCambiado = precioRef !== null && wooPrice > 0 && Math.abs(wooPrice - precioRef) > 0.01;
+      const ofertaCambiada = wooOferta !== supaOferta;
+
+      if (precioCambiado || ofertaCambiada) {
+        const cambios: Record<string, { woo: string | null; actual: string | null }> = {};
+        if (precioCambiado) {
+          cambios["precio"] = { woo: String(wooPrice), actual: String(precioRef) };
+        }
+        if (ofertaCambiada) {
+          cambios["oferta"] = { woo: wooOferta ? "Sí" : "No", actual: supaOferta ? "Sí" : "No" };
+        }
         modificados.push({
           slug: slugEnDB!,
           nombre: p.name,
           tipo: "modificado",
           wooId: p.id,
           wooCategories: p.categories.map(c => c.id),
-          precioCambio: { woo: wooPrice, actual: snap.precio }
+          precioCambio: precioCambiado ? { woo: wooPrice, actual: precioRef! } : undefined,
+          cambios,
         });
       } else {
         iguales++;
