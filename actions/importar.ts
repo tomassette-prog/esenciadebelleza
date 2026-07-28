@@ -482,10 +482,74 @@ export async function calcularDiff(): Promise<{
 
     const gaps: DiffGaps = { newBrands, unmappedCategories, pendingBrands };
 
-    return { nuevos, modificados, iguales, gaps, snapshotExists: tieneSnapshot };
+    // 6. Estadísticas detalladas
+    const ofertasEntrando = modificados.filter(m => m.cambios?.oferta?.woo === "Sí");
+    const ofertasSaliendo = modificados.filter(m => m.cambios?.oferta?.woo === "No");
+    const soloCambioPrecio = modificados.filter(m => m.cambios?.precio && !m.cambios?.oferta);
+    const sinMarca = nuevos.filter(n => !n.brandResolution || n.brandResolution.status === "pending");
+    const catGeneral = nuevos.filter(n => {
+      const wooP = wooProductos.find(wp => wp.id === n.wooId);
+      return wooP?.categories.some(c => {
+        const mapped = catMap.get(c.id);
+        return mapped?.subcategoria === "general" || mapped?.subcategoria === "otros";
+      });
+    });
+
+    const stats = {
+      totalWC: wooProductos.length,
+      nuevos: nuevos.length,
+      modificados: modificados.length,
+      iguales,
+      ofertasEntrando: ofertasEntrando.length,
+      ofertasSaliendo: ofertasSaliendo.length,
+      soloCambioPrecio: soloCambioPrecio.length,
+      sinMarca: sinMarca.length,
+      catGeneral: catGeneral.length,
+    };
+
+    return { nuevos, modificados, iguales, gaps, snapshotExists: tieneSnapshot, stats };
   } catch (e) {
     return { nuevos: [], modificados: [], iguales: 0, gaps: { newBrands: [], unmappedCategories: [], pendingBrands: [] }, error: String(e) };
   }
+}
+
+// ── Limpiar ofertas inconsistentes ───────────────────────────────────────────
+// Productos con oferta=true pero sin precio_comparar en ninguna variación
+export async function limpiarOfertasInconsistentes(): Promise<{
+  limpiados: number;
+  error?: string;
+}> {
+  try {
+    await verificarAdmin();
+  } catch {
+    return { limpiados: 0, error: "No autorizado" };
+  }
+
+  const supa = adminClient();
+
+  // Encontrar productos con oferta=true pero sin precio_comparar en ninguna variación activa
+  const { data: productos } = await supa
+    .from("productos_padre")
+    .select(`
+      id, slug, nombre, oferta,
+      variaciones:productos_variaciones!inner(precio_comparar, activa)
+    `)
+    .eq("oferta", true)
+    .eq("activo", true);
+
+  if (!productos) return { limpiados: 0 };
+
+  let limpiados = 0;
+  for (const p of productos) {
+    const vars = (p.variaciones as any[])?.filter(v => v.activa) ?? [];
+    const tieneComparar = vars.some(v => v.precio_comparar != null && v.precio_comparar > 0);
+    if (!tieneComparar) {
+      await supa.from("productos_padre").update({ oferta: false }).eq("id", p.id);
+      limpiados++;
+    }
+  }
+
+  return { limpiados };
 }
 
 export async function aplicarCambios(

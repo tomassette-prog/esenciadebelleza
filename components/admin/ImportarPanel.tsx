@@ -8,6 +8,7 @@ import {
   listarMarcasExistentes,
   backfillWooId,
   guardarSnapshot,
+  limpiarOfertasInconsistentes,
   type ProductoDiff,
   type DiffGaps,
   type ReviewGroup,
@@ -127,6 +128,8 @@ export function ImportarPanel({ allPairs }: { allPairs: CategoriaPair[] }) {
 
   // Smart import state
   const [gaps, setGaps]             = useState<DiffGaps>({ newBrands: [], unmappedCategories: [], pendingBrands: [] });
+  const [diffStats, setDiffStats]   = useState<Record<string, number> | null>(null);
+  const [limpiandoOfertas, setLimpiandoOfertas] = useState(false);
   const [reviewGroups, setReviewGroups] = useState<ReviewGroup[]>([]);
   const [groupApprovals, setGroupApprovals] = useState<Map<string, GroupState>>(new Map());
   const [productOverrides, setProductOverrides] = useState<Map<string, ProductOverride>>(new Map());
@@ -168,6 +171,7 @@ export function ImportarPanel({ allPairs }: { allPairs: CategoriaPair[] }) {
       setModificados(res.modificados);
       setIguales(res.iguales);
       setGaps(res.gaps);
+      setDiffStats(res.stats ?? null);
       setSnapshotExists(res.snapshotExists ?? false);
       setMarcasExistentes(marcasRes?.marcas ?? []);
       setBrandApprovals(new Map());
@@ -647,6 +651,54 @@ export function ImportarPanel({ allPairs }: { allPairs: CategoriaPair[] }) {
               <p className="text-3xl font-light text-neutral-400">{iguales}</p>
               <p className="text-xs tracking-widest uppercase text-neutral-500 mt-1">Sin cambios</p>
             </div>
+          </div>
+
+          {/* Detalle de cambios */}
+          {diffStats && (
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {diffStats.ofertasEntrando > 0 && (
+                <div className="border border-green-200 bg-green-50 p-3 text-center">
+                  <p className="text-xl font-medium text-green-700">{diffStats.ofertasEntrando}</p>
+                  <p className="text-[10px] tracking-wider uppercase text-green-600">Ofertas nuevas</p>
+                </div>
+              )}
+              {diffStats.ofertasSaliendo > 0 && (
+                <div className="border border-red-200 bg-red-50 p-3 text-center">
+                  <p className="text-xl font-medium text-red-700">{diffStats.ofertasSaliendo}</p>
+                  <p className="text-[10px] tracking-wider uppercase text-red-600">Salen de oferta</p>
+                </div>
+              )}
+              {diffStats.soloCambioPrecio > 0 && (
+                <div className="border border-amber-200 bg-amber-50 p-3 text-center">
+                  <p className="text-xl font-medium text-amber-700">{diffStats.soloCambioPrecio}</p>
+                  <p className="text-[10px] tracking-wider uppercase text-amber-600">Cambio precio</p>
+                </div>
+              )}
+              {diffStats.sinMarca > 0 && (
+                <div className="border border-orange-200 bg-orange-50 p-3 text-center">
+                  <p className="text-xl font-medium text-orange-700">{diffStats.sinMarca}</p>
+                  <p className="text-[10px] tracking-wider uppercase text-orange-600">Sin marca</p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Botón de limpieza de ofertas inconsistentes */}
+          <div className="flex items-center gap-3">
+            <button
+              onClick={async () => {
+                setLimpiandoOfertas(true);
+                const res = await limpiarOfertasInconsistentes();
+                setLimpiandoOfertas(false);
+                if (res.error) { setError(res.error); return; }
+                alert(`✅ ${res.limpiados} productos corregidos (oferta=true sin precio_comparar)`);
+              }}
+              disabled={limpiandoOfertas}
+              className="text-xs px-3 py-1.5 border border-neutral-300 text-neutral-600 hover:bg-neutral-100 disabled:opacity-50 transition-colors"
+            >
+              {limpiandoOfertas ? "Limpiando…" : "🧹 Limpiar ofertas inconsistentes"}
+            </button>
+            <p className="text-[11px] text-neutral-400">Corrige productos marcados como oferta pero sin precio anterior</p>
           </div>
 
           {/* Gaps banner */}
