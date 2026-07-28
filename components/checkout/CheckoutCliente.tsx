@@ -317,7 +317,7 @@ export function CheckoutCliente({
             </div>
 
             <h2
-              className="text-xl font-light text-neutral-900 mb-4"
+              className="text-xl font-light text-neutral-900 mb-6"
               style={{ fontFamily: "var(--font-cormorant)" }}
             >
               Elige tu método de pago
@@ -327,31 +327,64 @@ export function CheckoutCliente({
             <button
               onClick={pagarConStripe}
               disabled={cargandoStripe}
-              className="w-full py-4 bg-indigo-600 text-white text-xs tracking-widest uppercase hover:bg-indigo-700 disabled:opacity-50 transition-colors flex items-center justify-center gap-3 mb-3"
+              className="group w-full py-4 px-6 bg-neutral-900 text-white text-sm tracking-wide hover:bg-neutral-800 disabled:opacity-50 transition-all flex items-center justify-between rounded-lg mb-4 shadow-sm"
             >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
-                  d="M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h3m-3.75 3h15a2.25 2.25 0 002.25-2.25V6.75A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25v10.5A2.25 2.25 0 004.5 19.5z" />
-              </svg>
-              {cargandoStripe
-                ? "Procesando…"
-                : `Pagar ${(totalPrecio + gastoEnvioConf || totalPrecio + gastoEnvio).toLocaleString("es-ES", { style: "currency", currency: "EUR" })} con tarjeta`}
+              <div className="flex items-center gap-3">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+                    d="M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h3m-3.75 3h15a2.25 2.25 0 002.25-2.25V6.75A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25v10.5A2.25 2.25 0 004.5 19.5z" />
+                </svg>
+                <span className="font-medium">
+                  {cargandoStripe
+                    ? "Procesando…"
+                    : "Pagar con tarjeta"}
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-lg font-light">
+                  {(totalPrecio + gastoEnvioConf || totalPrecio + gastoEnvio).toLocaleString("es-ES", { style: "currency", currency: "EUR" })}
+                </span>
+                <svg className="w-4 h-4 opacity-50 group-hover:opacity-100 transition-opacity" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+              </div>
             </button>
 
-            <p className="text-xs text-neutral-400 text-center mb-5 flex items-center justify-center gap-2">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
-                  d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
-              </svg>
-              Pago seguro · Stripe
-            </p>
+            {/* Logos de tarjetas aceptadas */}
+            <div className="flex items-center justify-center gap-3 mb-6">
+              <div className="flex items-center gap-1.5 text-[10px] text-neutral-400 uppercase tracking-wider">
+                <span>Aceptamos</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="px-2 py-0.5 bg-blue-50 text-blue-700 text-[10px] font-semibold rounded border border-blue-100">VISA</span>
+                <span className="px-2 py-0.5 bg-red-50 text-red-700 text-[10px] font-semibold rounded border border-red-100">MC</span>
+                <span className="px-2 py-0.5 bg-blue-50 text-blue-800 text-[10px] font-semibold rounded border border-blue-100">AMEX</span>
+              </div>
+              <span className="text-[10px] text-neutral-300">·</span>
+              <div className="flex items-center gap-1 text-[10px] text-neutral-400">
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                  d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                </svg>
+                Pago seguro SSL
+              </div>
+            </div>
+
+            {/* ── Separador ── */}
+            <div className="flex items-center gap-4 mb-5">
+              <div className="flex-1 h-px bg-neutral-200"></div>
+              <span className="text-[11px] text-neutral-400 uppercase tracking-widest">o</span>
+              <div className="flex-1 h-px bg-neutral-200"></div>
+            </div>
 
             {/* ── PayPal — alternativa de pago ── */}
-            <PaypalSmartButtons
-              lineas={lineas}
-              datosEnvio={datos}
-              disabled={cargando}
-            />
+            <div className="bg-white border border-neutral-200 rounded-lg p-4">
+              <PaypalSmartButtons
+                lineas={lineas}
+                datosEnvio={datos}
+                disabled={cargando}
+              />
+            </div>
 
             {error && (
               <div className="mt-4 p-3 bg-red-50 border border-red-200 text-red-700 text-sm rounded">{error}</div>
