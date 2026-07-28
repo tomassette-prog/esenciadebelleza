@@ -12,14 +12,14 @@ export function buildProductoMetadata(
   const canonicalUrl = `${BASE_URL}/productos/${slugifyCategoria(producto.categoria)}/${slugifyCategoria(producto.subcategoria ?? "general")}/${producto.slug}`;
 
   // Si hay variación en la URL, el título muta para long-tail
-  let title = producto.seo_title ?? `${producto.nombre} | ${SITE_NAME}`;
+  let title = producto.seo_title ?? `${producto.nombre}`;
   let description =
     producto.seo_description ??
     `Compra ${producto.nombre} en ${SITE_NAME}. Envío rápido y precios competitivos.`;
 
   if (variacionSeleccionada) {
     const marca = producto.marca?.nombre ?? "";
-    title = `${marca ? `${marca} ` : ""}${producto.nombre} ${variacionSeleccionada.nombre_variacion} | ${SITE_NAME}`;
+    title = `${marca ? `${marca} ` : ""}${producto.nombre} ${variacionSeleccionada.nombre_variacion}`;
     title = title.slice(0, 60);
     description = `Compra ${producto.nombre} en tono ${variacionSeleccionada.nombre_variacion}. Precio: ${formatPrice(variacionSeleccionada.precio_b2c)}. Envío rápido en España.`;
     description = description.slice(0, 155);
@@ -60,7 +60,7 @@ export function buildCategoriaMetadata(categoria: string, subcategoria?: string)
   const nombre = subcategoria
     ? `${formatCategoryName(subcategoria)} — ${formatCategoryName(categoria)}`
     : formatCategoryName(categoria);
-  const title = `${nombre} | ${SITE_NAME}`.slice(0, 60);
+  const title = `${nombre}`.slice(0, 60);
   const description = `Descubre toda la gama de ${nombre.toLowerCase()} en ${SITE_NAME}. Productos profesionales con los mejores precios.`.slice(0, 155);
 
   return { title, description };

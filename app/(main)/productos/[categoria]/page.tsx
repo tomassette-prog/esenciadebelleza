@@ -161,7 +161,7 @@ export default async function CategoriaPage({ params, searchParams }: PageProps)
             className="text-4xl font-light text-neutral-900 mb-3"
             style={{ fontFamily: "var(--font-cormorant)" }}
           >
-            {categoriaNombre}
+            {formatCategoryName(categoriaNombre)}
           </h1>
           <div
             className="w-12 h-px mb-4"
