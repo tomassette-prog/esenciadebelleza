@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from "react";
 import {
   calcularDiff,
   aplicarCambios,
+  aplicarCambiosDirecto,
   publicarAprobados,
   listarMarcasExistentes,
   backfillWooId,
@@ -418,6 +419,39 @@ export function ImportarPanel({ allPairs }: { allPairs: CategoriaPair[] }) {
     }
   }
 
+  // ⚡ Aplicar rápido: usa los datos del diff directamente (sin descargar de WC)
+  async function handleAplicarRapido() {
+    if (!seleccionados.size) return;
+    setFase("aplicando");
+    setError(null);
+    setResumen(null);
+    setProgreso({ ok: 0, total: seleccionados.size });
+    try {
+      const todosDiff = [...nuevos, ...modificados];
+      const seleccionadosDiff = todosDiff.filter(p => seleccionados.has(p.slug));
+
+      const cambios = seleccionadosDiff.map(p => {
+        const isOferta = p.cambios?.oferta?.woo === "Sí";
+        return {
+          slug: p.slug,
+          wooRegularPrice: p.wooRegularPrice ?? p.precioCambio?.woo ?? 0,
+          wooSalePrice: p.wooSalePrice,
+          isOferta,
+          sku: p.wooSku,
+        };
+      }).filter(c => c.wooRegularPrice > 0);
+
+      const res = await aplicarCambiosDirecto(cambios);
+      if (res.errores.length > 0) {
+        setError(`${res.errores.length} errores: ${res.errores.slice(0, 3).join(", ")}`);
+      }
+      setResumen({ ok: res.ok, noEncontrados: res.errores, details: [`${res.ok} productos actualizados directamente`] });
+    } finally {
+      setFase("listo");
+      setProgreso(null);
+    }
+  }
+
   // ── Derived ─────────────────────────────────────────────────────────────────
 
   const approvedCount = [...groupApprovals.values()].filter(s => s.approved)
@@ -755,6 +789,14 @@ export function ImportarPanel({ allPairs }: { allPairs: CategoriaPair[] }) {
                 className="px-6 py-2 bg-neutral-900 text-white text-xs tracking-widest uppercase hover:bg-neutral-700 disabled:opacity-40 transition-colors"
               >
                 {fase === "aplicando" ? "Aplicando…" : `Aplicar ${seleccionados.size} cambios`}
+              </button>
+              <button
+                onClick={handleAplicarRapido}
+                disabled={!seleccionados.size || fase === "aplicando" || fase === "publicando"}
+                className="px-6 py-2 bg-green-700 text-white text-xs tracking-widest uppercase hover:bg-green-800 disabled:opacity-40 transition-colors"
+                title="Aplica directamente usando los datos del diff (sin descargar de WooCommerce)"
+              >
+                ⚡ Rápido ({seleccionados.size})
               </button>
             </div>
           )}

@@ -173,6 +173,9 @@ export interface ProductoDiff {
   wooCategories: number[];
   cambios?: Record<string, { woo: string | null; actual: string | null }>;
   precioCambio?: { woo: number; actual: number };
+  wooRegularPrice?: number;
+  wooSalePrice?: number;
+  wooSku?: string;
   brandResolution?: {
     brandName: string;
     status: "resolved" | "pending" | "new_confirmed";
@@ -431,6 +434,9 @@ export async function calcularDiff(): Promise<{
           wooId: p.id,
           wooCategories: p.categories.map(c => c.id),
           precioCambio: precioCambiado ? { woo: wooPrice, actual: precioRef! } : undefined,
+          wooRegularPrice: wooPrice,
+          wooSalePrice: wooSalePrice || undefined,
+          wooSku: p.sku || undefined,
           cambios,
         });
       } else {
@@ -880,6 +886,77 @@ export async function aplicarCambios(
   } catch (e) {
     return { ok: 0, noEncontrados: [], brandsCreated: [], error: String(e) };
   }
+}
+
+// ── aplicarCambiosDirecto — Aplica cambios usando datos del diff (SIN descargar de WC) ──
+export async function aplicarCambiosDirecto(
+  cambios: Array<{
+    slug: string;
+    wooRegularPrice: number;
+    wooSalePrice?: number;
+    isOferta: boolean;
+    sku?: string;
+  }>
+): Promise<{ ok: number; errores: string[] }> {
+  try {
+    await verificarAdmin();
+  } catch {
+    return { ok: 0, errores: ["No autorizado"] };
+  }
+
+  const supa = adminClient();
+  const { data: config } = await supa.from("config_tampa").select("clave, valor").in("clave", ["precio_multiplicador_b2c"]);
+  const multiplicador = Number(config?.find((c: any) => c.clave === "precio_multiplicador_b2c")?.valor ?? "1") || 1;
+
+  let ok = 0;
+  const errores: string[] = [];
+
+  // Procesar en lotes de 50 para no sobrecargar Supabase
+  for (let i = 0; i < cambios.length; i += 50) {
+    const lote = cambios.slice(i, i + 50);
+    await Promise.all(lote.map(async (c) => {
+      try {
+        // Actualizar oferta en padre
+        await supa.from("productos_padre").update({ oferta: c.isOferta }).eq("slug", c.slug);
+
+        // Actualizar precios en variaciones
+        const precioB2c = c.isOferta && c.wooSalePrice ? c.wooSalePrice : c.wooRegularPrice;
+        const precioB2b = Number((precioB2c * multiplicador).toFixed(2));
+        const precioComparar = c.isOferta ? c.wooRegularPrice : null;
+
+        // Buscar variación por SKU o por producto_padre_id
+        let query = supa.from("productos_variaciones").update({
+          precio_b2c: precioB2c,
+          precio_b2b: precioB2b,
+          precio_comparar: precioComparar,
+        });
+
+        if (c.sku) {
+          query = query.eq("sku", c.sku);
+        } else {
+          // Buscar por producto_padre_id
+          const { data: padre } = await supa.from("productos_padre").select("id").eq("slug", c.slug).single();
+          if (padre) {
+            query = query.eq("producto_padre_id", padre.id).eq("activa", true);
+          } else {
+            errores.push(`${c.slug}: producto no encontrado`);
+            return;
+          }
+        }
+
+        const { error } = await query;
+        if (error) {
+          errores.push(`${c.slug}: ${error.message}`);
+        } else {
+          ok++;
+        }
+      } catch (e: any) {
+        errores.push(`${c.slug}: ${e.message}`);
+      }
+    }));
+  }
+
+  return { ok, errores };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
