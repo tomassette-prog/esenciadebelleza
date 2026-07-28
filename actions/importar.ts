@@ -261,6 +261,7 @@ export async function calcularDiff(): Promise<{
   iguales: number;
   gaps: DiffGaps;
   snapshotExists?: boolean;
+  stats?: Record<string, number>;
   error?: string;
 }> {
   try {
