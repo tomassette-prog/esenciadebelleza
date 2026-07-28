@@ -432,10 +432,13 @@ export function ImportarPanel({ allPairs }: { allPairs: CategoriaPair[] }) {
       const seleccionadosDiff = todosDiff.filter(p => seleccionados.has(p.slug));
 
       const cambios = seleccionadosDiff.map(p => {
-        const isOferta = p.cambios?.oferta?.woo === "Sí";
+        // Siempre calcular isOferta basado en los precios de WC, no solo en cambios detectados
+        const wooRegPrice = p.wooRegularPrice ?? p.precioCambio?.woo ?? 0;
+        const wooSale = p.wooSalePrice ?? 0;
+        const isOferta = wooSale > 0 && wooSale < wooRegPrice;
         return {
           slug: p.slug,
-          wooRegularPrice: p.wooRegularPrice ?? p.precioCambio?.woo ?? 0,
+          wooRegularPrice: wooRegPrice,
           wooSalePrice: p.wooSalePrice,
           isOferta,
           sku: p.wooSku,

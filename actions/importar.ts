@@ -414,15 +414,24 @@ export async function calcularDiff(): Promise<{
       const supaPrice = supaProduct?.precio_b2c ?? null;
       const supaOferta = supaProduct?.oferta ?? false;
 
-      // Detectar cambio de precio: contra precio actual de Supabase (prioridad) o snapshot
-      const precioRef = supaPrice ?? snap?.precio ?? null;
-      const precioCambiado = precioRef !== null && wooPrice > 0 && Math.abs(wooPrice - precioRef) > 0.01;
-      const ofertaCambiada = wooOferta !== supaOferta;
+      // El precio correcto en Esencia debería ser:
+      // - Si hay sale_price: precio_b2c = sale_price
+      // - Si no hay sale_price: precio_b2c = regular_price
+      const precioCorrecto = wooOferta ? wooSalePrice : wooPrice;
 
-      if (precioCambiado || ofertaCambiada) {
+      // Detectar cambio de precio: comparar con el precio correcto (no solo regular_price)
+      const precioRef = supaPrice ?? snap?.precio ?? null;
+      const precioCambiado = precioRef !== null && precioCorrecto > 0 && Math.abs(precioCorrecto - precioRef) > 0.01;
+      const ofertaCambiada = wooOferta !== supaOferta;
+      // También detectar si el precio_b2c está mal (debería ser sale_price pero es regular_price)
+      const precioIncorrecto = wooOferta && supaPrice !== null && Math.abs(wooPrice - supaPrice) < 0.01 && Math.abs(wooSalePrice - supaPrice) > 0.01;
+
+      if (precioCambiado || ofertaCambiada || precioIncorrecto) {
         const cambios: Record<string, { woo: string | null; actual: string | null }> = {};
         if (precioCambiado) {
-          cambios["precio"] = { woo: String(wooPrice), actual: String(precioRef) };
+          cambios["precio"] = { woo: String(precioCorrecto), actual: String(precioRef) };
+        } else if (precioIncorrecto) {
+          cambios["precio"] = { woo: String(wooSalePrice), actual: String(supaPrice) };
         }
         if (ofertaCambiada) {
           cambios["oferta"] = { woo: wooOferta ? "Sí" : "No", actual: supaOferta ? "Sí" : "No" };
