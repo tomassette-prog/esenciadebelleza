@@ -154,11 +154,12 @@ export async function iniciarPagoCeca(
   }
 
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://esenciadebelleza.es";
+  // Use simple URL paths without query parameters to avoid & encoding issues
   const { gatewayUrl, campos } = generarCamposCeca({
     numOper,
     importeCentimos: Math.round(totalFinal * 100),
-    urlOk:  `${siteUrl}/checkout/confirmacion?num_oper=${numOper}&resultado=ok`,
-    urlNok: `${siteUrl}/checkout/confirmacion?num_oper=${numOper}&resultado=ko`,
+    urlOk:  `${siteUrl}/checkout/confirmacion/${numOper}/ok`,
+    urlNok: `${siteUrl}/checkout/confirmacion/${numOper}/ko`,
   });
 
   // DEBUG: Log exact values sent to Cecabank
