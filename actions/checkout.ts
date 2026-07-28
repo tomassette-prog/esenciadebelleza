@@ -161,6 +161,12 @@ export async function iniciarPagoCeca(
     urlNok: `${siteUrl}/checkout/confirmacion?num_oper=${numOper}&resultado=ko`,
   });
 
+  // DEBUG: Log exact values sent to Cecabank
+  console.log("[DEBUG CECA] campos:", JSON.stringify(campos, null, 2));
+  console.log("[DEBUG CECA] CECA_CIFRADO env:", process.env.CECA_CIFRADO);
+  console.log("[DEBUG CECA] CECA_MERCHANT_ID env:", process.env.CECA_MERCHANT_ID);
+  console.log("[DEBUG CECA] CECA_SECRET_KEY length:", process.env.CECA_SECRET_KEY?.length);
+
   return { gatewayUrl, campos, gastoEnvio, error: null };
 }
 
