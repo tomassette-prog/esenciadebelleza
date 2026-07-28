@@ -154,12 +154,12 @@ export async function iniciarPagoCeca(
   }
 
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://esenciadebelleza.es";
-  // Use simple URL paths without query parameters to avoid & encoding issues
+  // TEST: Use depeluqueriaproductos.com URLs to see if domain is the issue
   const { gatewayUrl, campos } = generarCamposCeca({
     numOper,
     importeCentimos: Math.round(totalFinal * 100),
-    urlOk:  `${siteUrl}/checkout/confirmacion/${numOper}/ok`,
-    urlNok: `${siteUrl}/checkout/confirmacion/${numOper}/ko`,
+    urlOk:  `https://depeluqueriaproductos.com/checkout/confirmacion?num_oper=${numOper}&resultado=ok`,
+    urlNok: `https://depeluqueriaproductos.com/checkout/confirmacion?num_oper=${numOper}&resultado=ko`,
   });
 
   // DEBUG: Log exact values sent to Cecabank
