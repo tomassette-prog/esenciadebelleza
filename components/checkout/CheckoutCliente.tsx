@@ -44,6 +44,7 @@ export function CheckoutCliente({
   const [cecaUrl, setCecaUrl]         = useState<string>("");
   const [gastoEnvioConf, setGastoEnvioConf] = useState(0);
   const [cargando, setCargando]       = useState(false);
+  const [cargandoStripe, setCargandoStripe] = useState(false);
   const [error, setError]             = useState<string | null>(null);
 
   const formCecaRef = useRef<HTMLFormElement>(null);
@@ -97,6 +98,28 @@ export function CheckoutCliente({
 
   function pagarConTarjeta() {
     if (formCecaRef.current) formCecaRef.current.submit();
+  }
+
+  async function pagarConStripe() {
+    setCargandoStripe(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/stripe/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ lineas, datosEnvio: datos }),
+      });
+      const data = await res.json();
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        setError(data.error ?? "Error al conectar con Stripe");
+        setCargandoStripe(false);
+      }
+    } catch {
+      setError("Error al conectar con Stripe");
+      setCargandoStripe(false);
+    }
   }
 
 
@@ -313,19 +336,19 @@ export function CheckoutCliente({
               Elige tu método de pago
             </h2>
 
-            {/* ── Cecabank — pago con tarjeta (mismas credenciales que depeluqueriaproductos) ── */}
+            {/* ── Stripe — pago con tarjeta ── */}
             <button
-              onClick={pagarConTarjeta}
-              disabled={cargando}
-              className="w-full py-4 bg-neutral-900 text-white text-xs tracking-widest uppercase hover:bg-neutral-700 disabled:opacity-50 transition-colors flex items-center justify-center gap-3 mb-3"
+              onClick={pagarConStripe}
+              disabled={cargandoStripe}
+              className="w-full py-4 bg-indigo-600 text-white text-xs tracking-widest uppercase hover:bg-indigo-700 disabled:opacity-50 transition-colors flex items-center justify-center gap-3 mb-3"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
                   d="M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h3m-3.75 3h15a2.25 2.25 0 002.25-2.25V6.75A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25v10.5A2.25 2.25 0 004.5 19.5z" />
               </svg>
-              {cargando
+              {cargandoStripe
                 ? "Procesando…"
-                : `Pagar ${(totalPrecio + gastoEnvioConf).toLocaleString("es-ES", { style: "currency", currency: "EUR" })} con tarjeta`}
+                : `Pagar ${(totalPrecio + gastoEnvioConf || totalPrecio + gastoEnvio).toLocaleString("es-ES", { style: "currency", currency: "EUR" })} con tarjeta`}
             </button>
 
             <p className="text-xs text-neutral-400 text-center mb-5 flex items-center justify-center gap-2">
@@ -333,7 +356,7 @@ export function CheckoutCliente({
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
                   d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
               </svg>
-              Pago seguro con tarjeta · Cecabank TPV
+              Pago seguro · Stripe
             </p>
 
             {/* ── PayPal — alternativa de pago ── */}
@@ -342,13 +365,6 @@ export function CheckoutCliente({
               datosEnvio={datos}
               disabled={cargando}
             />
-
-            {/* Formulario oculto que se envía a Cecabank (oculto, pendiente de resolver) */}
-            <form ref={formCecaRef} action={cecaUrl} method="POST" className="hidden">
-              {Object.entries(cecaCampos).map(([name, value]) => (
-                <input key={name} type="hidden" name={name} value={value} />
-              ))}
-            </form>
           </div>
         )}
       </div>
