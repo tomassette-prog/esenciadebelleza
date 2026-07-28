@@ -586,22 +586,34 @@ export async function aplicarCambios(
       attributes: { name: string; options: string[] }[];
     };
 
-    // 1. Fetch products from WooCommerce by ID
-    const PARALELO = 20;
+    // 1. Fetch products from WooCommerce in batches using 'include' parameter
+    const BATCH_SIZE = 50;
     const seleccionados: WooProducto[] = [];
     const noEncontrados: string[] = [];
-    for (let i = 0; i < slugsConId.length; i += PARALELO) {
-      const lote = slugsConId.slice(i, i + PARALELO);
-      const resultados = await Promise.all(
-        lote.map(({ slug, wooId }) =>
-          (fetchWoo(`/products/${wooId}`) as Promise<WooProducto>)
-            .then(p => ({ ok: true as const, p }))
-            .catch(() => ({ ok: false as const, slug }))
-        )
-      );
-      for (const r of resultados) {
-        if (r.ok) seleccionados.push(r.p);
-        else noEncontrados.push(r.slug);
+    
+    for (let i = 0; i < slugsConId.length; i += BATCH_SIZE) {
+      const batch = slugsConId.slice(i, i + BATCH_SIZE);
+      const ids = batch.map(s => s.wooId).join(",");
+      try {
+        const products = await fetchWoo(`/products?include=${ids}&per_page=${BATCH_SIZE}`) as WooProducto[];
+        for (const p of products) {
+          seleccionados.push(p);
+        }
+        // Find which IDs were not returned
+        const returnedIds = new Set(products.map(p => p.id));
+        for (const { slug, wooId } of batch) {
+          if (!returnedIds.has(wooId)) noEncontrados.push(slug);
+        }
+      } catch {
+        // If batch fails, fall back to individual fetches
+        for (const { slug, wooId } of batch) {
+          try {
+            const p = await fetchWoo(`/products/${wooId}`) as WooProducto;
+            seleccionados.push(p);
+          } catch {
+            noEncontrados.push(slug);
+          }
+        }
       }
     }
 
