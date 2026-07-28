@@ -41,8 +41,8 @@ export default function PaypalSmartButtons({ lineas, datosEnvio, disabled }: Pro
     }
 
     const script = document.createElement("script");
-    // Habilitar Apple Pay, Google Pay, PayPal y Venmo
-    script.src = `https://www.paypal.com/sdk/js?client-id=${clientId}&currency=EUR&locale=es_ES&components=buttons&enable-funding=applepay,googlepay,venmo&intent=capture`;
+    // Cargar SDK de PayPal (solo PayPal estándar, sin Apple Pay/Google Pay/Venmo)
+    script.src = `https://www.paypal.com/sdk/js?client-id=${clientId}&currency=EUR&locale=es_ES&components=buttons&intent=capture`;
     script.async = true;
     script.onload = () => setLoaded(true);
     script.onerror = () => setError("No se pudo cargar PayPal");
