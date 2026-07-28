@@ -370,21 +370,12 @@ export function CheckoutCliente({
               </div>
             </div>
 
-            {/* ── Separador ── */}
-            <div className="flex items-center gap-4 mb-5">
-              <div className="flex-1 h-px bg-neutral-200"></div>
-              <span className="text-[11px] text-neutral-400 uppercase tracking-widest">o</span>
-              <div className="flex-1 h-px bg-neutral-200"></div>
-            </div>
-
             {/* ── PayPal — alternativa de pago ── */}
-            <div className="bg-white border border-neutral-200 rounded-lg p-4">
-              <PaypalSmartButtons
-                lineas={lineas}
-                datosEnvio={datos}
-                disabled={cargando}
-              />
-            </div>
+            <PaypalSmartButtons
+              lineas={lineas}
+              datosEnvio={datos}
+              disabled={cargando}
+            />
 
             {error && (
               <div className="mt-4 p-3 bg-red-50 border border-red-200 text-red-700 text-sm rounded">{error}</div>
