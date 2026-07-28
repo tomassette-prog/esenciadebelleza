@@ -39,7 +39,12 @@ function firma(partes: string[]): string {
     return crypto.createHash("sha256").update(raw, "utf8").digest("hex");
   }
   // SHA1: NO se reemplaza &amp; (igual que el plugin oficial de Cecabank)
-  return crypto.createHash("sha1").update(clave + joined, "utf8").digest("hex");
+  const rawInput = clave + joined;
+  const hash = crypto.createHash("sha1").update(rawInput, "utf8").digest("hex");
+  console.log("[DEBUG FIRMA] clave length:", clave.length, "clave repr:", JSON.stringify(clave));
+  console.log("[DEBUG FIRMA] rawInput length:", rawInput.length);
+  console.log("[DEBUG FIRMA] hash:", hash);
+  return hash;
 }
 
 // ── Generar campos para el formulario POST al TPV ─────────────────────────────
