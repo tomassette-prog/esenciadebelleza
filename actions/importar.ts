@@ -520,6 +520,184 @@ export async function calcularDiff(): Promise<{
   }
 }
 
+// ── sincronizarTodo — Descarga WC UNA VEZ y aplica todo en un solo paso ──────
+export async function sincronizarTodo(): Promise<{
+  ok: number;
+  nuevos: number;
+  preciosActualizados: number;
+  ofertasActualizadas: number;
+  errores: string[];
+  sinCambios: number;
+  marcasPendientes: string[];
+}> {
+  try {
+    await verificarAdmin();
+  } catch {
+    return { ok: 0, nuevos: 0, preciosActualizados: 0, ofertasActualizadas: 0, errores: ["No autorizado"], sinCambios: 0, marcasPendientes: [] };
+  }
+
+  const supa = adminClient();
+  const errores: string[] = [];
+
+  // 1. Config
+  const { data: config } = await supa.from("config_tienda").select("clave, valor");
+  const configMap = new Map((config ?? []).map((c: any) => [c.clave, c.valor]));
+  const precioMultiplicador = Number(configMap.get("precio_multiplicador_b2c") ?? "1") || 1;
+
+  // 2. Cargar catálogo actual de Supabase
+  const supaMap = new Map<string, any>();
+  const supaWooMap = new Map<number, string>();
+  let offset = 0;
+  while (true) {
+    const { data } = await supa.from("productos_padre")
+      .select("id, slug, nombre, woo_id, oferta")
+      .range(offset, offset + 999);
+    if (!data?.length) break;
+    for (const r of data) {
+      supaMap.set(r.slug, r);
+      if (r.woo_id) supaWooMap.set(r.woo_id, r.slug);
+    }
+    if (data.length < 1000) break;
+    offset += 1000;
+  }
+
+  // 3. Cargar variaciones actuales
+  const varsMap = new Map<string, { id: string; sku: string; precio_b2c: number }[]>();
+  offset = 0;
+  while (true) {
+    const { data: vars } = await supa.from("productos_variaciones")
+      .select("id, producto_padre_id, sku, precio_b2c, activa")
+      .eq("activa", true)
+      .range(offset, offset + 999);
+    if (!vars?.length) break;
+    for (const v of vars) {
+      const existing = varsMap.get(v.producto_padre_id) ?? [];
+      existing.push(v);
+      varsMap.set(v.producto_padre_id, existing);
+    }
+    if (vars.length < 1000) break;
+    offset += 1000;
+  }
+
+  // 4. Cargar categorías y marcas
+  const catMap = await getDbCatMap(supa);
+  const brandMappingsCache = await getBrandMappingsCache(supa);
+  const marcasPendientes: string[] = [];
+
+  // 5. Descargar TODOS los productos de WooCommerce (UNA sola vez)
+  const wooProductos: any[] = [];
+  let page = 1;
+  while (true) {
+    const batch = await fetchWoo(`/products?status=publish&per_page=100&page=${page}`);
+    if (!Array.isArray(batch) || batch.length === 0) break;
+    wooProductos.push(...batch);
+    if (batch.length < 100) break;
+    page++;
+  }
+
+  let preciosActualizados = 0;
+  let ofertasActualizadas = 0;
+  let nuevosCount = 0;
+  let sinCambios = 0;
+
+  // 6. Procesar cada producto de WC
+  for (const wp of wooProductos) {
+    const slug = wp.slug || slugify(wp.name);
+    const wooPrice = parseFloat(wp.regular_price || wp.price) || 0;
+    const wooSalePrice = parseFloat(wp.sale_price) || 0;
+    const isOferta = wooSalePrice > 0 && wooSalePrice < wooPrice;
+    const wooId = wp.id;
+
+    const existingSlug = supaWooMap.get(wooId) || (supaMap.has(slug) ? slug : null);
+
+    if (!existingSlug) {
+      // ── PRODUCTO NUEVO ──
+      const brandResolution = await resolveBrandFromWc(supa, wp.name, wp.attributes ?? [], brandMappingsCache);
+
+      const catIds = (wp.categories ?? []).map((c: any) => c.id);
+      let categoria = "General";
+      let subcategoria = "otros";
+      for (const catId of catIds) {
+        const mapped = catMap.get(catId);
+        if (mapped) { categoria = mapped.categoria; subcategoria = mapped.subcategoria; break; }
+      }
+
+      let marcaId: string | null = null;
+      if (brandResolution?.marcaId) {
+        marcaId = brandResolution.marcaId;
+      } else if (brandResolution?.brandName) {
+        marcasPendientes.push(brandResolution.brandName);
+      }
+
+      try {
+        const { data: inserted, error: insertErr } = await supa.from("productos_padre").insert({
+          nombre: wp.name, slug, categoria, subcategoria,
+          woo_id: wooId, activo: true, oferta: isOferta,
+          marca_id: marcaId,
+          imagen_principal_url: wp.images?.[0]?.src ?? null,
+          descripcion_general: wp.description || null,
+        }).select("id").single();
+
+        if (insertErr || !inserted) { errores.push(`Nuevo ${wp.name}: ${insertErr?.message}`); continue; }
+
+        const precioB2c = isOferta ? wooSalePrice : wooPrice;
+        await supa.from("productos_variaciones").insert({
+          producto_padre_id: inserted.id,
+          sku: wp.sku || `WC-${wooId}`,
+          nombre_variacion: "Unidad",
+          precio_b2c: precioB2c,
+          precio_b2b: Number((precioB2c * precioMultiplicador).toFixed(2)),
+          precio_comparar: isOferta ? wooPrice : null,
+          stock: wp.stock_quantity ?? 0,
+          activa: wp.stock_status !== "outofstock",
+          imagen_url: wp.images?.[0]?.src ?? null,
+        });
+        nuevosCount++;
+      } catch (e: any) { errores.push(`Nuevo ${wp.name}: ${e.message}`); }
+    } else {
+      // ── EXISTENTE ──
+      const supaP = supaMap.get(existingSlug);
+      if (!supaP) continue;
+      const supaVars = varsMap.get(supaP.id) ?? [];
+      const supaVar = supaVars[0];
+      if (!supaVar) continue;
+
+      const precioActual = supaVar.precio_b2c;
+      const ofertaActual = supaP.oferta ?? false;
+      const precioCambiado = wooPrice > 0 && Math.abs(wooPrice - precioActual) > 0.01;
+      const ofertaCambiada = isOferta !== ofertaActual;
+
+      if (!precioCambiado && !ofertaCambiada) { sinCambios++; continue; }
+
+      const precioB2c = isOferta ? wooSalePrice : wooPrice;
+      try {
+        await supa.from("productos_variaciones").update({
+          precio_b2c: precioB2c,
+          precio_b2b: Number((precioB2c * precioMultiplicador).toFixed(2)),
+          precio_comparar: isOferta ? wooPrice : null,
+        }).eq("id", supaVar.id);
+        if (precioCambiado) preciosActualizados++;
+        if (ofertaCambiada) {
+          await supa.from("productos_padre").update({ oferta: isOferta }).eq("id", supaP.id);
+          ofertasActualizadas++;
+        }
+      } catch (e: any) { errores.push(`${wp.name}: ${e.message}`); }
+    }
+  }
+
+  try { await guardarSnapshot(); } catch {}
+
+  return {
+    ok: nuevosCount + preciosActualizados + ofertasActualizadas,
+    nuevos: nuevosCount,
+    preciosActualizados,
+    ofertasActualizadas,
+    errores: errores.slice(0, 20),
+    sinCambios,
+    marcasPendientes: [...new Set(marcasPendientes)],
+  };
+}
+
 // ── Limpiar ofertas inconsistentes ───────────────────────────────────────────
 // Productos con oferta=true pero sin precio_comparar en ninguna variación
 export async function limpiarOfertasInconsistentes(): Promise<{

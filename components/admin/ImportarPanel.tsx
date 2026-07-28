@@ -5,6 +5,7 @@ import {
   calcularDiff,
   aplicarCambios,
   aplicarCambiosDirecto,
+  sincronizarTodo,
   publicarAprobados,
   listarMarcasExistentes,
   backfillWooId,
@@ -452,6 +453,30 @@ export function ImportarPanel({ allPairs }: { allPairs: CategoriaPair[] }) {
     }
   }
 
+  // 🔄 Sincronización total: descarga WC una vez y aplica todo (nuevos + precios + ofertas)
+  async function handleSyncAll() {
+    setFase("aplicando");
+    setError(null);
+    setResumen(null);
+    setProgreso({ ok: 0, total: 0 });
+    try {
+      const res = await sincronizarTodo();
+      const details: string[] = [];
+      if (res.nuevos > 0) details.push(`${res.nuevos} productos nuevos creados`);
+      if (res.preciosActualizados > 0) details.push(`${res.preciosActualizados} precios actualizados`);
+      if (res.ofertasActualizadas > 0) details.push(`${res.ofertasActualizadas} ofertas actualizadas`);
+      if (res.sinCambios > 0) details.push(`${res.sinCambios} sin cambios`);
+      if (res.marcasPendientes.length > 0) details.push(`Marcas pendientes: ${res.marcasPendientes.join(", ")}`);
+      if (res.errores.length > 0) setError(`${res.errores.length} errores: ${res.errores.slice(0, 3).join(", ")}`);
+      setResumen({ ok: res.ok, noEncontrados: res.errores, details });
+    } catch (e: any) {
+      setError(e.message ?? "Error en sincronización");
+    } finally {
+      setFase("listo");
+      setProgreso(null);
+    }
+  }
+
   // ── Derived ─────────────────────────────────────────────────────────────────
 
   const approvedCount = [...groupApprovals.values()].filter(s => s.approved)
@@ -478,13 +503,23 @@ export function ImportarPanel({ allPairs }: { allPairs: CategoriaPair[] }) {
             Compara el catálogo actual con depeluqueriaproductos.com y elige qué aplicar.
           </p>
         </div>
-        <button
-          onClick={handleDiff}
-          disabled={busy}
-          className="shrink-0 px-6 py-2.5 bg-neutral-900 text-white text-xs tracking-widest uppercase hover:bg-neutral-700 disabled:opacity-50 transition-colors"
-        >
-          {fase === "diff" ? "Calculando…" : "Calcular diff"}
-        </button>
+        <div className="flex gap-2 shrink-0">
+          <button
+            onClick={handleDiff}
+            disabled={busy}
+            className="px-6 py-2.5 bg-neutral-900 text-white text-xs tracking-widest uppercase hover:bg-neutral-700 disabled:opacity-50 transition-colors"
+          >
+            {fase === "diff" ? "Calculando…" : "Calcular diff"}
+          </button>
+          <button
+            onClick={handleSyncAll}
+            disabled={busy}
+            className="px-6 py-2.5 bg-green-700 text-white text-xs tracking-widest uppercase hover:bg-green-800 disabled:opacity-50 transition-colors"
+            title="Descarga todo de WooCommerce UNA VEZ y aplica: nuevos productos + precios + ofertas. Los sin categoría van a General."
+          >
+            {fase === "aplicando" ? "Sincronizando…" : "🔄 Sincronizar todo"}
+          </button>
+        </div>
       </div>
 
       {/* Alerts */}
