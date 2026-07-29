@@ -302,7 +302,7 @@ export async function sincronizarTodosPrecios(): Promise<{
         precio_b2b: parseFloat((precioRegular * precioMultiplicador).toFixed(2)),
         precio_comparar: precioVenta > 0 && precioVenta < precioRegular ? precioRegular : null,
         stock: wp.stock_quantity ?? 0,
-        // No desactivar por outofstock — mantener activo para Google Shopping
+        activa: true, // Siempre activar — Google necesita ver disponibilidad
       }).eq("sku", wp.sku);
 
       actualizados++;
