@@ -1,0 +1,130 @@
+"use server";
+
+import { createAdminClient } from "@/lib/supabase/admin";
+
+export interface DiagnosticoProducto {
+  id: string;
+  nombre: string;
+  slug: string;
+  categoria: string;
+  problemas: string[];
+}
+
+export async function diagnosticarProductosMerchant(): Promise<{
+  total: number;
+  sinVariaciones: DiagnosticoProducto[];
+  sinPrecio: DiagnosticoProducto[];
+  sinNombre: DiagnosticoProducto[];
+  sinImagen: DiagnosticoProducto[];
+}> {
+  const supabase = createAdminClient();
+
+  // Cargar todos los productos activos con variaciones
+  let todos: Record<string, unknown>[] = [];
+  let offset = 0;
+  while (true) {
+    const { data } = await supabase
+      .from("productos_padre")
+      .select(`
+        id, nombre, slug, categoria, imagen_principal_url,
+        variaciones:productos_variaciones(id, activa, stock, precio_b2c)
+      `)
+      .eq("activo", true)
+      .range(offset, offset + 999);
+    if (!data || data.length === 0) break;
+    todos = todos.concat(data);
+    if (data.length < 1000) break;
+    offset += 1000;
+  }
+
+  const sinVariaciones: DiagnosticoProducto[] = [];
+  const sinPrecio: DiagnosticoProducto[] = [];
+  const sinNombre: DiagnosticoProducto[] = [];
+  const sinImagen: DiagnosticoProducto[] = [];
+
+  for (const p of todos) {
+    const problemas: string[] = [];
+    const vars = (p.variaciones as { activa: boolean; precio_b2c: number; stock: number }[]) ?? [];
+    const varsActivas = vars.filter((v) => v.activa);
+    const nombre = (p.nombre as string) ?? "";
+
+    // Sin variaciones activas → availability missing
+    if (vars.length === 0 || varsActivas.length === 0) {
+      problemas.push("availability");
+      sinVariaciones.push({
+        id: p.id as string,
+        nombre,
+        slug: p.slug as string,
+        categoria: p.categoria as string,
+        problemas: ["Sin variaciones activas"],
+      });
+    }
+
+    // Variaciones activas sin precio → price missing
+    if (
+      varsActivas.length > 0 &&
+      varsActivas.every((v) => !v.precio_b2c || v.precio_b2c <= 0)
+    ) {
+      problemas.push("price");
+      sinPrecio.push({
+        id: p.id as string,
+        nombre,
+        slug: p.slug as string,
+        categoria: p.categoria as string,
+        problemas: ["Variaciones sin precio"],
+      });
+    }
+
+    // Nombre genérico o vacío
+    if (!nombre || nombre.toLowerCase() === "unidad" || nombre.length < 3) {
+      problemas.push("title");
+      sinNombre.push({
+        id: p.id as string,
+        nombre: nombre || "(vacío)",
+        slug: p.slug as string,
+        categoria: p.categoria as string,
+        problemas: ["Nombre genérico o vacío"],
+      });
+    }
+
+    // Sin imagen
+    if (!p.imagen_principal_url) {
+      problemas.push("image");
+      sinImagen.push({
+        id: p.id as string,
+        nombre,
+        slug: p.slug as string,
+        categoria: p.categoria as string,
+        problemas: ["Sin imagen principal"],
+      });
+    }
+  }
+
+  return {
+    total: todos.length,
+    sinVariaciones,
+    sinPrecio,
+    sinNombre,
+    sinImagen,
+  };
+}
+
+export async function activarVariaciones(ids: string[]): Promise<{
+  ok: boolean;
+  actualizados: number;
+  error?: string;
+}> {
+  if (!ids.length) return { ok: true, actualizados: 0 };
+
+  const supabase = createAdminClient();
+
+  // Activar todas las variaciones de los productos seleccionados
+  const { error, count } = await supabase
+    .from("productos_variaciones")
+    .update({ activa: true })
+    .in("producto_padre_id", ids)
+    .select();
+
+  if (error) return { ok: false, actualizados: 0, error: error.message };
+  return { ok: true, actualizados: count ?? 0 };
+}

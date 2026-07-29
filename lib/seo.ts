@@ -264,6 +264,41 @@ export function slugifyCategoria(texto: string): string {
 }
 
 export function formatCategoryName(slug: string): string {
+  // Mapa de corrección: slug → nombre con tildes y formato correcto
+  const CORRECTIONS: Record<string, string> = {
+    // Categorías principales
+    "peluqueria":      "Peluquería",
+    "estetica":        "Estética",
+    "barberia":        "Barbería",
+    "perfumeria":      "Perfumería",
+    // Subcategorías con tildes o nombres especiales
+    "champus":         "Champús",
+    "ampollas-y-serums":       "Ampollas y Sérums",
+    "serums-faciales":         "Sérums faciales",
+    "decoloracion":    "Decoloración",
+    "secadores-y-planchas":    "Secadores y Planchas",
+    "maquinas-corte":  "Máquinas de corte",
+    "cepillos-y-peines":       "Cepillos y Peines",
+    "tijeras":         "Tijeras y Navajas",
+    "utensilios":      "Utensilios y Accesorios",
+    "rizos":           "Rizos y Anticrespo",
+    "gominas-y-ceras": "Gominas y Ceras",
+    "lamparas-uv":     "Lámparas UV/LED",
+    "gel-corporal":    "Gel de ducha",
+    "peeling":         "Peeling y Exfoliantes",
+    "ceras-barbero":   "Ceras de barbero",
+    "champus-barba":   "Champús de barba",
+    "eau-de-parfum":   "Eau de Parfum",
+    "eau-de-toilette": "Eau de Toilette",
+    "brumas-y-velas":  "Brumas y Velas",
+    "sin-amoniaco":    "Sin amoniaco",
+    "manicura-pedicura": "Manicura y Pedicura",
+    "unas":            "Limas y Fresas",
+  };
+
+  if (CORRECTIONS[slug]) return CORRECTIONS[slug];
+
+  // Fallback: capitalizar cada palabra
   return slug
     .replace(/-/g, " ")
     .replace(/\b\w/g, (c) => c.toUpperCase());

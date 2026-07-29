@@ -249,6 +249,77 @@ export default async function CategoriaPage({ params, searchParams }: PageProps)
             />
           </div>
         )}
+
+        {/* FAQs — rich results para Google */}
+        {FAQ_DATA[categoria] && (
+          <section className="mt-16 pt-8 border-t border-neutral-100">
+            <h2
+              className="text-2xl font-light text-neutral-900 mb-6"
+              style={{ fontFamily: "var(--font-cormorant)" }}
+            >
+              Preguntas frecuentes
+            </h2>
+            <div className="space-y-4">
+              {FAQ_DATA[categoria].map((faq, i) => (
+                <details key={i} className="group border border-neutral-100 rounded-lg">
+                  <summary className="flex items-center justify-between cursor-pointer p-4 text-sm font-medium text-neutral-800 hover:bg-neutral-50 transition-colors">
+                    {faq.pregunta}
+                    <span className="ml-2 text-neutral-400 group-open:rotate-180 transition-transform">▾</span>
+                  </summary>
+                  <div className="px-4 pb-4 text-sm text-neutral-600 leading-relaxed">
+                    {faq.respuesta}
+                  </div>
+                </details>
+              ))}
+            </div>
+            {/* JSON-LD FAQPage */}
+            <script
+              type="application/ld+json"
+              dangerouslySetInnerHTML={{
+                __html: JSON.stringify({
+                  "@context": "https://schema.org",
+                  "@type": "FAQPage",
+                  mainEntity: FAQ_DATA[categoria].map((faq) => ({
+                    "@type": "Question",
+                    name: faq.pregunta,
+                    acceptedAnswer: {
+                      "@type": "Answer",
+                      text: faq.respuesta,
+                    },
+                  })),
+                }),
+              }}
+            />
+          </section>
+        )}
+
+        {/* Enlaces internos a otras categorías */}
+        {OTRAS_CATEGORIAS[categoria] && (
+          <nav className="mt-16 pt-8 border-t border-neutral-100" aria-label="Categorías relacionadas">
+            <h2
+              className="text-2xl font-light text-neutral-900 mb-6"
+              style={{ fontFamily: "var(--font-cormorant)" }}
+            >
+              También te puede interesar
+            </h2>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              {OTRAS_CATEGORIAS[categoria].map((cat) => (
+                <Link
+                  key={cat.slug}
+                  href={`/productos/${cat.slug}`}
+                  className="group block p-4 border border-neutral-100 rounded-lg hover:border-neutral-300 transition-colors"
+                >
+                  <span className="text-sm font-medium text-neutral-800 group-hover:text-neutral-900">
+                    {cat.label}
+                  </span>
+                  <span className="block text-xs text-neutral-400 mt-1">
+                    {cat.descripcion}
+                  </span>
+                </Link>
+              ))}
+            </div>
+          </nav>
+        )}
       </div>
     </>
   );
@@ -279,4 +350,94 @@ const SEO_FOOTER: Record<string, string> = {
   barberia: `<h2>Barbería profesional — Productos para salón y uso personal</h2>
 <p>La sección de barbería de Esencia de Belleza está pensada para barberos profesionales y para hombres que cuidan su imagen. Encontrarás <strong>ceras y pomadas de alta fijación</strong>, champús específicos para barba y cabello masculino, aceites y bálsamos de barba, así como productos de cuidado caballero de marcas como Hey Joe, Don Algodón, Kuul y Novon.</p>
 <p>Todos los productos de nuestra sección de barbería están seleccionados por profesionales del sector para garantizar resultados de calidad en el salón y en casa. Envío rápido a toda España.</p>`,
+
+  perfumeria: `<h2>Perfumería y fragancias — Eau de Parfum, colonias y ambientación</h2>
+<p>Descubre nuestra selección de <strong>perfumes y fragancias</strong> para mujer y hombre. Contamos con eau de parfum, eau de toilette y colonias de marcas reconocidas, además de <strong>ambientadores, brumas y velas aromáticas</strong> para perfumar tu hogar o tu centro de estética.</p>
+<p>Todos nuestros perfumes son originales y se envían en su embalaje original con factura. Si buscas una fragancia concreta que no encuentras en el catálogo, contacta con nosotros y te ayudaremos a encontrarla. Envío rápido a toda España.</p>`,
+};
+
+// ── FAQs por categoría (long-tail keywords + Google rich results) ─────────────
+
+const FAQ_DATA: Record<string, { pregunta: string; respuesta: string }[]> = {
+  peluqueria: [
+    {
+      pregunta: "¿Qué productos de peluquería profesional vendéis?",
+      respuesta: "En Esencia de Belleza encontrarás tintes, decolorantes, oxigenadas, champús, mascarillas, acondicionadores, lacas, espumas, gominas, secadores, planchas, máquinas de corte, tijeras y todo tipo de accesorios para peluquería profesional.",
+    },
+    {
+      pregunta: "¿Tenéis precios especiales para peluqueros profesionales?",
+      respuesta: "Sí. Si eres profesional del sector, puedes registrarte como cuenta profesional y acceder a tarifas B2B con descuentos exclusivos. Solo necesitas verificar tu actividad profesional durante el registro.",
+    },
+    {
+      pregunta: "¿Qué marcas de peluquería trabajáis?",
+      respuesta: "Trabajamos con las principales marcas del sector: Schwarzkopf, Wella, L'Oréal Professionnel, Fanola, Salerm, Tahe, Yunsey, Revlon, KIS y muchas más. Todas originales y con garantía.",
+    },
+    {
+      pregunta: "¿Hacéis envíos de productos de peluquería a toda España?",
+      respuesta: "Sí, enviamos a toda España peninsular. El envío estándar tiene un coste de 5 €, pero es gratuito para pedidos superiores a 40 €. Entrega en 24-48 horas laborables.",
+    },
+  ],
+  estetica: [
+    {
+      pregunta: "¿Qué productos de estética profesional tenéis?",
+      respuesta: "Ofrecemos cremas faciales, sérums, mascarillas, productos corporales, ceras depiladoras, material de manicura y pedicura, lámparas UV/LED y maquillaje profesional de las mejores marcas del sector.",
+    },
+    {
+      pregunta: "¿Los productos de estética son para profesionales o para particulares?",
+      respuesta: "Ambos. Nuestros productos están pensados para centros de estética y spas, pero también están disponibles para particulares que quieren cuidarse en casa con productos de calidad profesional.",
+    },
+    {
+      pregunta: "¿Tenéis productos de depilación profesional?",
+      respuesta: "Sí, contamos con ceras depiladoras, fundidores de cera, depilatorios y todo el material necesario para depilación profesional en centro de estética.",
+    },
+  ],
+  barberia: [
+    {
+      pregunta: "¿Qué productos de barbería vendéis?",
+      respuesta: "Tenemos ceras y pomadas de barbería, champús específicos para barba, aceites y bálsamos, productos de afeitado y cuidado caballero de marcas como Hey Joe, Don Algodón, Kuul y Novon.",
+    },
+    {
+      pregunta: "¿Los productos de barbería son para salones o para uso personal?",
+      respuesta: "Ambos. Están seleccionados por profesionales del sector para garantizar resultados de calidad tanto en el salón como en casa.",
+    },
+  ],
+  perfumeria: [
+    {
+      pregunta: "¿Los perfumes que vendéis son originales?",
+      respuesta: "Sí, todos nuestros perfumes son 100% originales. Se envían en su embalaje original con factura. Trabajamos directamente con distribuidores oficiales.",
+    },
+    {
+      pregunta: "¿Qué tipos de fragancias tenéis?",
+      respuesta: "Ofrecemos eau de parfum, eau de toilette y colonias para mujer y hombre, además de ambientadores, brumas y velas aromáticas para el hogar.",
+    },
+    {
+      pregunta: "¿Puedo pedir un perfume que no está en el catálogo?",
+      respuesta: "Sí, si buscas una fragancia concreta que no encuentras en nuestra tienda online, contacta con nosotros y te ayudaremos a encontrarla al mejor precio.",
+    },
+  ],
+};
+
+// ── Enlaces internos a otras categorías ───────────────────────────────────────
+
+const OTRAS_CATEGORIAS: Record<string, { slug: string; label: string; descripcion: string }[]> = {
+  peluqueria: [
+    { slug: "estetica", label: "Estética", descripcion: "Cuidado facial, corporal y depilación" },
+    { slug: "barberia", label: "Barbería", descripcion: "Productos para barba y cabello masculino" },
+    { slug: "perfumeria", label: "Perfumería", descripcion: "Fragancias y ambientación" },
+  ],
+  estetica: [
+    { slug: "peluqueria", label: "Peluquería", descripcion: "Tintes, champús y tratamientos capilares" },
+    { slug: "barberia", label: "Barbería", descripcion: "Cuidado masculino y barbería profesional" },
+    { slug: "perfumeria", label: "Perfumería", descripcion: "Fragancias de marca y ambientación" },
+  ],
+  barberia: [
+    { slug: "peluqueria", label: "Peluquería", descripcion: "Productos capilares profesionales" },
+    { slug: "estetica", label: "Estética", descripcion: "Cuidado facial y corporal" },
+    { slug: "perfumeria", label: "Perfumería", descripcion: "Colonias y fragancias masculinas" },
+  ],
+  perfumeria: [
+    { slug: "peluqueria", label: "Peluquería", descripcion: "Tintes, champús y herramientas" },
+    { slug: "estetica", label: "Estética", descripcion: "Cremas, sérums y cuidado facial" },
+    { slug: "barberia", label: "Barbería", descripcion: "Ceras, champús y cuidado caballero" },
+  ],
 };
