@@ -121,12 +121,13 @@ export async function activarVariaciones(ids: string[]): Promise<{
   let totalUpdated = 0;
   let totalInserted = 0;
 
-  // 1. Activar variaciones existentes pero inactivas
+  // 1. Activar variaciones existentes pero inactivas QUE TENGAN PRECIO
   const { data: updated, error: updateError } = await supabase
     .from("productos_variaciones")
     .update({ activa: true })
     .in("producto_padre_id", ids)
     .eq("activa", false)
+    .gt("precio_b2c", 0)
     .select("id");
 
   if (updateError) return { ok: false, actualizados: 0, insertados: 0, error: updateError.message };

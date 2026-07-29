@@ -42,7 +42,11 @@ export default function MerchantDiagnostico() {
         const partes = [];
         if (result.actualizados > 0) partes.push(`${result.actualizados} activadas`);
         if (result.insertados > 0) partes.push(`${result.insertados} creadas`);
-        setFixResult(`✅ ${partes.join(", ")}. Ejecuta el diagnóstico de nuevo para verificar.`);
+        if (partes.length === 0) {
+          setFixResult(`⚠️ No se activó nada. Las variaciones existentes no tienen precio. Ejecuta "Sincronizar precios vacíos" primero.`);
+        } else {
+          setFixResult(`✅ ${partes.join(", ")}. Ejecuta el diagnóstico de nuevo para verificar.`);
+        }
       } else {
         setFixResult(`❌ Error: ${result.error}`);
       }
