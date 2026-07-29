@@ -31,8 +31,10 @@ export default function MerchantDiagnostico() {
   function arreglarAvailability() {
     if (!diag?.sinVariaciones.length) return;
     const ids = diag.sinVariaciones.map((p) => p.id);
-    // Confirmación temporalmente deshabilitada para activación masiva via admin
-    // if (!window.confirm(`¿Activar variaciones de ${ids.length} productos?`)) return;
+    const confirmar = window.confirm(
+      `¿Activar variaciones de ${ids.length} productos? Esto marcará todas sus variaciones como activas.`
+    );
+    if (!confirmar) return;
 
     startFix(async () => {
       const result = await activarVariaciones(ids);
