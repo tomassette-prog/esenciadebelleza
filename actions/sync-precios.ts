@@ -89,13 +89,13 @@ export async function sincronizarPrecios(): Promise<{
       offset += 1000;
     }
 
-    // 2. Load ALL variations to find which products have prices
-    const allVars: Array<{ producto_padre_id: string; precio_b2c: number | null }> = [];
+    // 2. Load variations to find products with missing/zero prices
+    const allVars: Array<{ id: string; producto_padre_id: string; precio_b2c: number | null; sku: string | null; activa: boolean }> = [];
     offset = 0;
     while (true) {
       const { data } = await supa
         .from("productos_variaciones")
-        .select("producto_padre_id, precio_b2c")
+        .select("id, producto_padre_id, precio_b2c, sku, activa")
         .range(offset, offset + 999);
       if (!data || data.length === 0) break;
       allVars.push(...data);
@@ -105,15 +105,20 @@ export async function sincronizarPrecios(): Promise<{
 
     const hasValidPrice = new Set<string>();
     for (const v of allVars) {
-      if (v.precio_b2c && v.precio_b2c > 0) {
+      if (v.precio_b2c && v.precio_b2c > 0.1) {
         hasValidPrice.add(v.producto_padre_id);
       }
     }
 
+    // Also collect dummy SKUs (VAR-*) that need cleanup
+    const dummyVars = allVars.filter(v => v.sku?.startsWith("VAR-") && (!v.precio_b2c || v.precio_b2c <= 0.1));
+    const dummyByProduct = new Map<string, string>();
+    for (const d of dummyVars) dummyByProduct.set(d.producto_padre_id, d.id);
+
     // 3. Find products that need prices — collect their woo_ids
     const needsPrice = esenciaProducts.filter(ep => !hasValidPrice.has(ep.id));
     const needsPriceWithWooId = needsPrice.filter(ep => ep.woo_id && ep.woo_id > 0);
-    const wooIds = needsPriceWithWooId.map(ep => ep.woo_id!);
+    const wooIds = [...new Set(needsPriceWithWooId.map(ep => ep.woo_id!))];
 
     if (wooIds.length === 0) {
       return { ok: 0, actualizados: 0, sinMatch: 0, error: "No hay productos sin precio con woo_id" };
@@ -209,6 +214,18 @@ export async function sincronizarPrecios(): Promise<{
         }
       }
       actualizados++;
+    }
+
+    // 9. Clean up dummy variations (VAR-*) for products that now have real variations with prices
+    const updatedProductIds = new Set(toUpdate.map(u => u.id));
+    const dummyIdsToDelete: string[] = [];
+    for (const [prodId, dummyId] of dummyByProduct) {
+      if (updatedProductIds.has(prodId)) {
+        dummyIdsToDelete.push(dummyId);
+      }
+    }
+    if (dummyIdsToDelete.length > 0) {
+      await supa.from("productos_variaciones").delete().in("id", dummyIdsToDelete);
     }
 
     return { ok: toUpdate.length, actualizados, sinMatch };
