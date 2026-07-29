@@ -197,7 +197,7 @@ export async function sincronizarPrecios(): Promise<{
             precio_b2b: precioB2b,
             precio_comparar: precioComparar,
             stock: woo.stock_quantity ?? 0,
-            activa: woo.stock_status !== "outofstock",
+            // No desactivar por outofstock — mantener activo para Google Shopping
           }).eq("sku", woo.sku);
         } else {
           await supa.from("productos_variaciones").insert({
@@ -208,7 +208,7 @@ export async function sincronizarPrecios(): Promise<{
             precio_b2b: precioB2b,
             precio_comparar: precioComparar,
             stock: woo.stock_quantity ?? 0,
-            activa: woo.stock_status !== "outofstock",
+            activa: true,
             imagen_url: imagenUrl,
           });
         }
@@ -302,7 +302,7 @@ export async function sincronizarTodosPrecios(): Promise<{
         precio_b2b: parseFloat((precioRegular * precioMultiplicador).toFixed(2)),
         precio_comparar: precioVenta > 0 && precioVenta < precioRegular ? precioRegular : null,
         stock: wp.stock_quantity ?? 0,
-        activa: wp.stock_status !== "outofstock",
+        // No desactivar por outofstock — mantener activo para Google Shopping
       }).eq("sku", wp.sku);
 
       actualizados++;
