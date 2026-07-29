@@ -119,15 +119,24 @@ export async function sincronizarPrecios(): Promise<{
       return { ok: 0, actualizados: 0, sinMatch: 0, error: "No hay productos sin precio con woo_id" };
     }
 
-    // 4. Fetch ONLY the WC products we need (batch by IDs, max 100 per request)
+    // 4. Fetch ONLY the WC products we need (batch by IDs, max 50 per request with delay)
     const wooById = new Map<number, WooProduct>();
-    for (let i = 0; i < wooIds.length; i += 100) {
-      const batch = wooIds.slice(i, i + 100);
-      const batchData = await fetchWoo(`/products?include=${batch.join(",")}&per_page=100`);
-      if (Array.isArray(batchData)) {
-        for (const wp of batchData) wooById.set(wp.id, wp);
+    for (let i = 0; i < wooIds.length; i += 50) {
+      const batch = wooIds.slice(i, i + 50);
+      try {
+        const batchData = await fetchWoo(`/products?include=${batch.join(",")}&per_page=100`);
+        if (Array.isArray(batchData)) {
+          for (const wp of batchData) wooById.set(wp.id, wp);
+        }
+      } catch (e) {
+        // If rate limited, wait and retry once
+        await new Promise(r => setTimeout(r, 5000));
+        const retry = await fetchWoo(`/products?include=${batch.join(",")}&per_page=100`);
+        if (Array.isArray(retry)) {
+          for (const wp of retry) wooById.set(wp.id, wp);
+        }
       }
-      if (batch.length >= 100) await new Promise(r => setTimeout(r, 200));
+      await new Promise(r => setTimeout(r, 500));
     }
 
     // 5. Match and prepare updates
