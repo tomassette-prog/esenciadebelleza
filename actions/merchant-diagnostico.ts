@@ -163,3 +163,25 @@ export async function activarVariaciones(ids: string[]): Promise<{
 
   return { ok: true, actualizados: totalUpdated, insertados: totalInserted };
 }
+
+/**
+ * Activa TODAS las variaciones que tengan precio > 0, sin importar el stock.
+ * Útil para que aparezcan en Google Shopping aunque estén agotadas en WC.
+ */
+export async function activarTodasConPrecio(): Promise<{
+  ok: boolean;
+  activadas: number;
+  error?: string;
+}> {
+  const supabase = createAdminClient();
+
+  const { data, error } = await supabase
+    .from("productos_variaciones")
+    .update({ activa: true })
+    .eq("activa", false)
+    .gt("precio_b2c", 0)
+    .select("id");
+
+  if (error) return { ok: false, activadas: 0, error: error.message };
+  return { ok: true, activadas: data?.length ?? 0 };
+}

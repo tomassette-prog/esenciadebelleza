@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import {
   diagnosticarProductosMerchant,
   activarVariaciones,
+  activarTodasConPrecio,
   type DiagnosticoProducto,
 } from "@/actions/merchant-diagnostico";
 
@@ -20,6 +21,7 @@ export default function MerchantDiagnostico() {
   const [loading, startTransition] = useTransition();
   const [fixing, startFix] = useTransition();
   const [fixResult, setFixResult] = useState<string | null>(null);
+  const [activatingAll, startActivateAll] = useTransition();
 
   function ejecutarDiagnostico() {
     startTransition(async () => {
@@ -67,6 +69,24 @@ export default function MerchantDiagnostico() {
           className="px-4 py-2 bg-rose-600 text-white rounded-lg hover:bg-rose-700 disabled:opacity-50 font-medium"
         >
           {loading ? "Analizando…" : "🔍 Ejecutar diagnóstico"}
+        </button>
+        <button
+          onClick={() => {
+            startActivateAll(async () => {
+              const result = await activarTodasConPrecio();
+              if (result.ok) {
+                setFixResult(`✅ ${result.activadas} variaciones con precio activadas.`);
+                ejecutarDiagnostico();
+              } else {
+                setFixResult(`❌ Error: ${result.error}`);
+              }
+              setTimeout(() => setFixResult(null), 30000);
+            });
+          }}
+          disabled={activatingAll}
+          className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 font-medium"
+        >
+          {activatingAll ? "Activando…" : "✅ Activar todas con precio"}
         </button>
         {diag && (
           <span className="text-sm text-gray-500">
