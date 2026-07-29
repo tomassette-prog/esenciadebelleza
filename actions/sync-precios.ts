@@ -197,7 +197,7 @@ export async function sincronizarPrecios(): Promise<{
             precio_b2b: precioB2b,
             precio_comparar: precioComparar,
             stock: woo.stock_quantity ?? 0,
-            // No desactivar por outofstock — mantener activo para Google Shopping
+            activa: true, // Siempre activar — Google necesita ver disponibilidad
           }).eq("sku", woo.sku);
         } else {
           await supa.from("productos_variaciones").insert({
