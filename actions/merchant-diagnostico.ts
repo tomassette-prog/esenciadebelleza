@@ -119,12 +119,12 @@ export async function activarVariaciones(ids: string[]): Promise<{
   const supabase = createAdminClient();
 
   // Activar todas las variaciones de los productos seleccionados
-  const { error, count } = await supabase
+  const { data, error } = await supabase
     .from("productos_variaciones")
     .update({ activa: true })
     .in("producto_padre_id", ids)
-    .select();
+    .select("id");
 
   if (error) return { ok: false, actualizados: 0, error: error.message };
-  return { ok: true, actualizados: count ?? 0 };
+  return { ok: true, actualizados: data?.length ?? 0 };
 }
