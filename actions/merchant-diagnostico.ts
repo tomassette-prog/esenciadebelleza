@@ -144,7 +144,8 @@ export async function activarVariaciones(ids: string[]): Promise<{
   if (sinVariacion.length > 0) {
     const nuevas = sinVariacion.map((id) => ({
       producto_padre_id: id,
-      nombre: "Unidad",
+      sku: `VAR-${id.slice(0, 8)}-default`,
+      nombre_variacion: "Unidad",
       activa: true,
       stock: 0,
       precio_b2c: 0,
