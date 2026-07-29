@@ -51,7 +51,7 @@ async function fetchWoo(path: string) {
 
 /**
  * Sync prices from WooCommerce for Esencia products that have missing or zero prices.
- * Also updates stock and sale prices.
+ * Optimized: only fetches specific WC products that need prices, not the entire catalog.
  */
 export async function sincronizarPrecios(): Promise<{
   ok: number;
@@ -68,7 +68,6 @@ export async function sincronizarPrecios(): Promise<{
   try {
     const supa = adminClient();
 
-    // 1. Fetch ALL WooCommerce products (paginated)
     type WooProduct = {
       id: number; slug: string; sku: string; name: string;
       regular_price: string; sale_price: string; price: string;
@@ -76,26 +75,7 @@ export async function sincronizarPrecios(): Promise<{
       type: string; images: { src: string }[];
     };
 
-    const wooProducts: WooProduct[] = [];
-    let page = 1;
-    while (true) {
-      const batch = await fetchWoo(`/products?per_page=100&page=${page}`);
-      if (!Array.isArray(batch) || batch.length === 0) break;
-      wooProducts.push(...batch);
-      if (batch.length < 100) break;
-      page++;
-      await new Promise(r => setTimeout(r, 200));
-    }
-
-    // 2. Build lookup maps from WC
-    const wooBySlug = new Map<string, WooProduct>();
-    const wooByWooId = new Map<number, WooProduct>();
-    for (const wp of wooProducts) {
-      wooBySlug.set(wp.slug, wp);
-      wooByWooId.set(wp.id, wp);
-    }
-
-    // 3. Load ALL Esencia products
+    // 1. Load ALL Esencia products
     const esenciaProducts: Array<{ id: string; slug: string; woo_id: number | null }> = [];
     let offset = 0;
     while (true) {
@@ -109,7 +89,7 @@ export async function sincronizarPrecios(): Promise<{
       offset += 1000;
     }
 
-    // 4. Load ALL variations in bulk to find which products have prices
+    // 2. Load ALL variations to find which products have prices
     const allVars: Array<{ producto_padre_id: string; precio_b2c: number | null }> = [];
     offset = 0;
     while (true) {
@@ -123,7 +103,6 @@ export async function sincronizarPrecios(): Promise<{
       offset += 1000;
     }
 
-    // Build set of product IDs that already have valid prices
     const hasValidPrice = new Set<string>();
     for (const v of allVars) {
       if (v.precio_b2c && v.precio_b2c > 0) {
@@ -131,23 +110,39 @@ export async function sincronizarPrecios(): Promise<{
       }
     }
 
-    // 5. Find products that need prices
-    const needsPrice: Array<{ id: string; slug: string; woo: WooProduct }> = [];
+    // 3. Find products that need prices — collect their woo_ids
+    const needsPrice = esenciaProducts.filter(ep => !hasValidPrice.has(ep.id));
+    const needsPriceWithWooId = needsPrice.filter(ep => ep.woo_id && ep.woo_id > 0);
+    const wooIds = needsPriceWithWooId.map(ep => ep.woo_id!);
 
-    for (const ep of esenciaProducts) {
-      if (hasValidPrice.has(ep.id)) continue;
-
-      // Find matching WC product
-      const woo = (ep.woo_id && wooByWooId.get(ep.woo_id)) || wooBySlug.get(ep.slug);
-      if (!woo) continue;
-
-      const precioRegular = parseFloat(woo.regular_price || woo.price) || 0;
-      if (precioRegular <= 0) continue;
-
-      needsPrice.push({ id: ep.id, slug: ep.slug, woo });
+    if (wooIds.length === 0) {
+      return { ok: 0, actualizados: 0, sinMatch: 0, error: "No hay productos sin precio con woo_id" };
     }
 
-    // 4. Load precio_multiplicador_b2b
+    // 4. Fetch ONLY the WC products we need (batch by IDs, max 100 per request)
+    const wooById = new Map<number, WooProduct>();
+    for (let i = 0; i < wooIds.length; i += 100) {
+      const batch = wooIds.slice(i, i + 100);
+      const batchData = await fetchWoo(`/products?include=${batch.join(",")}&per_page=100`);
+      if (Array.isArray(batchData)) {
+        for (const wp of batchData) wooById.set(wp.id, wp);
+      }
+      if (batch.length >= 100) await new Promise(r => setTimeout(r, 200));
+    }
+
+    // 5. Match and prepare updates
+    const toUpdate: Array<{ id: string; slug: string; woo: WooProduct }> = [];
+    let sinMatch = 0;
+
+    for (const ep of needsPriceWithWooId) {
+      const woo = wooById.get(ep.woo_id!);
+      if (!woo) { sinMatch++; continue; }
+      const precioRegular = parseFloat(woo.regular_price || woo.price) || 0;
+      if (precioRegular <= 0) { sinMatch++; continue; }
+      toUpdate.push({ id: ep.id, slug: ep.slug, woo });
+    }
+
+    // 6. Load precio_multiplicador_b2b
     let precioMultiplicador = 0.75;
     try {
       const { data: configMult } = await supa.from("config_tienda")
@@ -155,7 +150,7 @@ export async function sincronizarPrecios(): Promise<{
       if (configMult?.valor) precioMultiplicador = parseFloat(configMult.valor) || 0.75;
     } catch { /* usar fallback */ }
 
-    // 5. Load all existing variation SKUs in bulk for matching
+    // 7. Load existing variation SKUs
     const existingSkus = new Set<string>();
     offset = 0;
     while (true) {
@@ -166,25 +161,21 @@ export async function sincronizarPrecios(): Promise<{
       offset += 1000;
     }
 
-    // 6. Update prices
+    // 8. Apply updates
     let actualizados = 0;
-    let sinMatch = 0;
-
-    for (const { id, slug, woo } of needsPrice) {
+    for (const { id, woo } of toUpdate) {
       const precioRegular = parseFloat(woo.regular_price || woo.price) || 0;
       const precioVenta = parseFloat(woo.sale_price) || 0;
       const imagenUrl = woo.images?.[0]?.src ?? null;
       const isOferta = precioVenta > 0 && precioVenta < precioRegular;
 
-      // Update product fields
-      const prodUpdates: any = { oferta: isOferta };
+      const prodUpdates: Record<string, unknown> = { oferta: isOferta };
       if (imagenUrl) prodUpdates.imagen_principal_url = imagenUrl;
       await supa.from("productos_padre").update(prodUpdates).eq("id", id);
 
-      // Update or create variation
       if (woo.type === "simple" && woo.sku) {
         const precioB2b = parseFloat((precioRegular * precioMultiplicador).toFixed(2));
-        const precioComparar = precioVenta > 0 && precioVenta < precioRegular ? precioRegular : null;
+        const precioComparar = isOferta ? precioRegular : null;
 
         if (existingSkus.has(woo.sku)) {
           await supa.from("productos_variaciones").update({
@@ -208,11 +199,10 @@ export async function sincronizarPrecios(): Promise<{
           });
         }
       }
-
       actualizados++;
     }
 
-    return { ok: needsPrice.length, actualizados, sinMatch };
+    return { ok: toUpdate.length, actualizados, sinMatch };
   } catch (e) {
     return { ok: 0, actualizados: 0, sinMatch: 0, error: String(e) };
   }
