@@ -112,19 +112,52 @@ export async function diagnosticarProductosMerchant(): Promise<{
 export async function activarVariaciones(ids: string[]): Promise<{
   ok: boolean;
   actualizados: number;
+  insertados: number;
   error?: string;
 }> {
-  if (!ids.length) return { ok: true, actualizados: 0 };
+  if (!ids.length) return { ok: true, actualizados: 0, insertados: 0 };
 
   const supabase = createAdminClient();
+  let totalUpdated = 0;
+  let totalInserted = 0;
 
-  // Activar todas las variaciones de los productos seleccionados
-  const { data, error } = await supabase
+  // 1. Activar variaciones existentes pero inactivas
+  const { data: updated, error: updateError } = await supabase
     .from("productos_variaciones")
     .update({ activa: true })
     .in("producto_padre_id", ids)
+    .eq("activa", false)
     .select("id");
 
-  if (error) return { ok: false, actualizados: 0, error: error.message };
-  return { ok: true, actualizados: data?.length ?? 0 };
+  if (updateError) return { ok: false, actualizados: 0, insertados: 0, error: updateError.message };
+  totalUpdated = updated?.length ?? 0;
+
+  // 2. Para productos sin ninguna variación, insertar una por defecto
+  const { data: existing } = await supabase
+    .from("productos_variaciones")
+    .select("producto_padre_id")
+    .in("producto_padre_id", ids);
+
+  const conVariacion = new Set((existing ?? []).map((r: { producto_padre_id: string }) => r.producto_padre_id));
+  const sinVariacion = ids.filter((id) => !conVariacion.has(id));
+
+  if (sinVariacion.length > 0) {
+    const nuevas = sinVariacion.map((id) => ({
+      producto_padre_id: id,
+      nombre: "Unidad",
+      activa: true,
+      stock: 0,
+      precio_b2c: 0,
+    }));
+
+    const { data: inserted, error: insertError } = await supabase
+      .from("productos_variaciones")
+      .insert(nuevas)
+      .select("id");
+
+    if (insertError) return { ok: false, actualizados: totalUpdated, insertados: 0, error: insertError.message };
+    totalInserted = inserted?.length ?? 0;
+  }
+
+  return { ok: true, actualizados: totalUpdated, insertados: totalInserted };
 }

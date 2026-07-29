@@ -37,7 +37,10 @@ export default function MerchantDiagnostico() {
     startFix(async () => {
       const result = await activarVariaciones(ids);
       if (result.ok) {
-        setFixResult(`✅ ${result.actualizados} variaciones activadas. Ejecuta el diagnóstico de nuevo para verificar.`);
+        const partes = [];
+        if (result.actualizados > 0) partes.push(`${result.actualizados} activadas`);
+        if (result.insertados > 0) partes.push(`${result.insertados} creadas`);
+        setFixResult(`✅ ${partes.join(", ")}. Ejecuta el diagnóstico de nuevo para verificar.`);
       } else {
         setFixResult(`❌ Error: ${result.error}`);
       }
