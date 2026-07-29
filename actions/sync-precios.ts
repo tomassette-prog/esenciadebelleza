@@ -76,12 +76,12 @@ export async function sincronizarPrecios(): Promise<{
     };
 
     // 1. Load ALL Esencia products
-    const esenciaProducts: Array<{ id: string; slug: string; woo_id: number | null }> = [];
+    const esenciaProducts: Array<{ id: string; slug: string; nombre: string; woo_id: number | null }> = [];
     let offset = 0;
     while (true) {
       const { data } = await supa
         .from("productos_padre")
-        .select("id, slug, woo_id")
+        .select("id, slug, nombre, woo_id")
         .range(offset, offset + 999);
       if (!data || data.length === 0) break;
       esenciaProducts.push(...data);
@@ -118,14 +118,13 @@ export async function sincronizarPrecios(): Promise<{
     // 3. Find products that need prices — collect their woo_ids
     const needsPrice = esenciaProducts.filter(ep => !hasValidPrice.has(ep.id));
     const needsPriceWithWooId = needsPrice.filter(ep => ep.woo_id && ep.woo_id > 0);
+    const needsPriceNoWooId = needsPrice.filter(ep => !ep.woo_id || ep.woo_id <= 0);
     const wooIds = [...new Set(needsPriceWithWooId.map(ep => ep.woo_id!))];
 
-    if (wooIds.length === 0) {
-      return { ok: 0, actualizados: 0, sinMatch: 0, error: "No hay productos sin precio con woo_id" };
-    }
-
-    // 4. Fetch ONLY the WC products we need (batch by IDs, max 50 per request with delay)
+    // 4. Fetch WC products by ID (batch by IDs, max 50 per request with delay)
     const wooById = new Map<number, WooProduct>();
+    const wooByName = new Map<string, WooProduct>();
+
     for (let i = 0; i < wooIds.length; i += 50) {
       const batch = wooIds.slice(i, i + 50);
       try {
@@ -134,7 +133,6 @@ export async function sincronizarPrecios(): Promise<{
           for (const wp of batchData) wooById.set(wp.id, wp);
         }
       } catch (e) {
-        // If rate limited, wait and retry once
         await new Promise(r => setTimeout(r, 5000));
         const retry = await fetchWoo(`/products?include=${batch.join(",")}&per_page=100`);
         if (Array.isArray(retry)) {
@@ -144,12 +142,38 @@ export async function sincronizarPrecios(): Promise<{
       await new Promise(r => setTimeout(r, 500));
     }
 
+    // 4b. For products without woo_id, search WC by name
+    for (const ep of needsPriceNoWooId) {
+      try {
+        const searchData = await fetchWoo(`/products?search=${encodeURIComponent(ep.slug)}&per_page=5`);
+        if (Array.isArray(searchData) && searchData.length > 0) {
+          // Try exact name match first, then slug match
+          const exact = searchData.find((wp: WooProduct) =>
+            wp.name.toLowerCase() === ep.nombre?.toLowerCase() ||
+            wp.slug === ep.slug
+          );
+          const match = exact || searchData[0];
+          wooByName.set(ep.id, match);
+        }
+      } catch { /* skip */ }
+      await new Promise(r => setTimeout(r, 300));
+    }
+
     // 5. Match and prepare updates
     const toUpdate: Array<{ id: string; slug: string; woo: WooProduct }> = [];
     let sinMatch = 0;
 
     for (const ep of needsPriceWithWooId) {
       const woo = wooById.get(ep.woo_id!);
+      if (!woo) { sinMatch++; continue; }
+      const precioRegular = parseFloat(woo.regular_price || woo.price) || 0;
+      if (precioRegular <= 0) { sinMatch++; continue; }
+      toUpdate.push({ id: ep.id, slug: ep.slug, woo });
+    }
+
+    // 5b. Add products found by name search
+    for (const ep of needsPriceNoWooId) {
+      const woo = wooByName.get(ep.id);
       if (!woo) { sinMatch++; continue; }
       const precioRegular = parseFloat(woo.regular_price || woo.price) || 0;
       if (precioRegular <= 0) { sinMatch++; continue; }
