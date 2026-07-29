@@ -75,7 +75,7 @@ export function PedidosTable({
       if (result.error) {
         setMensaje(`❌ Error: ${result.error}`);
       } else {
-        setMensaje(`✅ ${result.eliminado}${ids.length > 1 ? "s" : ""} pedido${ids.length > 1 ? "s" : ""} eliminado${ids.length > 1 ? "s" : ""}`);
+        setMensaje(`✅ ${result.eliminados} pedido${result.eliminados > 1 ? "s" : ""} eliminado${result.eliminados > 1 ? "s" : ""}`);
         setSeleccionados(new Set());
       }
       setTimeout(() => setMensaje(null), 4000);
