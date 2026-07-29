@@ -144,11 +144,11 @@ export async function activarVariaciones(ids: string[]): Promise<{
   if (sinVariacion.length > 0) {
     const nuevas = sinVariacion.map((id) => ({
       producto_padre_id: id,
-      sku: `VAR-${id.slice(0, 8)}-default`,
+      sku: `VAR-${crypto.randomUUID().slice(0, 12)}`,
       nombre_variacion: "Unidad",
       activa: true,
       stock: 0,
-      precio_b2c: 0,
+      precio_b2c: 0.01,
     }));
 
     const { data: inserted, error: insertError } = await supabase
@@ -156,7 +156,7 @@ export async function activarVariaciones(ids: string[]): Promise<{
       .insert(nuevas)
       .select("id");
 
-    if (insertError) return { ok: false, actualizados: totalUpdated, insertados: 0, error: insertError.message };
+    if (insertError) return { ok: false, actualizados: totalUpdated, insertados: 0, error: `Insert: ${insertError.message}` };
     totalInserted = inserted?.length ?? 0;
   }
 

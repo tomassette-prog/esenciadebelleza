@@ -44,7 +44,7 @@ export default function MerchantDiagnostico() {
       } else {
         setFixResult(`❌ Error: ${result.error}`);
       }
-      setTimeout(() => setFixResult(null), 8000);
+      setTimeout(() => setFixResult(null), 30000);
     });
   }
 
