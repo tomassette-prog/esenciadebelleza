@@ -112,18 +112,31 @@ export default function AvisoLegalPage() {
           Tercera — Condiciones del contrato
         </h2>
         <p>
-          Como condición para realizar cualquier pedido, el usuario debe proporcionar la información requerida para la correcta realización del envío. La información proporcionada debe ser precisa, completa y actualizada. Una vez efectuada la compra y realizado el pago, Esencia de Belleza remitirá por e-mail una confirmación de que su pedido está siendo procesado. En el plazo más breve posible, siempre antes de 24 horas laborables, se remitirá la confirmación de envío con el número de seguimiento.
+          Como condición para realizar cualquier pedido, el usuario debe proporcionar la información requerida para la correcta realización del envío. La información proporcionada debe ser precisa, completa y actualizada. Una vez efectuada la compra y realizado el pago (a excepción del pago contra reembolso, que no requiere confirmación de pago previa), Esencia de Belleza remitirá por e-mail una confirmación de que su pedido está siendo procesado. En el plazo más breve posible, siempre antes de 24 horas laborables, se remitirá la confirmación de envío con el número de seguimiento.
         </p>
 
         <h2 className="text-xl font-light text-neutral-900 mt-8 mb-3" style={{ fontFamily: "var(--font-cormorant)" }}>
-          Cuarta — IVA y precios
+          Cuarta — Formas de pago
+        </h2>
+        <p>
+          <strong>Contra reembolso:</strong> podrá abonar su compra pagándola al repartidor de la empresa de transportes en el momento de la entrega de la mercancía. Se aplica un suplemento de 3,00 € sobre los gastos de envío estándar. Las compras a contrarembolso implican una responsabilidad por parte del cliente, y el rechazo de un pedido de este tipo puede ser considerado fraude ante un tribunal y exigirse responsabilidades al mismo. Los plazos de entrega para pedidos contra reembolso se computan de inmediato, sin necesidad de confirmación de pago previa.
+        </p>
+        <p>
+          <strong>Tarjeta de débito/crédito:</strong> pago a través de nuestro TPV virtual seguro (Stripe), que garantiza la seguridad y fiabilidad del pago. Aceptamos Visa, Mastercard, American Express, Apple Pay, Google Pay y Bizum.
+        </p>
+        <p>
+          <strong>PayPal:</strong> pago a través de la plataforma PayPal, que ofrece protección al comprador.
+        </p>
+
+        <h2 className="text-xl font-light text-neutral-900 mt-8 mb-3" style={{ fontFamily: "var(--font-cormorant)" }}>
+          Quinta — IVA y precios
         </h2>
         <p>
           El precio de los productos vendidos por Esencia de Belleza incluye el IVA español. Para pedidos con destino a otros países de la Unión Europea, el IVA español podrá ser deducido y se aplicará el tipo impositivo correspondiente al país de destino. Para pedidos fuera de la UE, estarán exentos de IVA en concepto de exportación. Los precios pueden cambiar en cualquier momento sin que ello genere derecho a reembolso retroactivo.
         </p>
 
         <h2 className="text-xl font-light text-neutral-900 mt-8 mb-3" style={{ fontFamily: "var(--font-cormorant)" }}>
-          Quinta — Derecho de desistimiento
+          Sexta — Derecho de desistimiento
         </h2>
         <p>
           Tiene usted derecho a desistir del presente contrato en un plazo de <strong>14 días naturales</strong> sin necesidad de justificación, contados desde la fecha de entrega del pedido. Para ejercer este derecho, notifíquenos su decisión a{" "}
@@ -135,14 +148,14 @@ export default function AvisoLegalPage() {
         </p>
 
         <h2 className="text-xl font-light text-neutral-900 mt-8 mb-3" style={{ fontFamily: "var(--font-cormorant)" }}>
-          Sexta — Garantías legales
+          Séptima — Garantías legales
         </h2>
         <p>
           En caso de producto defectuoso, Esencia de Belleza procederá, según corresponda, a la reparación, sustitución, rebaja del precio o resolución del contrato, gestiones que serán gratuitas para el consumidor. El vendedor responde de las faltas de conformidad que se manifiesten en un plazo de <strong>dos años</strong> desde la entrega.
         </p>
 
         <h2 className="text-xl font-light text-neutral-900 mt-8 mb-3" style={{ fontFamily: "var(--font-cormorant)" }}>
-          Séptima — Confidencialidad y protección de datos
+          Octava — Confidencialidad y protección de datos
         </h2>
         <p>
           Toda la información y documentación utilizada durante la contratación tiene carácter confidencial. Esencia de Belleza se compromete al cumplimiento de su obligación de secreto de los datos de carácter personal y de adoptar las medidas de seguridad exigidas por la legislación aplicable.
