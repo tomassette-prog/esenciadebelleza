@@ -60,6 +60,10 @@ export default function EnviosPage() {
           </table>
         </div>
 
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm text-blue-800 mt-4">
+          <strong>Contra reembolso:</strong> disponible para toda España peninsular y Baleares. Se aplica un suplemento de 3,00 € sobre los gastos de envío estándar. Pagas en efectivo al repartidor cuando recibas tu pedido.
+        </div>
+
         <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-sm text-amber-800">
           <strong>Zonas sin servicio de envío:</strong> actualmente no realizamos envíos a Canarias, Ceuta, Melilla, Andorra ni Gibraltar. Pedimos disculpas por las molestias.
         </div>

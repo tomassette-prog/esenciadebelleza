@@ -6,7 +6,7 @@ import { generarNumOper, generarCamposCeca } from "@/lib/cecabank";
 import { stripe } from "@/lib/stripe";
 import type { LineaCarrito, LineaPack } from "@/context/CarritoContext";
 
-import { calcularGastoEnvio } from "@/lib/envio";
+import { calcularGastoEnvio, SUPLEMENTO_CONTRAREEMBOLSO } from "@/lib/envio";
 import { enviarNotificacionPedido } from "@/lib/email";
 
 // ── Convertir packs a líneas de pedido (explota cada pack en sus componentes) ─
@@ -425,11 +425,15 @@ export async function crearPedidoWooCommerce(params: {
   ceca_num_oper?: string;
   notas?:         string;
   gasto_envio?:   number;
+  metodo_pago?:   string;   // "contrarembolso" → cod
+  set_paid?:      boolean;  // false para contrarembolso
+  status?:        string;   // "on-hold" para contrarembolso
 }): Promise<{ wc_order_id: number | null; error: string | null }> {
   const {
     email, nombre, apellidos, telefono,
     direccion, ciudad, provincia, codigo_postal,
     lineas, ceca_num_oper, notas, gasto_envio = 0,
+    metodo_pago, set_paid = true, status = "processing",
   } = params;
 
   const WOO_URL = process.env.WOO_URL!;
@@ -438,10 +442,10 @@ export async function crearPedidoWooCommerce(params: {
   const auth    = Buffer.from(`${CK}:${CS}`).toString("base64");
 
   const body = {
-    payment_method:       "cecabank_gateway",
-    payment_method_title: "Tarjeta",
-    set_paid:             true,
-    status:               "processing",
+    payment_method:       metodo_pago === "contrarembolso" ? "cod" : "cecabank_gateway",
+    payment_method_title: metodo_pago === "contrarembolso" ? "Contra reembolso" : "Tarjeta",
+    set_paid,
+    status,
     billing: {
       first_name: nombre, last_name: apellidos,
       address_1: direccion, city: ciudad,
@@ -692,4 +696,116 @@ export async function confirmarPedidoStripe(
   });
 
   return { ok: true, wc_order_id: wc_order_id ?? undefined, email: pedido.email_cliente, pedidoId: pedido.id };
+}
+
+// ── Crear pedido contra reembolso ──────────────────────────────────────────
+export async function crearPedidoContrarembolso(
+  lineas: LineaCarrito[],
+  packs: LineaPack[],
+  datosEnvio: {
+    email: string; nombre: string; apellidos: string; telefono: string;
+    direccion: string; ciudad: string; provincia: string; codigo_postal: string;
+    notas?: string;
+  }
+): Promise<{ ok: boolean; pedidoId?: string; wc_order_id?: number; error?: string }> {
+  if (!lineas.length && !packs.length) return { ok: false, error: "El carrito está vacío" };
+
+  const supabase   = createAdminClient();
+  const authClient = await createClient();
+  const { data: { user } } = await authClient.auth.getUser();
+
+  let tipoPrecio: "b2c" | "b2b" = "b2c";
+  if (user) {
+    const { data: perfil } = await authClient
+      .from("perfiles_usuario")
+      .select("b2b_aprobado, tipo_cliente")
+      .eq("id", user.id)
+      .single();
+    if (perfil?.tipo_cliente === "b2b" && perfil?.b2b_aprobado === true) tipoPrecio = "b2b";
+  }
+
+  const totalProductos = lineas.reduce((acc, l) => acc + l.precio * l.cantidad, 0)
+                       + packs.reduce((acc, p) => acc + p.precio * p.cantidad, 0);
+  const gastoEnvioBase = calcularGastoEnvio(totalProductos, datosEnvio.provincia);
+
+  if (gastoEnvioBase === -1) return { ok: false, error: "No realizamos envíos a esa provincia." };
+
+  const gastoEnvio = gastoEnvioBase + SUPLEMENTO_CONTRAREEMBOLSO;
+  const totalFinal = totalProductos + gastoEnvio;
+
+  // 1. Guardar pedido en Supabase
+  const { data: pedido, error: errPedido } = await supabase
+    .from("pedidos")
+    .insert({
+      usuario_id:       user?.id ?? null,
+      estado:           "pagado",
+      subtotal:         totalProductos,
+      gastos_envio:     gastoEnvio,
+      total:            totalFinal,
+      tipo_precio:      tipoPrecio,
+      metodo_pago:      "contrarembolso",
+      email_cliente:    datosEnvio.email,
+      direccion_envio:  datosEnvio as unknown as Record<string, unknown>,
+    })
+    .select("id")
+    .single();
+
+  if (errPedido || !pedido) {
+    console.error("[contrarembolso] Error:", errPedido);
+    return { ok: false, error: "No se pudo guardar el pedido." };
+  }
+
+  // 2. Guardar líneas
+  const { lineasPedido, lineasWoo } = explotarPacks(packs);
+
+  for (const l of lineas) {
+    await supabase.from("pedidos_lineas").insert({
+      pedido_id: pedido.id, variacion_id: l.variacion_id, sku: l.sku,
+      nombre_producto: l.nombre, nombre_variacion: l.nombre_variacion,
+      cantidad: l.cantidad, precio_unitario: l.precio,
+      subtotal: l.precio * l.cantidad, imagen_url: l.imagen_url,
+    });
+  }
+  for (const lp of lineasPedido) {
+    await supabase.from("pedidos_lineas").insert({
+      pedido_id: pedido.id, variacion_id: lp.variacion_id, sku: lp.sku,
+      nombre_producto: lp.nombre, nombre_variacion: lp.nombre_variacion,
+      cantidad: lp.cantidad, precio_unitario: lp.precio_unitario,
+      subtotal: lp.subtotal, imagen_url: lp.imagen_url,
+    });
+  }
+
+  // 3. Crear pedido en WooCommerce (on-hold, pago en destino)
+  const todasLineasWoo = [
+    ...lineas.map((l) => ({ sku: l.sku, cantidad: l.cantidad })),
+    ...lineasWoo,
+  ];
+
+  const { wc_order_id } = await crearPedidoWooCommerce({
+    email: datosEnvio.email, nombre: datosEnvio.nombre,
+    apellidos: datosEnvio.apellidos, telefono: datosEnvio.telefono,
+    direccion: datosEnvio.direccion, ciudad: datosEnvio.ciudad,
+    provincia: datosEnvio.provincia, codigo_postal: datosEnvio.codigo_postal,
+    lineas: todasLineasWoo as unknown as LineaCarrito[],
+    notas: datosEnvio.notas, gasto_envio: gastoEnvio,
+    metodo_pago: "contrarembolso", set_paid: false, status: "on-hold",
+  });
+
+  if (wc_order_id) {
+    await supabase.from("pedidos").update({ woo_order_id: wc_order_id }).eq("id", pedido.id);
+  }
+
+  // 4. Email notificación
+  void enviarNotificacionPedido({
+    pedidoId: pedido.id, email: datosEnvio.email,
+    nombre: datosEnvio.nombre, apellidos: datosEnvio.apellidos,
+    total: totalFinal, gastoEnvio, metodoPago: "Contra reembolso",
+    tipoPrecio, provincia: datosEnvio.provincia, ciudad: datosEnvio.ciudad,
+    lineas: lineas.map((l) => ({
+      nombre: l.nombre, nombre_variacion: l.nombre_variacion,
+      cantidad: l.cantidad, precio: l.precio,
+    })),
+  });
+
+  return { ok: true, pedidoId: pedido.id, wc_order_id: wc_order_id ?? undefined };
 }

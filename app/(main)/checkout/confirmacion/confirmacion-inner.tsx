@@ -24,10 +24,20 @@ export default function ConfirmacionInner() {
     const numOper   = searchParams.get("num_oper")    ?? "";
     const sessionId = searchParams.get("session_id")  ?? "";
     const resultado = searchParams.get("resultado")   ?? "";
+    const metodo    = searchParams.get("metodo")      ?? "";
+    const pedidoId  = searchParams.get("pedido")      ?? "";
 
     // Pago cancelado
     if (resultado === "ko") {
       setEstado("error");
+      return;
+    }
+
+    // ── Flujo Contra reembolso ──────────────────────────────────────────────
+    if (metodo === "contrarembolso" && pedidoId) {
+      vaciar();
+      setOrderData({ orderId: pedidoId, email: "" });
+      setEstado("exito");
       return;
     }
 

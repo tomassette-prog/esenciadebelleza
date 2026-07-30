@@ -4,7 +4,8 @@ import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useCarrito } from "@/context/CarritoContext";
-import { calcularGastoEnvio, getZonaEnvio } from "@/lib/envio";
+import { calcularGastoEnvio, getZonaEnvio, SUPLEMENTO_CONTRAREEMBOLSO } from "@/lib/envio";
+import { crearPedidoContrarembolso } from "@/actions/checkout";
 import PaypalSmartButtons from "@/components/checkout/PaypalSmartButtons";
 
 type Paso = "direccion" | "pago";
@@ -42,6 +43,7 @@ export function CheckoutCliente({
   const [gastoEnvioConf, setGastoEnvioConf] = useState(0);
   const [cargando, setCargando]       = useState(false);
   const [cargandoStripe, setCargandoStripe] = useState(false);
+  const [cargandoCR, setCargandoCR]         = useState(false);
   const [error, setError]                 = useState<string | null>(null);
 
   const [datos, setDatos] = useState<DatosEnvio>({
@@ -107,6 +109,23 @@ export function CheckoutCliente({
     } catch {
       setError("Error al conectar con Stripe");
       setCargandoStripe(false);
+    }
+  }
+
+  async function pagarContrarembolso() {
+    setCargandoCR(true);
+    setError(null);
+    try {
+      const result = await crearPedidoContrarembolso(lineas, packs, datos);
+      if (result.ok) {
+        window.location.href = `/checkout/confirmacion?metodo=contrarembolso&pedido=${result.pedidoId}&resultado=ok`;
+      } else {
+        setError(result.error ?? "Error al crear el pedido");
+        setCargandoCR(false);
+      }
+    } catch {
+      setError("Error al procesar el pedido");
+      setCargandoCR(false);
     }
   }
 
@@ -376,6 +395,37 @@ export function CheckoutCliente({
               datosEnvio={datos}
               disabled={cargando}
             />
+
+            {/* ── Contra reembolso ── */}
+            <div className="mt-4 pt-4 border-t border-neutral-200">
+              <button
+                onClick={pagarContrarembolso}
+                disabled={cargandoCR}
+                className="group w-full py-4 px-6 bg-white border-2 border-neutral-300 text-neutral-900 text-sm tracking-wide hover:border-neutral-900 disabled:opacity-50 transition-all flex items-center justify-between rounded-lg"
+              >
+                <div className="flex items-center gap-3">
+                  <svg className="w-5 h-5 text-neutral-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+                      d="M2.25 18.75a60.07 60.07 0 0115.797 2.101c.727.198 1.453-.342 1.453-1.096V18.75M3.75 4.5v.75A.75.75 0 013 6h-.75m0 0v-.375c0-.621.504-1.125 1.125-1.125H20.25M2.25 6v9m18-10.5v.75c0 .414.336.75.75.75h.75m-1.5-1.5h.375c.621 0 1.125.504 1.125 1.125v9.75c0 .621-.504 1.125-1.125 1.125h-.375m1.5-1.5H21a.75.75 0 00-.75.75v.75m0 0H3.75m0 0h-.375a1.125 1.125 0 01-1.125-1.125V15m1.5 1.5v-.75A.75.75 0 003 15h-.75M15 10.5a3 3 0 11-6 0 3 3 0 016 0zm3 0h.008v.008H18V10.5zm-12 0h.008v.008H6V10.5z" />
+                  </svg>
+                  <span className="font-medium">
+                    {cargandoCR ? "Procesando…" : "Contra reembolso"}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-neutral-500">+{SUPLEMENTO_CONTRAREEMBOLSO.toFixed(2)} € suplemento</span>
+                  <span className="text-lg font-light">
+                    {(totalPrecio + gastoEnvioConf + SUPLEMENTO_CONTRAREEMBOLSO || totalPrecio + gastoEnvio + SUPLEMENTO_CONTRAREEMBOLSO).toLocaleString("es-ES", { style: "currency", currency: "EUR" })}
+                  </span>
+                  <svg className="w-4 h-4 opacity-50 group-hover:opacity-100 transition-opacity" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                </div>
+              </button>
+              <p className="text-[11px] text-neutral-400 mt-2 text-center">
+                Pagas en efectivo al repartidor cuando recibas tu pedido
+              </p>
+            </div>
 
             {error && (
               <div className="mt-4 p-3 bg-red-50 border border-red-200 text-red-700 text-sm rounded">{error}</div>
