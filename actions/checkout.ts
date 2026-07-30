@@ -707,7 +707,7 @@ export async function crearPedidoContrarembolso(
     direccion: string; ciudad: string; provincia: string; codigo_postal: string;
     notas?: string;
   }
-): Promise<{ ok: boolean; pedidoId?: string; wc_order_id?: number; error?: string }> {
+): Promise<{ ok: boolean; pedidoId?: string; error?: string }> {
   if (!lineas.length && !packs.length) return { ok: false, error: "El carrito está vacío" };
 
   const supabase   = createAdminClient();
@@ -756,7 +756,7 @@ export async function crearPedidoContrarembolso(
   }
 
   // 2. Guardar líneas
-  const { lineasPedido, lineasWoo } = explotarPacks(packs);
+  const { lineasPedido } = explotarPacks(packs);
 
   for (const l of lineas) {
     await supabase.from("pedidos_lineas").insert({
@@ -775,25 +775,8 @@ export async function crearPedidoContrarembolso(
     });
   }
 
-  // 3. Crear pedido en WooCommerce (on-hold, pago en destino)
-  const todasLineasWoo = [
-    ...lineas.map((l) => ({ sku: l.sku, cantidad: l.cantidad })),
-    ...lineasWoo,
-  ];
-
-  const { wc_order_id } = await crearPedidoWooCommerce({
-    email: datosEnvio.email, nombre: datosEnvio.nombre,
-    apellidos: datosEnvio.apellidos, telefono: datosEnvio.telefono,
-    direccion: datosEnvio.direccion, ciudad: datosEnvio.ciudad,
-    provincia: datosEnvio.provincia, codigo_postal: datosEnvio.codigo_postal,
-    lineas: todasLineasWoo as unknown as LineaCarrito[],
-    notas: datosEnvio.notas, gasto_envio: gastoEnvio,
-    metodo_pago: "contrarembolso", set_paid: false, status: "on-hold",
-  });
-
-  if (wc_order_id) {
-    await supabase.from("pedidos").update({ woo_order_id: wc_order_id }).eq("id", pedido.id);
-  }
+  // 3. NO crear en WooCommerce aquí — el admin usará "Lanzar pedido" cuando revise el pedido
+  //    Esto sigue el mismo flujo que Stripe/Cecabank: pedido en Supabase → admin revisa → envía a depeluqueria
 
   // 4. Email notificación
   void enviarNotificacionPedido({
@@ -807,5 +790,5 @@ export async function crearPedidoContrarembolso(
     })),
   });
 
-  return { ok: true, pedidoId: pedido.id, wc_order_id: wc_order_id ?? undefined };
+  return { ok: true, pedidoId: pedido.id };
 }

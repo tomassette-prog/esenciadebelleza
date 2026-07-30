@@ -96,11 +96,19 @@ export async function lanzarPedidoWoo(
   const refPago = (pedido.stripe_payment_id ?? pedido.id).toString().slice(0, 20).toUpperCase();
 
   // Nota clara para el almacén de depeluqueriaproductos
+  const esContrareembolso = (pedido.metodo_pago ?? "").toLowerCase().includes("contrarembolso");
   const notaCliente = [
     `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
-    `PEDIDO DESDE ESENCIA DE BELLEZA`,
+    esContrareembolso
+      ? `⚠️  PEDIDO CONTRA REEMBOLSO — COBRAR AL ENTREGAR  ⚠️`
+      : `PEDIDO DESDE ESENCIA DE BELLEZA`,
     `Ref. pago: ${refPago}`,
     `Método pago: ${(pedido.metodo_pago ?? "—").toUpperCase()}`,
+    ...(esContrareembolso
+      ? [``, `🔴 ATENCIÓN: Este pedido debe cobrarse en destino.`,
+         `   Total a cobrar: ${pedido.total?.toFixed(2)} € (IVA incluido)`,
+         `   Incluye suplemento contrarembolso en gastos de envío.`]
+      : []),
     ``,
     `CLIENTE:`,
     `  ${dir.nombre ?? ""} ${dir.apellidos ?? ""}`,
