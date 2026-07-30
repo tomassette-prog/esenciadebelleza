@@ -5,6 +5,7 @@ export const dynamic = "force-static";
 export const metadata: Metadata = {
   title: "Aviso Legal",
   description: "Aviso legal y condiciones generales de uso y contratación de Esencia de Belleza.",
+  alternates: { canonical: "https://esenciadebelleza.es/aviso-legal" },
 };
 
 export default function AvisoLegalPage() {

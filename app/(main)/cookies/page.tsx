@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 export const metadata: Metadata = {
   title: "Política de Cookies",
   description: "Política de cookies de Esencia de Belleza. Información sobre el uso de cookies conforme al RGPD.",
+  alternates: { canonical: "https://esenciadebelleza.es/cookies" },
 };
 
 export default function CookiesPage() {

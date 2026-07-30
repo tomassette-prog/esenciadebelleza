@@ -4,6 +4,7 @@ export const metadata: Metadata = {
   title: "Sobre Nosotros",
   description:
     "Conoce Esencia de Belleza, tienda especializada en productos profesionales de peluquería, estética y perfumería con precios especiales para profesionales del sector.",
+  alternates: { canonical: "https://esenciadebelleza.es/sobre-nosotros" },
 };
 
 export default function SobreNosotrosPage() {

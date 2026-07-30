@@ -236,6 +236,18 @@ const nextConfig = {
         destination: "/aviso-legal",
         permanent: true,
       },
+      // Productos con slug antiguo (promociones eliminadas)
+      {
+        source: "/productos/estetica/cremas-corporales/alan-coar-leche-regeneradora-especial-125ml-3x2",
+        destination: "/productos/estetica/cremas-corporales/alan-coar-leche-regeneradora-especial-125ml",
+        permanent: true,
+      },
+      // Producto duplicado en categoría incorrecta → redirigir al correcto
+      {
+        source: "/productos/estetica/cremas-corporales/armaf-beach-party-eau-de-parfum-100ml",
+        destination: "/productos/perfumeria/eau-de-parfum/armaf-beach-party-eau-de-parfum-100ml-2",
+        permanent: true,
+      },
     ];
   },
 

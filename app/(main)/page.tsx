@@ -18,6 +18,7 @@ export const metadata: Metadata = {
   description:
     "Tienda online de productos profesionales de peluquería, estética y perfumería. Precios para particulares y tarifas especiales para profesionales. Envío rápido en España.",
   robots: { index: true, follow: true },
+  alternates: { canonical: "https://esenciadebelleza.es" },
 };
 
 export default async function HomePage() {

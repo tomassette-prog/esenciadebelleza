@@ -11,6 +11,7 @@ export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
   title: "Packs de regalo",
   description: "Descubre nuestros packs de productos de peluquería y estética, ideales para regalo. Ahorra comprando en pack.",
+  alternates: { canonical: "https://esenciadebelleza.es/packs" },
 };
 
 interface ProductoPack {

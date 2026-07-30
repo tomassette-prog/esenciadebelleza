@@ -151,14 +151,31 @@ export function buildProductJsonLd(
     description,
     ...(imagenPrincipal ? { image: imagenPrincipal } : {}),
     ...(marcaNombre ? { brand: { "@type": "Brand", name: marcaNombre } } : {}),
-    aggregateRating: {
-      "@type": "AggregateRating",
-      ratingValue: aggregate?.valoracion_media.toFixed(1) ?? "0",
-      reviewCount: aggregate?.total_resenas ?? 0,
-      bestRating: "5",
-      worstRating: "1",
-    },
+    // Solo incluir aggregateRating si hay reseñas reales (Google rechaza ratingValue "0")
+    ...(aggregate && aggregate.total_resenas > 0
+      ? {
+          aggregateRating: {
+            "@type": "AggregateRating",
+            ratingValue: aggregate.valoracion_media.toFixed(1),
+            reviewCount: aggregate.total_resenas,
+            bestRating: "5",
+            worstRating: "1",
+          },
+        }
+      : {}),
     offers: (() => {
+      // Si no hay variaciones, emitir offer genérica OutOfStock (evita "missing availability" en MC)
+      if (offers.length === 0) {
+        return {
+          "@type": "Offer",
+          price: "0",
+          priceCurrency: "EUR",
+          availability: "https://schema.org/OutOfStock",
+          seller: { "@type": "Organization", name: SITE_NAME },
+          hasMerchantReturnPolicy: RETURN_POLICY,
+          shippingDetails: SHIPPING_DETAILS,
+        };
+      }
       if (offers.length === 1) return offers[0];
       const precios = producto.variaciones.map((v) => v.precio_b2c);
       const lowPrice = Math.min(...precios).toFixed(2);

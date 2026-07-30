@@ -10,6 +10,7 @@ export const revalidate = 0;
 export const metadata: Metadata = {
   title: "Ofertas",
   description: "Productos en oferta con los mejores precios. Descuentos en marcas profesionales de peluquería, estética y perfumería.",
+  alternates: { canonical: "https://esenciadebelleza.es/ofertas" },
 };
 
 function toProductoCatalogo(p: any): ProductoCatalogo {
