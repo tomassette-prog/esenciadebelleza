@@ -154,6 +154,20 @@ export default function DetallePedidoClient({ pedido }: { pedido: Pedido }) {
         </div>
       )}
 
+      {/* Banner contrarembolso */}
+      {(pedido.metodo_pago ?? "").toLowerCase().includes("contrarembolso") && (
+        <div className="bg-amber-50 border-2 border-amber-400 rounded-xl p-4 flex items-center gap-3">
+          <span className="text-2xl">💵</span>
+          <div>
+            <p className="font-bold text-amber-900 text-lg">PEDIDO CONTRA REEMBOLSO</p>
+            <p className="text-amber-700 text-sm">
+              El cliente pagará <strong>{pedido.total.toFixed(2)} €</strong> en efectivo al repartidor.
+              Gastos de envío incluyen suplemento contrarembolso.
+            </p>
+          </div>
+        </div>
+      )}
+
       <div className="grid md:grid-cols-2 gap-6">
         {/* Datos del cliente */}
         <div className="bg-white rounded-xl shadow p-5 space-y-1">
@@ -165,7 +179,9 @@ export default function DetallePedidoClient({ pedido }: { pedido: Pedido }) {
           <p className="text-gray-500 text-sm">{pedido.email_cliente}</p>
           <hr className="my-2"/>
           <p className="text-xs text-gray-400">Ref. pago: <span className="font-mono text-gray-600">{refPago}</span></p>
-          <p className="text-xs text-gray-400">Método: <span className="text-gray-600">{pedido.metodo_pago ?? "—"}</span></p>
+          <p className="text-xs text-gray-400">Método: <span className={`font-medium ${(pedido.metodo_pago ?? "").toLowerCase().includes("contrarembolso") ? "text-amber-700" : "text-gray-600"}`}>
+            {pedido.metodo_pago === "contrarembolso" ? "💵 Contra reembolso" : (pedido.metodo_pago ?? "—")}
+          </span></p>
         </div>
 
         {/* Resumen económico */}

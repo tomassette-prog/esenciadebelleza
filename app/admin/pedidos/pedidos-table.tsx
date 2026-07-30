@@ -15,6 +15,7 @@ interface Pedido {
   woo_estado: string | null;
   created_at: string;
   direccion_envio: Record<string, string> | null;
+  metodo_pago: string | null;
 }
 
 interface Estilos { label: string; color: string }
@@ -187,8 +188,13 @@ export function PedidosTable({
                     </div>
                   </td>
                   <td className="px-4 py-3">
-                    <div className="font-medium text-gray-900">
+                    <div className="font-medium text-gray-900 flex items-center gap-2">
                       {dir.nombre} {dir.apellidos}
+                      {p.metodo_pago?.toLowerCase().includes("contrarembolso") && (
+                        <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300">
+                          💵 CR
+                        </span>
+                      )}
                     </div>
                     <div className="text-gray-400 text-xs">{p.email_cliente}</div>
                   </td>

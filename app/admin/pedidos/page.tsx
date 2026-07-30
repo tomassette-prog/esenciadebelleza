@@ -46,6 +46,7 @@ export default async function AdminPedidosPage({
     woo_estado:      p.woo_estado as string | null,
     created_at:      p.created_at as string,
     direccion_envio: p.direccion_envio as Record<string, string> | null,
+    metodo_pago:     p.metodo_pago as string | null,
   }));
 
   return (
