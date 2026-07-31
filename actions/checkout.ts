@@ -63,6 +63,21 @@ export async function iniciarPagoCeca(
   const authClient = await createClient();
   const { data: { user } } = await authClient.auth.getUser();
 
+  // ── Validar precios contra la base de datos ──
+  const variacionIds = lineas.map((l) => l.variacion_id).filter(Boolean);
+  if (variacionIds.length > 0) {
+    const { data: dbVars } = await supabase
+      .from("productos_variaciones")
+      .select("id, precio_b2c, activa")
+      .in("id", variacionIds);
+    const varsMap = new Map((dbVars ?? []).map((v) => [v.id, v]));
+    for (const l of lineas) {
+      const dbVar = varsMap.get(l.variacion_id);
+      if (!dbVar || !dbVar.activa) return { gatewayUrl: null, campos: null, gastoEnvio: 0, error: `"${l.nombre}" ya no está disponible.` };
+      if (Math.abs(l.precio - dbVar.precio_b2c) > 0.02) return { gatewayUrl: null, campos: null, gastoEnvio: 0, error: `El precio de "${l.nombre}" ha cambiado. Actualiza la página.` };
+    }
+  }
+
   // Detectar si el usuario es profesional B2B aprobado
   let tipoPrecio: "b2c" | "b2b" = "b2c";
   if (user) {
@@ -282,6 +297,21 @@ export async function iniciarPagoWooCommerce(
   const supabase   = createAdminClient();
   const authClient = await createClient();
   const { data: { user } } = await authClient.auth.getUser();
+
+  // ── Validar precios contra la base de datos ──
+  const variacionIds = lineas.map((l) => l.variacion_id).filter(Boolean);
+  if (variacionIds.length > 0) {
+    const { data: dbVars } = await supabase
+      .from("productos_variaciones")
+      .select("id, precio_b2c, activa")
+      .in("id", variacionIds);
+    const varsMap = new Map((dbVars ?? []).map((v) => [v.id, v]));
+    for (const l of lineas) {
+      const dbVar = varsMap.get(l.variacion_id);
+      if (!dbVar || !dbVar.activa) return { pagoUrl: null, pedidoId: null, gastoEnvio: 0, error: `"${l.nombre}" ya no está disponible.` };
+      if (Math.abs(l.precio - dbVar.precio_b2c) > 0.02) return { pagoUrl: null, pedidoId: null, gastoEnvio: 0, error: `El precio de "${l.nombre}" ha cambiado. Actualiza la página.` };
+    }
+  }
 
   let tipoPrecio: "b2c" | "b2b" = "b2c";
   if (user) {
@@ -508,6 +538,26 @@ export async function iniciarPagoStripe(
   const supabase   = createAdminClient();
   const authClient = await createClient();
   const { data: { user } } = await authClient.auth.getUser();
+
+  // ── Validar precios contra la base de datos (anti-precio-incorrecto) ──
+  const variacionIds = lineas.map((l) => l.variacion_id).filter(Boolean);
+  if (variacionIds.length > 0) {
+    const { data: dbVars } = await supabase
+      .from("productos_variaciones")
+      .select("id, precio_b2c, precio_b2b, activa")
+      .in("id", variacionIds);
+    const varsMap = new Map((dbVars ?? []).map((v) => [v.id, v]));
+    for (const l of lineas) {
+      const dbVar = varsMap.get(l.variacion_id);
+      if (!dbVar || !dbVar.activa) {
+        return { url: null, error: `"${l.nombre}" ya no está disponible.` };
+      }
+      const precioEsperado = dbVar.precio_b2c;
+      if (Math.abs(l.precio - precioEsperado) > 0.02) {
+        return { url: null, error: `El precio de "${l.nombre}" ha cambiado. Actualiza la página e inténtalo de nuevo.` };
+      }
+    }
+  }
 
   const totalProductos = lineas.reduce((acc, l) => acc + l.precio * l.cantidad, 0)
                        + packs.reduce((acc, p) => acc + p.precio * p.cantidad, 0);

@@ -83,10 +83,11 @@ export default async function MarcaPage({ params }: PageProps) {
     .from("productos_padre")
     .select(`
       id, nombre, slug, categoria, subcategoria, imagen_principal_url, seo_description,
-      productos_variaciones ( precio_b2c )
+      productos_variaciones!inner ( precio_b2c, activa )
     `)
     .eq("marca_id", marca.id)
     .eq("activo", true)
+    .eq("productos_variaciones.activa", true)
     .order("nombre");
 
   const breadcrumbJsonLd = buildBreadcrumbJsonLdItems([

@@ -78,27 +78,38 @@ export async function getProductosNuevos(): Promise<{ productos: ProductoNuevo[]
       id, nombre, slug, categoria, subcategoria, imagen_principal_url,
       woo_id, activo, created_at,
       marca:marcas(nombre),
-      variaciones:productos_variaciones(sku, precio_b2c)
+      variaciones:productos_variaciones!inner(sku, precio_b2c, activa)
     `)
+    .eq("variaciones.activa", true)
     .gt("created_at", clearedAt)
     .order("created_at", { ascending: false });
 
   if (error) return { productos: [], clearedAt, error: error.message };
 
-  const mapped = (productos ?? []).map((p: any) => ({
-    id: p.id,
-    nombre: p.nombre,
-    slug: p.slug,
-    categoria: p.categoria,
-    subcategoria: p.subcategoria,
-    imagen_principal_url: p.imagen_principal_url,
-    woo_id: p.woo_id,
-    activo: p.activo,
-    created_at: p.created_at,
-    marca_nombre: p.marca?.nombre ?? null,
-    precio_b2c: p.variaciones?.[0]?.precio_b2c ?? null,
-    sku: p.variaciones?.[0]?.sku ?? null,
-  }));
+  const mapped = (productos ?? []).map((p: any) => {
+    // Preferir variación con precio válido más alto (evita precios dummy de 0.01)
+    const vars: any[] = p.variaciones ?? [];
+    const bestVar = vars
+      .filter((v: any) => v.precio_b2c != null && v.precio_b2c > 0.1)
+      .sort((a: any, b: any) => b.precio_b2c - a.precio_b2c)[0]
+      ?? vars[0]
+      ?? null;
+
+    return {
+      id: p.id,
+      nombre: p.nombre,
+      slug: p.slug,
+      categoria: p.categoria,
+      subcategoria: p.subcategoria,
+      imagen_principal_url: p.imagen_principal_url,
+      woo_id: p.woo_id,
+      activo: p.activo,
+      created_at: p.created_at,
+      marca_nombre: p.marca?.nombre ?? null,
+      precio_b2c: bestVar?.precio_b2c ?? null,
+      sku: bestVar?.sku ?? null,
+    };
+  });
 
   return { productos: mapped, clearedAt };
 }

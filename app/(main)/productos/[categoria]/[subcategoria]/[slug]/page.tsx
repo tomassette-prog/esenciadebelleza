@@ -64,8 +64,8 @@ export async function generateMetadata({ params, searchParams }: PageProps): Pro
 
   const variacionSeleccionada = tono
     ? producto.variaciones?.find(
-        (v: { nombre_variacion: string }) =>
-          v.nombre_variacion.toLowerCase() === decodeURIComponent(tono).toLowerCase()
+        (v: { nombre_variacion: string; activa: boolean; precio_b2c: number }) =>
+          v.activa && v.precio_b2c > 0 && v.nombre_variacion.toLowerCase() === decodeURIComponent(tono).toLowerCase()
       ) ?? null
     : null;
 
@@ -110,13 +110,19 @@ export default async function ProductoPage({ params, searchParams }: PageProps) 
     getResenaAggregate(p.id),
   ]);
 
-  // Variación activa por query param o primera disponible
+  // Solo considerar variaciones activas con precio válido
+  const varsActivas = p.variaciones.filter((v) => v.activa && v.precio_b2c > 0);
+
+  // Variación activa por query param o primera disponible con precio válido
   const variacionActiva =
     (tono
-      ? p.variaciones.find(
+      ? varsActivas.find(
           (v) => v.nombre_variacion.toLowerCase() === decodeURIComponent(tono).toLowerCase()
         )
-      : null) ?? p.variaciones.find((v) => v.activa) ?? p.variaciones[0] ?? null;
+      : null)
+    ?? varsActivas.sort((a, b) => b.precio_b2c - a.precio_b2c)[0]
+    ?? p.variaciones.find((v) => v.activa)
+    ?? null;
 
   // URL canónica siempre apunta al padre — evita duplicate content
   const canonicalUrl = `https://esenciadebelleza.es/productos/${slugifyCategoria(categoria)}/${slugifyCategoria(subcategoria)}/${slug}`;

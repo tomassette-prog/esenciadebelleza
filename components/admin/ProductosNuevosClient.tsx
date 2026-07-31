@@ -13,6 +13,7 @@ import {
   listarMarcasParaSelect,
   type ProductoNuevo,
 } from "@/actions/productos-nuevos";
+import { sincronizarPrecios } from "@/actions/sync-precios";
 
 import type { CategoriaPair } from "@/lib/category-suggester";
 
@@ -87,6 +88,15 @@ export function ProductosNuevosClient({ initialProductos, clearedAt, initialErro
       if (res.error) { setError(res.error); return; }
       setProductos([]); setSelected(new Set());
       setSuccess("Todos los productos marcados como verificados");
+    });
+  }
+
+  function handleSyncPrices() {
+    if (!confirm("¿Sincronizar precios desde WooCommerce? Se corregirán los precios incorrectos.")) return;
+    startTransition(async () => {
+      const res = await sincronizarPrecios();
+      if (res.error) { setError(res.error); return; }
+      setSuccess(`Precios sincronizados: ${res.actualizados} actualizados, ${res.sinMatch} sin coincidencia. Recarga la página para ver los cambios.`);
     });
   }
 
@@ -193,10 +203,16 @@ export function ProductosNuevosClient({ initialProductos, clearedAt, initialErro
           <p className="text-xs text-neutral-400 mt-1">Importados desde {clearedDate} · <strong>{productos.length}</strong> productos</p>
         </div>
         {productos.length > 0 && (
-          <button onClick={handleClear} disabled={isPending}
-            className="px-5 py-2 bg-green-700 text-white text-xs tracking-widest uppercase hover:bg-green-800 disabled:opacity-40 transition-colors">
-            Marcar como verificados
-          </button>
+          <div className="flex gap-2">
+            <button onClick={handleSyncPrices} disabled={isPending}
+              className="px-5 py-2 bg-blue-700 text-white text-xs tracking-widest uppercase hover:bg-blue-800 disabled:opacity-40 transition-colors">
+              🔄 Sincronizar precios
+            </button>
+            <button onClick={handleClear} disabled={isPending}
+              className="px-5 py-2 bg-green-700 text-white text-xs tracking-widest uppercase hover:bg-green-800 disabled:opacity-40 transition-colors">
+              Marcar como verificados
+            </button>
+          </div>
         )}
       </div>
 
