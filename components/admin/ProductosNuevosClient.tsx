@@ -13,7 +13,7 @@ import {
   listarMarcasParaSelect,
   type ProductoNuevo,
 } from "@/actions/productos-nuevos";
-import { sincronizarPrecios } from "@/actions/sync-precios";
+import { sincronizarPrecios, sincronizarTodosPrecios } from "@/actions/sync-precios";
 
 import type { CategoriaPair } from "@/lib/category-suggester";
 
@@ -92,11 +92,11 @@ export function ProductosNuevosClient({ initialProductos, clearedAt, initialErro
   }
 
   function handleSyncPrices() {
-    if (!confirm("¿Sincronizar precios desde WooCommerce? Se corregirán los precios incorrectos.")) return;
+    if (!confirm("¿Sincronizar TODOS los precios desde WooCommerce? Esto actualizará precios de TODOS los productos (no solo los nuevos).")) return;
     startTransition(async () => {
-      const res = await sincronizarPrecios();
+      const res = await sincronizarTodosPrecios();
       if (res.error) { setError(res.error); return; }
-      setSuccess(`Precios sincronizados: ${res.actualizados} actualizados, ${res.sinMatch} sin coincidencia. Recarga la página para ver los cambios.`);
+      setSuccess(`✅ Sincronización completa: ${res.actualizados} precios actualizados de ${res.ok} productos de WooCommerce. Recarga la página para ver los cambios.`);
     });
   }
 
@@ -206,7 +206,7 @@ export function ProductosNuevosClient({ initialProductos, clearedAt, initialErro
           <div className="flex gap-2">
             <button onClick={handleSyncPrices} disabled={isPending}
               className="px-5 py-2 bg-blue-700 text-white text-xs tracking-widest uppercase hover:bg-blue-800 disabled:opacity-40 transition-colors">
-              🔄 Sincronizar precios
+              🔄 Sincronizar TODOS los precios
             </button>
             <button onClick={handleClear} disabled={isPending}
               className="px-5 py-2 bg-green-700 text-white text-xs tracking-widest uppercase hover:bg-green-800 disabled:opacity-40 transition-colors">
