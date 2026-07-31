@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useCarrito } from "@/context/CarritoContext";
 import { calcularGastoEnvio, getZonaEnvio, getSuplementoContrareembolso } from "@/lib/envio";
 import { crearPedidoContrarembolso } from "@/actions/checkout";
+import { POBLACIONES } from "@/lib/poblaciones";
 
 type Paso = "direccion" | "pago";
 
@@ -225,19 +226,23 @@ export function CheckoutCliente({
               />
             </div>
 
-            {/* Ciudad, Código postal */}
+            {/* Ciudad (población) — deplegable según provincia */}
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs tracking-wider uppercase text-neutral-600 mb-1.5">
-                  Ciudad
+                  Población
                 </label>
-                <input
-                  type="text"
+                <select
                   required
                   value={datos.ciudad}
                   onChange={(e) => cambiar("ciudad", e.target.value)}
-                  className="w-full border border-neutral-200 px-4 py-3 text-sm focus:outline-none focus:border-neutral-900 transition-colors"
-                />
+                  className="w-full border border-neutral-200 px-4 py-3 text-sm focus:outline-none focus:border-neutral-900 transition-colors bg-white"
+                >
+                  <option value="">Seleccionar población</option>
+                  {(POBLACIONES[datos.provincia] ?? []).map((p) => (
+                    <option key={p} value={p}>{p}</option>
+                  ))}
+                </select>
               </div>
               <div>
                 <label className="block text-xs tracking-wider uppercase text-neutral-600 mb-1.5">
@@ -263,7 +268,9 @@ export function CheckoutCliente({
               </label>
               <select
                 value={datos.provincia}
-                onChange={(e) => cambiar("provincia", e.target.value)}
+                onChange={(e) => {
+                  setDatos((d) => ({ ...d, provincia: e.target.value, ciudad: "" }));
+                }}
                 className="w-full border border-neutral-200 px-4 py-3 text-sm focus:outline-none focus:border-neutral-900 transition-colors bg-white"
               >
                 {PROVINCIAS.map((p) => (
