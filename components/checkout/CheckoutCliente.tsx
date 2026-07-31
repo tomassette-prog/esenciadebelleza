@@ -63,7 +63,7 @@ export function CheckoutCliente({
   const totalFinal   = totalPrecio + gastoEnvio;
 
   const infoEnvio = (() => {
-    if (zona === "baleares") return "Envío a Baleares: 12,00 €";
+    if (zona === "baleares") return "Envío a Baleares: 7,00 €";
     if (zona === "valencia") return totalPrecio >= 35 ? "Envío gratis (pedido ≥ 35 €)" : "Envío: 5,00 € (gratis desde 35 €)";
     return totalPrecio >= 40 ? "Envío gratis (pedido ≥ 40 €)" : "Envío: 5,00 € (gratis desde 40 €)";
   })();

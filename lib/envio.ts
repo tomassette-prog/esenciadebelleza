@@ -20,7 +20,7 @@ export function calcularGastoEnvio(totalProductos: number, provincia: string): n
   const zona = getZonaEnvio(provincia);
   switch (zona) {
     case "no_disponible": return -1;        // señal de zona no cubierta
-    case "baleares":      return 12;        // siempre 12 €
+    case "baleares":      return 7;         // siempre 7 €
     case "valencia":      return totalProductos >= 35 ? 0 : 5;
     default:              return totalProductos >= 40 ? 0 : 5; // península
   }
