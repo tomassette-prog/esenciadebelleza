@@ -530,7 +530,10 @@ export async function calcularDiff(): Promise<{
 }
 
 // ── sincronizarTodo — Descarga WC UNA VEZ y aplica todo en un solo paso ──────
-export async function sincronizarTodo(): Promise<{
+// Procesa UNA página de WC (100 productos) por invocación para no superar el timeout
+// de la función serverless (300s). El caller debe seguir llamando con `page` incremental
+// mientras `hasMore` sea true.
+export async function sincronizarTodo(page: number = 1): Promise<{
   ok: number;
   nuevos: number;
   preciosActualizados: number;
@@ -538,11 +541,13 @@ export async function sincronizarTodo(): Promise<{
   errores: string[];
   sinCambios: number;
   marcasPendientes: string[];
+  hasMore: boolean;
+  nextPage: number;
 }> {
   try {
     await verificarAdmin();
   } catch {
-    return { ok: 0, nuevos: 0, preciosActualizados: 0, ofertasActualizadas: 0, errores: ["No autorizado"], sinCambios: 0, marcasPendientes: [] };
+    return { ok: 0, nuevos: 0, preciosActualizados: 0, ofertasActualizadas: 0, errores: ["No autorizado"], sinCambios: 0, marcasPendientes: [], hasMore: false, nextPage: page };
   }
 
   const supa = adminClient();
@@ -593,27 +598,30 @@ export async function sincronizarTodo(): Promise<{
   const brandMappingsCache = await getBrandMappingsCache(supa);
   const marcasPendientes: string[] = [];
 
-  // 5. Descargar productos de WooCommerce — incremental si hay última sync
+  // 5. Descargar productos de WooCommerce — UNA página por invocación (pagina en caller)
   const { data: lastSyncRow } = await supa.from("config_tienda").select("valor").eq("clave", "ultima_sync_wc").single();
   const lastSync = lastSyncRow?.valor ?? null;
   const now = new Date().toISOString();
 
-  let page = 1;
   let preciosActualizados = 0;
   let ofertasActualizadas = 0;
   let nuevosCount = 0;
   let sinCambios = 0;
-  let procesados = 0;
 
-  // Procesar por página — no acumulamos todo en memoria
-  while (true) {
-    const url = lastSync
-      ? `/products?status=publish&per_page=100&page=${page}&modified_after=${lastSync}`
-      : `/products?status=publish&per_page=100&page=${page}`;
-    const batch = await fetchWoo(url);
-    if (!Array.isArray(batch) || batch.length === 0) break;
+  // Procesar solo la página pedida — el resto de páginas las pide el caller en llamadas siguientes
+  const url = lastSync
+    ? `/products?status=publish&per_page=100&page=${page}&modified_after=${lastSync}`
+    : `/products?status=publish&per_page=100&page=${page}`;
+  const batch = await fetchWoo(url);
+  const hasMore = Array.isArray(batch) && batch.length === 100;
+  if (!Array.isArray(batch) || batch.length === 0) {
+    // Primera página vacía = no hay productos; guardar timestamp y snapshot
+    await supa.from("config_tienda").upsert({ clave: "ultima_sync_wc", valor: now }, { onConflict: "clave" });
+    try { await guardarSnapshot(); } catch {}
+    return { ok: 0, nuevos: 0, preciosActualizados: 0, ofertasActualizadas: 0, errores: [], sinCambios: 0, marcasPendientes: [], hasMore: false, nextPage: page };
+  }
 
-    for (const wp of batch) {
+  for (const wp of batch) {
     const slug = wp.slug || slugify(wp.name);
     const wooPrice = parseFloat(wp.regular_price || wp.price) || 0;
     const wooSalePrice = parseFloat(wp.sale_price) || 0;
@@ -697,18 +705,14 @@ export async function sincronizarTodo(): Promise<{
     }
     }
 
-    procesados += batch.length;
-    if (batch.length < 100) break;
-    page++;
+  // Guardar timestamp y snapshot solo cuando no hay más páginas (última invocación)
+  if (!hasMore) {
+    await supa.from("config_tienda").upsert(
+      { clave: "ultima_sync_wc", valor: now },
+      { onConflict: "clave" }
+    );
+    try { await guardarSnapshot(); } catch {}
   }
-
-  // Guardar timestamp de última sincronización
-  await supa.from("config_tienda").upsert(
-    { clave: "ultima_sync_wc", valor: now },
-    { onConflict: "clave" }
-  );
-
-  try { await guardarSnapshot(); } catch {}
 
   return {
     ok: nuevosCount + preciosActualizados + ofertasActualizadas,
@@ -718,6 +722,8 @@ export async function sincronizarTodo(): Promise<{
     errores: errores.slice(0, 20),
     sinCambios,
     marcasPendientes: [...new Set(marcasPendientes)],
+    hasMore,
+    nextPage: page + 1,
   };
 }
 

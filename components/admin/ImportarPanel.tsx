@@ -463,15 +463,35 @@ export function ImportarPanel({ allPairs }: { allPairs: CategoriaPair[] }) {
     setResumen(null);
     setProgreso({ ok: 0, total: 0 });
     try {
-      const res = await sincronizarTodo();
+      let page = 1;
+      let totalNuevos = 0;
+      let totalPrecios = 0;
+      let totalOfertas = 0;
+      let totalSinCambios = 0;
+      let totalOk = 0;
+      const allErrores: string[] = [];
+      const allMarcasPendientes: string[] = [];
+      while (true) {
+        setProgreso({ ok: totalNuevos + totalPrecios, total: 0 });
+        const res = await sincronizarTodo(page);
+        totalNuevos += res.nuevos;
+        totalPrecios += res.preciosActualizados;
+        totalOfertas += res.ofertasActualizadas;
+        totalSinCambios += res.sinCambios;
+        totalOk += res.ok;
+        allErrores.push(...res.errores);
+        allMarcasPendientes.push(...res.marcasPendientes);
+        if (!res.hasMore) break;
+        page = res.nextPage;
+      }
       const details: string[] = [];
-      if (res.nuevos > 0) details.push(`${res.nuevos} productos nuevos creados`);
-      if (res.preciosActualizados > 0) details.push(`${res.preciosActualizados} precios actualizados`);
-      if (res.ofertasActualizadas > 0) details.push(`${res.ofertasActualizadas} ofertas actualizadas`);
-      if (res.sinCambios > 0) details.push(`${res.sinCambios} sin cambios`);
-      if (res.marcasPendientes.length > 0) details.push(`Marcas pendientes: ${res.marcasPendientes.join(", ")}`);
-      if (res.errores.length > 0) setError(`${res.errores.length} errores: ${res.errores.slice(0, 3).join(", ")}`);
-      setResumen({ ok: res.ok, noEncontrados: res.errores, details });
+      if (totalNuevos > 0) details.push(`${totalNuevos} productos nuevos creados`);
+      if (totalPrecios > 0) details.push(`${totalPrecios} precios actualizados`);
+      if (totalOfertas > 0) details.push(`${totalOfertas} ofertas actualizadas`);
+      if (totalSinCambios > 0) details.push(`${totalSinCambios} sin cambios`);
+      if (allMarcasPendientes.length > 0) details.push(`Marcas pendientes: ${[...new Set(allMarcasPendientes)].join(", ")}`);
+      if (allErrores.length > 0) setError(`${allErrores.length} errores: ${allErrores.slice(0, 3).join(", ")}`);
+      setResumen({ ok: totalOk, noEncontrados: allErrores, details });
     } catch (e: any) {
       setError(e.message ?? "Error en sincronización");
     } finally {
