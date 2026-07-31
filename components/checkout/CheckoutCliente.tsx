@@ -6,7 +6,6 @@ import Link from "next/link";
 import { useCarrito } from "@/context/CarritoContext";
 import { calcularGastoEnvio, getZonaEnvio, getSuplementoContrareembolso } from "@/lib/envio";
 import { crearPedidoContrarembolso } from "@/actions/checkout";
-import PaypalSmartButtons from "@/components/checkout/PaypalSmartButtons";
 
 type Paso = "direccion" | "pago";
 
@@ -370,33 +369,43 @@ export function CheckoutCliente({
             </button>
 
             {/* Logos de métodos de pago */}
-            <div className="flex items-center justify-center gap-4 mb-2 py-3">
+            <div className="flex items-end justify-center gap-5 mb-2 py-3">
               {/* Visa */}
-              <svg className="h-6 w-auto" viewBox="0 0 780 500" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M293.2 348.7l33.4-195.8h53.3l-33.3 195.8h-53.4zM530.9 157.7c-10.6-4-27.2-8.3-47.8-8.3-52.7 0-89.9 27.8-90.2 67.8-.3 29.7 26.7 46.2 47 56 20.8 10 27.8 16.4 27.7 25.3-.1 13.7-16.6 20-32 20-21.4 0-32.7-3-50.4-10.2l-6.9-3.1-7.5 43.8c12.5 5.5 35.6 10.2 59.6 10.5 56.1 0 92.6-27.5 93.1-70.2.2-23.3-14.5-41-46.4-55.8-19.3-9.3-31.2-15.5-31.1-25 0-8.4 9.7-17.5 30.6-17.5 17.5-.3 30.1 3.5 39.9 7.5l4.8 2.3 7.1-42.2zM675.5 152.9h-41.3c-12.8 0-22.4 3.5-28 16.3L467.8 348.7h59.4l16.7-44.2h72.6l9.8 44.2h52.2l-53-195.8zm-67 126.5l30.7-79.1 17.4 79.1h-48.1z" fill="#1A1F71"/>
-                <path d="M216.5 152.9l-52.4 134-5.6-27.2c-9.7-31.3-40-65.3-73.8-82.3l47.7 170.3h59.4l89.2-194.8h-64.8z" fill="#1A1F71"/>
-                <path d="M134.2 152.9H46.1l-.7 3.8c66.6 16.3 110.4 55.6 128.6 103l-18.5-89c-3.2-12.3-12.6-16.1-21.3-17.8z" fill="#F7B600"/>
-              </svg>
+              <div className="flex flex-col items-center gap-1">
+                <svg className="h-6 w-auto" viewBox="0 0 780 500" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M293.2 348.7l33.4-195.8h53.3l-33.3 195.8h-53.4zM530.9 157.7c-10.6-4-27.2-8.3-47.8-8.3-52.7 0-89.9 27.8-90.2 67.8-.3 29.7 26.7 46.2 47 56 20.8 10 27.8 16.4 27.7 25.3-.1 13.7-16.6 20-32 20-21.4 0-32.7-3-50.4-10.2l-6.9-3.1-7.5 43.8c12.5 5.5 35.6 10.2 59.6 10.5 56.1 0 92.6-27.5 93.1-70.2.2-23.3-14.5-41-46.4-55.8-19.3-9.3-31.2-15.5-31.1-25 0-8.4 9.7-17.5 30.6-17.5 17.5-.3 30.1 3.5 39.9 7.5l4.8 2.3 7.1-42.2zM675.5 152.9h-41.3c-12.8 0-22.4 3.5-28 16.3L467.8 348.7h59.4l16.7-44.2h72.6l9.8 44.2h52.2l-53-195.8zm-67 126.5l30.7-79.1 17.4 79.1h-48.1z" fill="#1A1F71"/>
+                  <path d="M216.5 152.9l-52.4 134-5.6-27.2c-9.7-31.3-40-65.3-73.8-82.3l47.7 170.3h59.4l89.2-194.8h-64.8z" fill="#1A1F71"/>
+                  <path d="M134.2 152.9H46.1l-.7 3.8c66.6 16.3 110.4 55.6 128.6 103l-18.5-89c-3.2-12.3-12.6-16.1-21.3-17.8z" fill="#F7B600"/>
+                </svg>
+                <span className="text-[9px] text-neutral-400">Visa</span>
+              </div>
               {/* Mastercard */}
-              <svg className="h-6 w-auto" viewBox="0 0 780 500" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <circle cx="312" cy="250" r="140" fill="#EB001B"/>
-                <circle cx="468" cy="250" r="140" fill="#F79E1B"/>
-                <path d="M390 143.6c31.3 25.2 51 63.6 51 106.4s-19.7 81.2-51 106.4c-31.3-25.2-51-63.6-51-106.4s19.7-81.2 51-106.4z" fill="#FF5F00"/>
-              </svg>
+              <div className="flex flex-col items-center gap-1">
+                <svg className="h-6 w-auto" viewBox="0 0 780 500" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <circle cx="312" cy="250" r="140" fill="#EB001B"/>
+                  <circle cx="468" cy="250" r="140" fill="#F79E1B"/>
+                  <path d="M390 143.6c31.3 25.2 51 63.6 51 106.4s-19.7 81.2-51 106.4c-31.3-25.2-51-63.6-51-106.4s19.7-81.2 51-106.4z" fill="#FF5F00"/>
+                </svg>
+                <span className="text-[9px] text-neutral-400">Mastercard</span>
+              </div>
               {/* Apple Pay */}
-              <svg className="h-6 w-auto" viewBox="0 0 780 500" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M232.7 130.1c-12.7 15-33.5 26.6-53.7 25.3-2.7-21.5 8-44.1 19.8-58.2 12.6-15 34.8-26.3 53.3-27.2 2.1 22.3-6.5 44.5-19.4 60.1zM265.8 194.5c-29.2-1.7-54.4 16.7-68.3 16.7-14.1 0-35.4-15.9-58.4-15.5-30.1.4-57.9 17.5-73.5 44.5-31.4 53.8-8.1 133.5 22.2 177.4 14.9 21.6 32.6 45.9 55.8 45.1 22-.7 30.5-14.3 57.2-14.3 26.7 0 34.3 14.3 57.6 13.9 24.2-.4 39.3-21.9 54-43.6 17-25 23.9-49.3 24.3-50.6-.5-.5-46.8-18-47.3-71.2-.5-44.4 36.3-65.7 37.8-66.8-20.7-30.5-52.8-34-64.1-35.4l-22.1-1z" fill="#000"/>
-                <path d="M218.5 84.6c12.3-14.8 20.5-35.4 18.3-56-17.7 1-38.6 11.9-51 26.5-11.2 13.2-21.1 34.1-18.5 54.1 19.5 1.5 39.3-10 51.2-24.6z" fill="#000"/>
-              </svg>
+              <div className="flex flex-col items-center gap-1">
+                <svg className="h-6 w-auto" viewBox="0 0 780 500" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M232.7 130.1c-12.7 15-33.5 26.6-53.7 25.3-2.7-21.5 8-44.1 19.8-58.2 12.6-15 34.8-26.3 53.3-27.2 2.1 22.3-6.5 44.5-19.4 60.1zM265.8 194.5c-29.2-1.7-54.4 16.7-68.3 16.7-14.1 0-35.4-15.9-58.4-15.5-30.1.4-57.9 17.5-73.5 44.5-31.4 53.8-8.1 133.5 22.2 177.4 14.9 21.6 32.6 45.9 55.8 45.1 22-.7 30.5-14.3 57.2-14.3 26.7 0 34.3 14.3 57.6 13.9 24.2-.4 39.3-21.9 54-43.6 17-25 23.9-49.3 24.3-50.6-.5-.5-46.8-18-47.3-71.2-.5-44.4 36.3-65.7 37.8-66.8-20.7-30.5-52.8-34-64.1-35.4l-22.1-1z" fill="#000"/>
+                  <path d="M218.5 84.6c12.3-14.8 20.5-35.4 18.3-56-17.7 1-38.6 11.9-51 26.5-11.2 13.2-21.1 34.1-18.5 54.1 19.5 1.5 39.3-10 51.2-24.6z" fill="#000"/>
+                </svg>
+                <span className="text-[9px] text-neutral-400">Apple Pay</span>
+              </div>
               {/* Google Pay */}
-              <svg className="h-6 w-auto" viewBox="0 0 780 500" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M372.7 247.2c0-13.4-1.2-26.2-3.4-38.4h-105v72.6h59.9c-2.6 14-10.4 25.9-22.1 33.8v28h35.8c20.9-19.3 33-47.7 33-96h1.8z" fill="#4285F4"/>
-                <path d="M372.7 315.2c-35.8 0-65.9-23.9-76.6-56.2h-35.8v28c21.1 41.8 63.9 69.8 112.4 69.8 32.1 0 59.1-10.6 78.9-28.9l-35.8-28c-10.6 7.1-24.2 11.3-43.1 15.3z" fill="#34A853"/>
-                <path d="M296.1 260.2c-5-14.8-5-30.6 0-45.4v-28h-35.8c-14.6 29-14.6 63.4 0 92.4l35.8-19z" fill="#FBBC05"/>
-                <path d="M296.1 214.8c18.8-29.3 56.7-39.6 86.6-24.2l28-28c-30.9-22.8-71.2-30.9-114.6-7.4l35.8 19z" fill="#EA4335"/>
-              </svg>
-              {/* Bizum */}
-              <span className="px-2.5 py-1 bg-[#2D2D2D] text-white text-[11px] font-bold rounded tracking-wide">bizum</span>
+              <div className="flex flex-col items-center gap-1">
+                <svg className="h-7 w-auto" viewBox="0 0 780 500" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M372.7 247.2c0-13.4-1.2-26.2-3.4-38.4h-105v72.6h59.9c-2.6 14-10.4 25.9-22.1 33.8v28h35.8c20.9-19.3 33-47.7 33-96h1.8z" fill="#4285F4"/>
+                  <path d="M372.7 315.2c-35.8 0-65.9-23.9-76.6-56.2h-35.8v28c21.1 41.8 63.9 69.8 112.4 69.8 32.1 0 59.1-10.6 78.9-28.9l-35.8-28c-10.6 7.1-24.2 11.3-43.1 15.3z" fill="#34A853"/>
+                  <path d="M296.1 260.2c-5-14.8-5-30.6 0-45.4v-28h-35.8c-14.6 29-14.6 63.4 0 92.4l35.8-19z" fill="#FBBC05"/>
+                  <path d="M296.1 214.8c18.8-29.3 56.7-39.6 86.6-24.2l28-28c-30.9-22.8-71.2-30.9-114.6-7.4l35.8 19z" fill="#EA4335"/>
+                </svg>
+                <span className="text-[9px] text-neutral-400">Google Pay</span>
+              </div>
             </div>
             <div className="flex items-center justify-center gap-1.5 mb-6">
               <svg className="w-3.5 h-3.5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -405,13 +414,6 @@ export function CheckoutCliente({
               </svg>
               <span className="text-[11px] text-neutral-400">Pago seguro con cifrado SSL · 100% protegido</span>
             </div>
-
-            {/* ── PayPal — alternativa de pago ── */}
-            <PaypalSmartButtons
-              lineas={lineas}
-              datosEnvio={datos}
-              disabled={cargando}
-            />
 
             {/* ── Contra reembolso ── */}
             <div className="mt-4 pt-4 border-t border-neutral-200">
