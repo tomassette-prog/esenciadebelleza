@@ -49,6 +49,14 @@ async function fetchWoo(path: string) {
   return res.json();
 }
 
+function normalizarNombre(nombre: string): string {
+  return nombre
+    .toLowerCase()
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 /**
  * Sync prices from WooCommerce for Esencia products that have missing or zero prices.
  * Optimized: only fetches specific WC products that need prices, not the entire catalog.
@@ -313,9 +321,9 @@ export async function sincronizarTodosPrecios(): Promise<{
       if (configMult?.valor) precioMultiplicador = parseFloat(configMult.valor) || 0.75;
     } catch { /* fallback */ }
 
-    // 3. Cargar todos los productos padre (para fallback por woo_id)
+    // 3. Cargar todos los productos padre (para fallback por woo_id y por nombre)
     const padresPorWooId = new Map<number, string>(); // woo_id -> producto_padre_id
-    const nombreById = new Map<string, string>();     // producto_padre_id -> nombre
+    const padresPorNombre = new Map<string, string>(); // nombre normalizado -> producto_padre_id
     let offset = 0;
     while (true) {
       const { data } = await supa
@@ -325,7 +333,7 @@ export async function sincronizarTodosPrecios(): Promise<{
       if (!data?.length) break;
       for (const r of data) {
         if (r.woo_id) padresPorWooId.set(r.woo_id, r.id);
-        nombreById.set(r.id, r.nombre);
+        padresPorNombre.set(normalizarNombre(r.nombre), r.id);
       }
       if (data.length < 1000) break;
       offset += 1000;
@@ -392,6 +400,15 @@ export async function sincronizarTodosPrecios(): Promise<{
         }
       }
 
+      // Match 3 (fallback): por nombre normalizado → producto_padre_id → primera variación
+      if (!existingVar) {
+        const padreId = padresPorNombre.get(normalizarNombre(wp.name));
+        if (padreId) {
+          const vars = varsByPadreId.get(padreId);
+          existingVar = vars?.[0];
+        }
+      }
+
       if (!existingVar) { noEncontradosSet.add(wp.name); continue; }
       await updateVariacion(existingVar.id, existingVar.producto_padre_id, precioB2c, precioRegular, isOferta, stock, activa);
     }
@@ -403,7 +420,7 @@ export async function sincronizarTodosPrecios(): Promise<{
         const wcVars: WooVariation[] = await fetchWoo(`/products/${wp.id}/variations?per_page=100`);
         if (!Array.isArray(wcVars) || wcVars.length === 0) { noEncontradosSet.add(wp.name); continue; }
 
-        const padreId = padresPorWooId.get(wp.id);
+        const padreId = padresPorWooId.get(wp.id) ?? padresPorNombre.get(normalizarNombre(wp.name));
         const padreVars = padreId ? varsByPadreId.get(padreId) : undefined;
         let matchedAny = false;
 
