@@ -78,20 +78,19 @@ export async function getProductosNuevos(): Promise<{ productos: ProductoNuevo[]
       id, nombre, slug, categoria, subcategoria, imagen_principal_url,
       woo_id, activo, created_at,
       marca:marcas(nombre),
-      variaciones:productos_variaciones!inner(sku, precio_b2c, activa)
+      variaciones:productos_variaciones(sku, precio_b2c, activa)
     `)
-    .eq("variaciones.activa", true)
     .gt("created_at", clearedAt)
     .order("created_at", { ascending: false });
 
   if (error) return { productos: [], clearedAt, error: error.message };
 
   const mapped = (productos ?? []).map((p: any) => {
-    // Preferir variación con precio válido más alto (evita precios dummy de 0.01)
+    // Preferir variaciones activas con precio válido > 0.10€ (evita precios dummy de 0.01)
     const vars: any[] = p.variaciones ?? [];
-    const bestVar = vars
-      .filter((v: any) => v.precio_b2c != null && v.precio_b2c > 0.1)
-      .sort((a: any, b: any) => b.precio_b2c - a.precio_b2c)[0]
+    const activeVars = vars.filter((v: any) => v.activa && v.precio_b2c != null && v.precio_b2c > 0.1);
+    const bestVar = activeVars.sort((a: any, b: any) => b.precio_b2c - a.precio_b2c)[0]
+      ?? vars.find((v: any) => v.activa)
       ?? vars[0]
       ?? null;
 
