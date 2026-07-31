@@ -495,3 +495,158 @@ export async function sincronizarTodosPrecios(page: number = 1): Promise<{
     return { ok: 0, actualizados: 0, noEncontrados: 0, noEncontradosList: [], hasMore: false, nextPage: page, error: String(e) };
   }
 }
+
+/**
+ * Import ONLY new products from WC that don't exist in Esencia yet.
+ * Same paginated architecture as sincronizarTodosPrecios — processes one WC page per call.
+ * Skips products that already exist (by woo_id or slug). Lightweight: no brand resolution.
+ *
+ * On first run (no lastSync): downloads ALL WC products but only inserts missing ones.
+ * After first successful run: uses modified_after to only check recently changed products → seconds.
+ */
+export async function importarNuevos(page: number = 1): Promise<{
+  nuevos: number;
+  errores: number;
+  errorList: string[];
+  hasMore: boolean;
+  nextPage: number;
+  sinCambios: number;
+  error?: string;
+}> {
+  try {
+    await verificarAdmin();
+  } catch {
+    return { nuevos: 0, errores: 0, errorList: [], hasMore: false, nextPage: page, sinCambios: 0, error: "No autorizado" };
+  }
+
+  try {
+    const supa = adminClient();
+
+    // 1. Check last sync timestamp for incremental mode
+    const { data: lastSyncRow } = await supa.from("config_tienda").select("valor").eq("clave", "ultima_import_wc").single();
+    const lastSync = lastSyncRow?.valor ?? null;
+    const now = new Date().toISOString();
+
+    // 2. Fetch UNA página de WC — incremental si hay última importación
+    const url = lastSync
+      ? `/products?per_page=100&page=${page}&status=publish&modified_after=${lastSync}`
+      : `/products?per_page=100&page=${page}&status=publish`;
+    const batch: any[] = await fetchWoo(url);
+    const hasMore = Array.isArray(batch) && batch.length === 100;
+    if (!Array.isArray(batch) || batch.length === 0) {
+      // No hay más productos — guardar timestamp si es la última página
+      if (!hasMore) {
+        await supa.from("config_tienda").upsert({ clave: "ultima_import_wc", valor: now }, { onConflict: "clave" });
+      }
+      return { nuevos: 0, errores: 0, errorList: [], hasMore: false, nextPage: page, sinCambios: 0 };
+    }
+
+    // 3. Load multiplicador B2C
+    let precioMultiplicador = 1;
+    try {
+      const { data: cfg } = await supa.from("config_tienda").select("valor").eq("clave", "precio_multiplicador_b2c").single();
+      if (cfg?.valor) precioMultiplicador = parseFloat(cfg.valor) || 1;
+    } catch { /* fallback 1 */ }
+
+    // 4. Load existing woo_ids + slugs — lightweight, only for this page's products
+    const wooIds = batch.map((p: any) => p.id);
+    const slugs = batch.map((p: any) => p.slug || p.name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, "-"));
+
+    const existingWooIds = new Set<number>();
+    const existingSlugs = new Set<string>();
+
+    const { data: byWoo } = await supa.from("productos_padre").select("woo_id").in("woo_id", wooIds);
+    if (byWoo) for (const r of byWoo) if (r.woo_id) existingWooIds.add(r.woo_id);
+
+    const missingSlugs = slugs.filter((s: string) => !existingSlugs.has(s));
+    if (missingSlugs.length > 0) {
+      const { data: bySlug } = await supa.from("productos_padre").select("slug").in("slug", missingSlugs);
+      if (bySlug) for (const r of bySlug) existingSlugs.add(r.slug);
+    }
+
+    // 5. Insert only new products, update prices for existing ones modified since lastSync
+    let nuevos = 0;
+    let errores = 0;
+    let sinCambios = 0;
+    const errorList: string[] = [];
+
+    for (const wp of batch) {
+      const slug = wp.slug || wp.name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, "-");
+      const precioRegular = parseFloat(wp.regular_price || wp.price) || 0;
+      const precioVenta = parseFloat(wp.sale_price) || 0;
+      const isOferta = precioVenta > 0 && precioVenta < precioRegular;
+      const precioB2c = isOferta ? precioVenta : precioRegular;
+
+      if (existingWooIds.has(wp.id) || existingSlugs.has(slug)) {
+        // ── EXISTENTE: actualizar precio si se modificó en WC ──
+        if (lastSync) {
+          // Solo en modo incremental — actualizar precios de productos modificados
+          try {
+            const { data: existing } = await supa.from("productos_padre")
+              .select("id").eq("woo_id", wp.id).single();
+            if (existing) {
+              await supa.from("productos_variaciones").update({
+                precio_b2c: precioB2c,
+                precio_b2b: parseFloat((precioB2c * precioMultiplicador).toFixed(2)),
+                precio_comparar: isOferta ? precioRegular : null,
+                stock: wp.stock_quantity ?? 0,
+                activa: wp.stock_status !== "outofstock",
+              }).eq("producto_padre_id", existing.id);
+              await supa.from("productos_padre").update({ oferta: isOferta }).eq("id", existing.id);
+            }
+          } catch { /* skip */ }
+        } else {
+          sinCambios++;
+        }
+        continue;
+      }
+
+      // ── NUEVO: crear producto + variación ──
+      try {
+        const { data: inserted, error: insertErr } = await supa.from("productos_padre").insert({
+          nombre: wp.name,
+          slug,
+          woo_id: wp.id,
+          activo: true,
+          oferta: isOferta,
+          imagen_principal_url: wp.images?.[0]?.src ?? null,
+          descripcion_general: wp.description || null,
+          categoria: "General",
+          subcategoria: "otros",
+        }).select("id").single();
+
+        if (insertErr || !inserted) {
+          errorList.push(`${wp.name}: ${insertErr?.message ?? "insert failed"}`);
+          errores++;
+          continue;
+        }
+
+        await supa.from("productos_variaciones").insert({
+          producto_padre_id: inserted.id,
+          sku: wp.sku || `WC-${wp.id}`,
+          nombre_variacion: "Unidad",
+          precio_b2c: precioB2c,
+          precio_b2b: parseFloat((precioB2c * precioMultiplicador).toFixed(2)),
+          precio_comparar: isOferta ? precioRegular : null,
+          stock: wp.stock_quantity ?? 0,
+          activa: wp.stock_status !== "outofstock",
+          imagen_url: wp.images?.[0]?.src ?? null,
+        });
+
+        nuevos++;
+      } catch (e: any) {
+        errorList.push(`${wp.name}: ${e.message}`);
+        errores++;
+      }
+    }
+
+    // 6. Guardar timestamp al completar la última página
+    if (!hasMore) {
+      await supa.from("config_tienda").upsert({ clave: "ultima_import_wc", valor: now }, { onConflict: "clave" });
+    }
+
+    return { nuevos, errores, errorList: errorList.slice(0, 20), hasMore, nextPage: page + 1, sinCambios };
+  } catch (e) {
+    return { nuevos: 0, errores: 0, errorList: [], hasMore: false, nextPage: page, sinCambios: 0, error: String(e) };
+  }
+}

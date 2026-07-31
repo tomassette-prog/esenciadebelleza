@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { sincronizarPrecios, sincronizarTodosPrecios } from "@/actions/sync-precios";
+import { sincronizarPrecios, sincronizarTodosPrecios, importarNuevos } from "@/actions/sync-precios";
 
 export function PreciosSync() {
   const [isPending, startTransition] = useTransition();
@@ -49,6 +49,38 @@ export function PreciosSync() {
     });
   }
 
+  function handleImportNuevos() {
+    if (!confirm("¿Importar productos nuevos de WooCommerce? Primera vez: tarda unos minutos. Siguientes: solo revisa modificados → segundos.")) return;
+    setError(null);
+    setResult(null);
+    setNoEncontrados([]);
+    startTransition(async () => {
+      let page = 1;
+      let totalNuevos = 0;
+      let totalErrores = 0;
+      let totalSinCambios = 0;
+      const allErrors: string[] = [];
+      while (true) {
+        setProgreso(`Página ${page}… (${totalNuevos} nuevos, ${totalSinCambios} sin cambios)`);
+        const res = await importarNuevos(page);
+        if (res.error) { setError(res.error); setProgreso(null); return; }
+        totalNuevos += res.nuevos;
+        totalErrores += res.errores;
+        totalSinCambios += res.sinCambios;
+        allErrors.push(...res.errorList);
+        if (!res.hasMore) break;
+        page = res.nextPage;
+      }
+      setProgreso(null);
+      if (totalNuevos === 0 && totalErrores === 0) {
+        setResult(`✅ Sin productos nuevos. ${totalSinCambios} productos existentes sin cambios. Próxima importación será instantánea.`);
+      } else {
+        setResult(`✅ ${totalNuevos} productos nuevos importados. ${totalSinCambios} existentes sin cambios. ${totalErrores} errores.`);
+      }
+      if (allErrors.length > 0) setNoEncontrados(allErrors);
+    });
+  }
+
   return (
     <div className="space-y-6 max-w-2xl">
       <div>
@@ -76,7 +108,7 @@ export function PreciosSync() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {/* Sync missing prices */}
         <div className="border border-neutral-200 bg-white p-5 space-y-3">
           <h3 className="font-medium text-sm text-neutral-900">Productos sin precio</h3>
@@ -106,6 +138,22 @@ export function PreciosSync() {
             className="w-full px-4 py-2.5 bg-neutral-200 text-neutral-800 text-xs tracking-widest uppercase hover:bg-neutral-300 disabled:opacity-40 transition-colors"
           >
             {isPending ? "Sincronizando…" : "Actualizar todos los precios"}
+          </button>
+        </div>
+
+        {/* Import new products */}
+        <div className="border border-neutral-200 bg-white p-5 space-y-3">
+          <h3 className="font-medium text-sm text-neutral-900">Importar productos nuevos</h3>
+          <p className="text-xs text-neutral-400">
+            Importa productos de WC que no existen en Esencia. Primera vez: tarda unos minutos.
+            Siguiente: solo revisa modificados → segundos.
+          </p>
+          <button
+            onClick={handleImportNuevos}
+            disabled={isPending}
+            className="w-full px-4 py-2.5 bg-emerald-700 text-white text-xs tracking-widest uppercase hover:bg-emerald-800 disabled:opacity-40 transition-colors"
+          >
+            {isPending ? "Importando…" : "Importar productos nuevos"}
           </button>
         </div>
       </div>
