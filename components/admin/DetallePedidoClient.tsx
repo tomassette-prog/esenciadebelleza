@@ -137,7 +137,7 @@ export default function DetallePedidoClient({ pedido }: { pedido: Pedido }) {
             Pedido <span className="font-mono text-base text-gray-500">#{pedido.id.slice(0, 8).toUpperCase()}</span>
           </h1>
           <p className="text-sm text-gray-500">
-            {new Date(pedido.created_at).toLocaleString("es-ES")} · {pedido.email_cliente} · {pedido.tipo_precio.toUpperCase()}
+            {new Date(pedido.created_at).toLocaleString("es-ES", { timeZone: "Europe/Madrid" })} · {pedido.email_cliente} · {pedido.tipo_precio.toUpperCase()}
           </p>
         </div>
         <button
@@ -333,7 +333,7 @@ export default function DetallePedidoClient({ pedido }: { pedido: Pedido }) {
               ✓ Enviado a WooCommerce #{pedido.woo_order_id}
               {pedido.woo_enviado_at && (
                 <span className="text-xs text-green-500 ml-1">
-                  · {new Date(pedido.woo_enviado_at).toLocaleString("es-ES")}
+                  · {new Date(pedido.woo_enviado_at).toLocaleString("es-ES", { timeZone: "Europe/Madrid" })}
                 </span>
               )}
             </span>

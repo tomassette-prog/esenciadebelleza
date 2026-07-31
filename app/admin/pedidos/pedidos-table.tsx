@@ -182,9 +182,9 @@ export function PedidosTable({
                     />
                   </td>
                   <td className="px-4 py-3 text-gray-500 whitespace-nowrap">
-                    <div>{new Date(p.created_at).toLocaleDateString("es-ES")}</div>
+                    <div>{new Date(p.created_at).toLocaleDateString("es-ES", { timeZone: "Europe/Madrid" })}</div>
                     <div className="text-xs text-gray-400">
-                      {new Date(p.created_at).toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" })}
+                      {new Date(p.created_at).toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Madrid" })}
                     </div>
                   </td>
                   <td className="px-4 py-3">

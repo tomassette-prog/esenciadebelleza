@@ -43,7 +43,7 @@ export function ProductosNuevosClient({ initialProductos, clearedAt, initialErro
   const [bulkSubcategoria, setBulkSubcategoria] = useState("");
 
   const clearedDate = clearedAt
-    ? new Date(clearedAt).toLocaleDateString("es-ES", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })
+    ? new Date(clearedAt).toLocaleDateString("es-ES", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", timeZone: "Europe/Madrid" })
     : "nunca";
 
   const categorias = useMemo(() => [...new Set(allPairs.map(p => p.categoria))], [allPairs]);
