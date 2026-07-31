@@ -7,10 +7,12 @@ export function PreciosSync() {
   const [isPending, startTransition] = useTransition();
   const [result, setResult] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [noEncontrados, setNoEncontrados] = useState<string[]>([]);
 
   function handleSyncMissing() {
     setError(null);
     setResult(null);
+    setNoEncontrados([]);
     startTransition(async () => {
       const res = await sincronizarPrecios();
       if (res.error) { setError(res.error); return; }
@@ -19,13 +21,15 @@ export function PreciosSync() {
   }
 
   function handleSyncAll() {
-    if (!confirm("¿Actualizar precios de TODOS los productos? Esto puede tardar unos minutos.")) return;
+    if (!confirm("¿Actualizar precios de TODOS los productos contra depeluqueriaproductos.com? Esto puede tardar varios minutos.")) return;
     setError(null);
     setResult(null);
+    setNoEncontrados([]);
     startTransition(async () => {
       const res = await sincronizarTodosPrecios();
       if (res.error) { setError(res.error); return; }
-      setResult(`✅ ${res.actualizados} de ${res.ok} productos actualizados. ${res.noEncontrados} no encontrados en Esencia.`);
+      setResult(`✅ ${res.actualizados} precios actualizados de ${res.ok} productos en WooCommerce. ${res.noEncontrados} sin coincidencia en Esencia (revisar abajo).`);
+      setNoEncontrados(res.noEncontradosList ?? []);
     });
   }
 
@@ -89,6 +93,20 @@ export function PreciosSync() {
         <strong>Nota:</strong> La sincronización descarga todos los productos de WooCommerce (~3000+).
         Tarda entre 30 segundos y 2 minutos según la carga del servidor.
       </div>
+
+      {noEncontrados.length > 0 && (
+        <div className="border border-red-200 bg-red-50 p-4 space-y-2">
+          <h3 className="text-sm font-medium text-red-700">
+            ⚠️ {noEncontrados.length} productos sin coincidencia (revisar manualmente)
+          </h3>
+          <p className="text-xs text-red-600">
+            Estos productos existen en WooCommerce pero no se pudo emparejar con ningún producto de Esencia (ni por SKU ni por woo_id). Sus precios NO se actualizaron.
+          </p>
+          <ul className="text-xs text-red-700 list-disc list-inside max-h-48 overflow-y-auto space-y-0.5">
+            {noEncontrados.map((nombre, i) => <li key={i}>{nombre}</li>)}
+          </ul>
+        </div>
+      )}
     </div>
   );
 }

@@ -261,18 +261,20 @@ export async function sincronizarPrecios(): Promise<{
 /**
  * Sync ALL products from WC — update prices, stock, and sale prices for ALL products,
  * not just those without price. Handles both simple and variable products.
- * Use this to refresh the entire catalog prices from WooCommerce.
+ * Matches by SKU first, falls back to woo_id if SKU doesn't align.
+ * Use this to refresh the entire catalog prices from WooCommerce (source of truth).
  */
 export async function sincronizarTodosPrecios(): Promise<{
   ok: number;
   actualizados: number;
   noEncontrados: number;
+  noEncontradosList: string[];
   error?: string;
 }> {
   try {
     await verificarAdmin();
   } catch {
-    return { ok: 0, actualizados: 0, noEncontrados: 0, error: "No autorizado" };
+    return { ok: 0, actualizados: 0, noEncontrados: 0, noEncontradosList: [], error: "No autorizado" };
   }
 
   try {
@@ -291,7 +293,7 @@ export async function sincronizarTodosPrecios(): Promise<{
       stock_quantity: number | null; stock_status: string;
     };
 
-    // 1. Fetch all WC products (paginated)
+    // 1. Fetch all WC products (paginated) — incluye publish + draft/private para no perder ninguno
     const wooProducts: WooProduct[] = [];
     let page = 1;
     while (true) {
@@ -311,9 +313,27 @@ export async function sincronizarTodosPrecios(): Promise<{
       if (configMult?.valor) precioMultiplicador = parseFloat(configMult.valor) || 0.75;
     } catch { /* fallback */ }
 
-    // 3. Build a map of all existing variations by SKU for fast lookup
-    const allVars: Array<{ id: string; sku: string; producto_padre_id: string }> = [];
+    // 3. Cargar todos los productos padre (para fallback por woo_id)
+    const padresPorWooId = new Map<number, string>(); // woo_id -> producto_padre_id
+    const nombreById = new Map<string, string>();     // producto_padre_id -> nombre
     let offset = 0;
+    while (true) {
+      const { data } = await supa
+        .from("productos_padre")
+        .select("id, woo_id, nombre")
+        .range(offset, offset + 999);
+      if (!data?.length) break;
+      for (const r of data) {
+        if (r.woo_id) padresPorWooId.set(r.woo_id, r.id);
+        nombreById.set(r.id, r.nombre);
+      }
+      if (data.length < 1000) break;
+      offset += 1000;
+    }
+
+    // 4. Cargar todas las variaciones existentes — por SKU y por producto_padre_id
+    const allVars: Array<{ id: string; sku: string | null; producto_padre_id: string }> = [];
+    offset = 0;
     while (true) {
       const { data } = await supa
         .from("productos_variaciones")
@@ -324,80 +344,109 @@ export async function sincronizarTodosPrecios(): Promise<{
       if (data.length < 1000) break;
       offset += 1000;
     }
-    const varsBySku = new Map(allVars.filter(v => v.sku).map(v => [v.sku, v]));
+    const varsBySku = new Map(allVars.filter(v => v.sku).map(v => [v.sku as string, v]));
+    const varsByPadreId = new Map<string, typeof allVars>();
+    for (const v of allVars) {
+      const arr = varsByPadreId.get(v.producto_padre_id) ?? [];
+      arr.push(v);
+      varsByPadreId.set(v.producto_padre_id, arr);
+    }
 
     let actualizados = 0;
-    let noEncontrados = 0;
-    const ofertasPadreIds = new Set<string>();
+    const noEncontradosSet = new Set<string>();
+    // padreId -> true si alguna variación tiene oferta activa
+    const ofertaPorPadre = new Map<string, boolean>();
 
-    // 4. Process simple products
+    async function updateVariacion(varId: string, padreId: string, precioB2c: number, precioRegular: number, isOferta: boolean, stock: number, activa: boolean) {
+      await supa.from("productos_variaciones").update({
+        precio_b2c: precioB2c,
+        precio_b2b: parseFloat((precioB2c * precioMultiplicador).toFixed(2)),
+        precio_comparar: isOferta ? precioRegular : null,
+        stock,
+        activa,
+      }).eq("id", varId);
+      ofertaPorPadre.set(padreId, ofertaPorPadre.get(padreId) || isOferta);
+      actualizados++;
+    }
+
+    // 5. Process simple products
     for (const wp of wooProducts) {
-      if (wp.type !== "simple" || !wp.sku) continue;
+      if (wp.type !== "simple") continue;
 
       const precioRegular = parseFloat(wp.regular_price || wp.price) || 0;
       const precioVenta = parseFloat(wp.sale_price) || 0;
       const isOferta = precioVenta > 0 && precioVenta < precioRegular;
       const precioB2c = isOferta ? precioVenta : precioRegular;
+      const stock = wp.stock_quantity ?? 0;
+      const activa = wp.stock_status !== "outofstock";
 
-      const existingVar = varsBySku.get(wp.sku);
-      if (!existingVar) { noEncontrados++; continue; }
+      // Match 1: por SKU exacto
+      let existingVar = wp.sku ? varsBySku.get(wp.sku) : undefined;
 
-      await supa.from("productos_variaciones").update({
-        precio_b2c: precioB2c,
-        precio_b2b: parseFloat((precioB2c * precioMultiplicador).toFixed(2)),
-        precio_comparar: isOferta ? precioRegular : null,
-        stock: wp.stock_quantity ?? 0,
-        activa: wp.stock_status !== "outofstock",
-      }).eq("id", existingVar.id);
+      // Match 2 (fallback): por woo_id → producto_padre_id → primera variación
+      if (!existingVar) {
+        const padreId = padresPorWooId.get(wp.id);
+        if (padreId) {
+          const vars = varsByPadreId.get(padreId);
+          existingVar = vars?.[0];
+        }
+      }
 
-      if (isOferta) ofertasPadreIds.add(existingVar.producto_padre_id);
-      actualizados++;
+      if (!existingVar) { noEncontradosSet.add(wp.name); continue; }
+      await updateVariacion(existingVar.id, existingVar.producto_padre_id, precioB2c, precioRegular, isOferta, stock, activa);
     }
 
-    // 5. Process variable products — fetch their variations from WC
+    // 6. Process variable products — fetch their variations from WC
     const variableProducts = wooProducts.filter(wp => wp.type === "variable" && wp.variations?.length > 0);
     for (const wp of variableProducts) {
       try {
         const wcVars: WooVariation[] = await fetchWoo(`/products/${wp.id}/variations?per_page=100`);
-        if (!Array.isArray(wcVars)) continue;
+        if (!Array.isArray(wcVars) || wcVars.length === 0) { noEncontradosSet.add(wp.name); continue; }
 
-        for (const wv of wcVars) {
-          if (!wv.sku) continue;
+        const padreId = padresPorWooId.get(wp.id);
+        const padreVars = padreId ? varsByPadreId.get(padreId) : undefined;
+        let matchedAny = false;
 
+        for (let i = 0; i < wcVars.length; i++) {
+          const wv = wcVars[i];
           const precioRegular = parseFloat(wv.regular_price || wv.price) || 0;
           const precioVenta = parseFloat(wv.sale_price) || 0;
           const isOferta = precioVenta > 0 && precioVenta < precioRegular;
           const precioB2c = isOferta ? precioVenta : precioRegular;
+          const stock = wv.stock_quantity ?? 0;
+          const activa = wv.stock_status !== "outofstock";
 
-          const existingVar = varsBySku.get(wv.sku);
-          if (!existingVar) { noEncontrados++; continue; }
+          // Match 1: por SKU exacto
+          let existingVar = wv.sku ? varsBySku.get(wv.sku) : undefined;
+          // Match 2 (fallback): por posición dentro de las variaciones del mismo padre
+          if (!existingVar && padreVars) existingVar = padreVars[i];
 
-          await supa.from("productos_variaciones").update({
-            precio_b2c: precioB2c,
-            precio_b2b: parseFloat((precioB2c * precioMultiplicador).toFixed(2)),
-            precio_comparar: isOferta ? precioRegular : null,
-            stock: wv.stock_quantity ?? 0,
-            activa: wv.stock_status !== "outofstock",
-          }).eq("id", existingVar.id);
-
-          if (isOferta) ofertasPadreIds.add(existingVar.producto_padre_id);
-          actualizados++;
+          if (!existingVar) continue;
+          matchedAny = true;
+          await updateVariacion(existingVar.id, existingVar.producto_padre_id, precioB2c, precioRegular, isOferta, stock, activa);
         }
+
+        if (!matchedAny) noEncontradosSet.add(wp.name);
 
         // Small delay between variable products to avoid rate limiting
         await new Promise(r => setTimeout(r, 300));
       } catch {
-        // Skip failed variable products
+        noEncontradosSet.add(wp.name);
       }
     }
 
-    // 6. Update oferta flags on parent products
-    for (const padreId of ofertasPadreIds) {
-      await supa.from("productos_padre").update({ oferta: true }).eq("id", padreId);
+    // 7. Update oferta flags on parent products — explícito true/false para no dejar ofertas obsoletas
+    for (const [padreId, isOferta] of ofertaPorPadre) {
+      await supa.from("productos_padre").update({ oferta: isOferta }).eq("id", padreId);
     }
 
-    return { ok: wooProducts.length, actualizados, noEncontrados };
+    return {
+      ok: wooProducts.length,
+      actualizados,
+      noEncontrados: noEncontradosSet.size,
+      noEncontradosList: [...noEncontradosSet].slice(0, 50),
+    };
   } catch (e) {
-    return { ok: 0, actualizados: 0, noEncontrados: 0, error: String(e) };
+    return { ok: 0, actualizados: 0, noEncontrados: 0, noEncontradosList: [], error: String(e) };
   }
 }
