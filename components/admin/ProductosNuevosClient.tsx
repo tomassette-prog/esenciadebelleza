@@ -94,9 +94,19 @@ export function ProductosNuevosClient({ initialProductos, clearedAt, initialErro
   function handleSyncPrices() {
     if (!confirm("¿Sincronizar TODOS los precios desde WooCommerce? Esto actualizará precios de TODOS los productos (no solo los nuevos).")) return;
     startTransition(async () => {
-      const res = await sincronizarTodosPrecios();
-      if (res.error) { setError(res.error); return; }
-      setSuccess(`✅ Sincronización completa: ${res.actualizados} precios actualizados de ${res.ok} productos de WooCommerce. Recarga la página para ver los cambios.`);
+      let page = 1;
+      let totalOk = 0;
+      let totalActualizados = 0;
+      while (true) {
+        setSuccess(`Procesando página ${page}… (${totalActualizados} actualizados hasta ahora)`);
+        const res = await sincronizarTodosPrecios(page);
+        if (res.error) { setError(res.error); return; }
+        totalOk += res.ok;
+        totalActualizados += res.actualizados;
+        if (!res.hasMore) break;
+        page = res.nextPage;
+      }
+      setSuccess(`✅ Sincronización completa: ${totalActualizados} precios actualizados de ${totalOk} productos de WooCommerce. Recarga la página para ver los cambios.`);
     });
   }
 

@@ -272,18 +272,24 @@ export async function sincronizarPrecios(): Promise<{
  * not just those without price. Handles both simple and variable products.
  * Matches by SKU first, falls back to woo_id if SKU doesn't align.
  * Use this to refresh the entire catalog prices from WooCommerce (source of truth).
+ *
+ * Procesa UNA página de WC (100 productos) por invocación para no superar el timeout
+ * de la función serverless (300s) con catálogos grandes (~3000+ productos). El caller
+ * debe seguir llamando con `page` incremental mientras `hasMore` sea true.
  */
-export async function sincronizarTodosPrecios(): Promise<{
+export async function sincronizarTodosPrecios(page: number = 1): Promise<{
   ok: number;
   actualizados: number;
   noEncontrados: number;
   noEncontradosList: string[];
+  hasMore: boolean;
+  nextPage: number;
   error?: string;
 }> {
   try {
     await verificarAdmin();
   } catch {
-    return { ok: 0, actualizados: 0, noEncontrados: 0, noEncontradosList: [], error: "No autorizado" };
+    return { ok: 0, actualizados: 0, noEncontrados: 0, noEncontradosList: [], hasMore: false, nextPage: page, error: "No autorizado" };
   }
 
   try {
@@ -302,16 +308,11 @@ export async function sincronizarTodosPrecios(): Promise<{
       stock_quantity: number | null; stock_status: string;
     };
 
-    // 1. Fetch all WC products (paginated) — incluye publish + draft/private para no perder ninguno
-    const wooProducts: WooProduct[] = [];
-    let page = 1;
-    while (true) {
-      const batch = await fetchWoo(`/products?per_page=100&page=${page}&status=publish`);
-      if (!Array.isArray(batch) || batch.length === 0) break;
-      wooProducts.push(...batch);
-      if (batch.length < 100) break;
-      page++;
-      await new Promise(r => setTimeout(r, 200));
+    // 1. Fetch solo la página pedida de WC — el resto de páginas las pide el caller en llamadas siguientes
+    const wooProducts: WooProduct[] = await fetchWoo(`/products?per_page=100&page=${page}&status=publish`);
+    const hasMore = Array.isArray(wooProducts) && wooProducts.length === 100;
+    if (!Array.isArray(wooProducts) || wooProducts.length === 0) {
+      return { ok: 0, actualizados: 0, noEncontrados: 0, noEncontradosList: [], hasMore: false, nextPage: page };
     }
 
     // 2. Load multiplicador B2B
@@ -487,8 +488,10 @@ export async function sincronizarTodosPrecios(): Promise<{
       actualizados,
       noEncontrados: noEncontradosSet.size,
       noEncontradosList: [...noEncontradosSet].slice(0, 50),
+      hasMore,
+      nextPage: page + 1,
     };
   } catch (e) {
-    return { ok: 0, actualizados: 0, noEncontrados: 0, noEncontradosList: [], error: String(e) };
+    return { ok: 0, actualizados: 0, noEncontrados: 0, noEncontradosList: [], hasMore: false, nextPage: page, error: String(e) };
   }
 }

@@ -8,6 +8,7 @@ export function PreciosSync() {
   const [result, setResult] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [noEncontrados, setNoEncontrados] = useState<string[]>([]);
+  const [progreso, setProgreso] = useState<string | null>(null);
 
   function handleSyncMissing() {
     setError(null);
@@ -26,10 +27,25 @@ export function PreciosSync() {
     setResult(null);
     setNoEncontrados([]);
     startTransition(async () => {
-      const res = await sincronizarTodosPrecios();
-      if (res.error) { setError(res.error); return; }
-      setResult(`✅ ${res.actualizados} precios actualizados de ${res.ok} productos en WooCommerce. ${res.noEncontrados} sin coincidencia en Esencia (revisar abajo).`);
-      setNoEncontrados(res.noEncontradosList ?? []);
+      let page = 1;
+      let totalOk = 0;
+      let totalActualizados = 0;
+      const noEncontradosAcum: string[] = [];
+      let totalNoEncontrados = 0;
+      while (true) {
+        setProgreso(`Procesando página ${page}… (${totalActualizados} actualizados hasta ahora)`);
+        const res = await sincronizarTodosPrecios(page);
+        if (res.error) { setError(res.error); setProgreso(null); return; }
+        totalOk += res.ok;
+        totalActualizados += res.actualizados;
+        totalNoEncontrados += res.noEncontrados;
+        noEncontradosAcum.push(...res.noEncontradosList);
+        if (!res.hasMore) break;
+        page = res.nextPage;
+      }
+      setProgreso(null);
+      setResult(`✅ ${totalActualizados} precios actualizados de ${totalOk} productos en WooCommerce. ${totalNoEncontrados} sin coincidencia en Esencia (revisar abajo).`);
+      setNoEncontrados(noEncontradosAcum.slice(0, 50));
     });
   }
 
@@ -52,6 +68,11 @@ export function PreciosSync() {
       {result && (
         <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 text-sm">
           {result}
+        </div>
+      )}
+      {progreso && (
+        <div className="bg-blue-50 border border-blue-200 text-blue-700 px-4 py-3 text-sm">
+          {progreso}
         </div>
       )}
 
