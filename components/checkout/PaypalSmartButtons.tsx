@@ -60,6 +60,9 @@ export default function PaypalSmartButtons({ lineas, datosEnvio, disabled }: Pro
     containerRef.current.innerHTML = "";
 
     window.paypal.Buttons({
+      // Solo mostrar botón de PayPal (no tarjeta — ya tenemos el nuestro arriba)
+      fundingSource: window.paypal.FUNDING.PAYPAL,
+
       style: {
         layout: "vertical",
         color:  "gold",
@@ -118,7 +121,7 @@ export default function PaypalSmartButtons({ lineas, datosEnvio, disabled }: Pro
       )}
 
       <p className="text-[10px] text-neutral-400 text-center">
-        PayPal · Apple Pay · Google Pay · Tarjeta
+        PayPal · Apple Pay · Google Pay
       </p>
     </div>
   );

@@ -7,6 +7,7 @@ import { useCarrito } from "@/context/CarritoContext";
 import { calcularGastoEnvio, getZonaEnvio, getSuplementoContrareembolso } from "@/lib/envio";
 import { crearPedidoContrarembolso } from "@/actions/checkout";
 import { POBLACIONES } from "@/lib/poblaciones";
+import PaypalSmartButtons from "@/components/checkout/PaypalSmartButtons";
 
 type Paso = "direccion" | "pago";
 
@@ -421,6 +422,13 @@ export function CheckoutCliente({
               </svg>
               <span className="text-[11px] text-neutral-400">Pago seguro con cifrado SSL · 100% protegido</span>
             </div>
+
+            {/* ── PayPal — alternativa de pago ── */}
+            <PaypalSmartButtons
+              lineas={lineas}
+              datosEnvio={datos}
+              disabled={cargando}
+            />
 
             {/* ── Contra reembolso ── */}
             <div className="mt-4 pt-4 border-t border-neutral-200">
