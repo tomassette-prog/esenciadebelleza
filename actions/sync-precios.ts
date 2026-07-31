@@ -53,6 +53,7 @@ function normalizarNombre(nombre: string): string {
   return nombre
     .toLowerCase()
     .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .replace(/[.,;:()[\]"'ºª-]/g, " ") // puntuación no debe impedir el match por nombre
     .replace(/\s+/g, " ")
     .trim();
 }
@@ -364,6 +365,8 @@ export async function sincronizarTodosPrecios(): Promise<{
     const noEncontradosSet = new Set<string>();
     // padreId -> true si alguna variación tiene oferta activa
     const ofertaPorPadre = new Map<string, boolean>();
+    // padreId -> woo_id a rellenar cuando el match se resolvió por nombre (self-healing para futuros syncs)
+    const woo_idsPorBackfillear = new Map<string, number>();
 
     async function updateVariacion(varId: string, padreId: string, precioB2c: number, precioRegular: number, isOferta: boolean, stock: number, activa: boolean) {
       await supa.from("productos_variaciones").update({
@@ -406,6 +409,7 @@ export async function sincronizarTodosPrecios(): Promise<{
         if (padreId) {
           const vars = varsByPadreId.get(padreId);
           existingVar = vars?.[0];
+          if (existingVar && !padresPorWooId.has(wp.id)) woo_idsPorBackfillear.set(padreId, wp.id);
         }
       }
 
@@ -420,29 +424,44 @@ export async function sincronizarTodosPrecios(): Promise<{
         const wcVars: WooVariation[] = await fetchWoo(`/products/${wp.id}/variations?per_page=100`);
         if (!Array.isArray(wcVars) || wcVars.length === 0) { noEncontradosSet.add(wp.name); continue; }
 
+        const resueltoPorNombre = !padresPorWooId.has(wp.id);
         const padreId = padresPorWooId.get(wp.id) ?? padresPorNombre.get(normalizarNombre(wp.name));
         const padreVars = padreId ? varsByPadreId.get(padreId) : undefined;
         let matchedAny = false;
 
-        for (let i = 0; i < wcVars.length; i++) {
-          const wv = wcVars[i];
+        // Match por SKU exacto — única forma fiable de vincular una variación de WC con su fila en Supabase.
+        // NUNCA emparejar por posición/índice: el orden de /variations no está garantizado y puede
+        // asignar el precio de una variación distinta (ej. una muestra de 1€ a un producto de 40€).
+        for (const wv of wcVars) {
+          const existingVar = wv.sku ? varsBySku.get(wv.sku) : undefined;
+          if (!existingVar) continue;
           const precioRegular = parseFloat(wv.regular_price || wv.price) || 0;
           const precioVenta = parseFloat(wv.sale_price) || 0;
           const isOferta = precioVenta > 0 && precioVenta < precioRegular;
           const precioB2c = isOferta ? precioVenta : precioRegular;
           const stock = wv.stock_quantity ?? 0;
           const activa = wv.stock_status !== "outofstock";
-
-          // Match 1: por SKU exacto
-          let existingVar = wv.sku ? varsBySku.get(wv.sku) : undefined;
-          // Match 2 (fallback): por posición dentro de las variaciones del mismo padre
-          if (!existingVar && padreVars) existingVar = padreVars[i];
-
-          if (!existingVar) continue;
           matchedAny = true;
           await updateVariacion(existingVar.id, existingVar.producto_padre_id, precioB2c, precioRegular, isOferta, stock, activa);
         }
 
+        // Fallback: si Esencia solo tiene 1 fila para este producto variable (sin SKU propio por
+        // variación en WC), usar el precio del producto padre — igual que hace la importación inicial.
+        if (!matchedAny && padreVars?.length === 1) {
+          const precioRegular = parseFloat(wp.regular_price || wp.price) || 0;
+          if (precioRegular > 0) {
+            const precioVenta = parseFloat(wp.sale_price) || 0;
+            const isOferta = precioVenta > 0 && precioVenta < precioRegular;
+            const precioB2c = isOferta ? precioVenta : precioRegular;
+            const stock = wp.stock_quantity ?? 0;
+            const activa = wp.stock_status !== "outofstock";
+            const v = padreVars[0];
+            matchedAny = true;
+            await updateVariacion(v.id, v.producto_padre_id, precioB2c, precioRegular, isOferta, stock, activa);
+          }
+        }
+
+        if (matchedAny && resueltoPorNombre && padreId) woo_idsPorBackfillear.set(padreId, wp.id);
         if (!matchedAny) noEncontradosSet.add(wp.name);
 
         // Small delay between variable products to avoid rate limiting
@@ -455,6 +474,12 @@ export async function sincronizarTodosPrecios(): Promise<{
     // 7. Update oferta flags on parent products — explícito true/false para no dejar ofertas obsoletas
     for (const [padreId, isOferta] of ofertaPorPadre) {
       await supa.from("productos_padre").update({ oferta: isOferta }).eq("id", padreId);
+    }
+
+    // 8. Backfill woo_id para productos que solo se pudieron vincular por nombre — así el próximo
+    // sync ya los encuentra directo por woo_id y deja de depender del match por nombre.
+    for (const [padreId, wooId] of woo_idsPorBackfillear) {
+      await supa.from("productos_padre").update({ woo_id: wooId }).eq("id", padreId);
     }
 
     return {
