@@ -3,7 +3,12 @@
 export type ZonaEnvio = "peninsula" | "valencia" | "baleares" | "no_disponible";
 
 // Suplemento por contrarembolso (el transportista cobra un extra por cobrar en destino)
-export const SUPLEMENTO_CONTRAREEMBOLSO = 3.00;
+export const SUPLEMENTO_CONTRAREEMBOLSO = 3.00; // pedidos >= 40 €
+export const SUPLEMENTO_CONTRAREEMBOLSO_BAJO = 7.50; // pedidos < 40 €
+
+export function getSuplementoContrareembolso(totalProductos: number): number {
+  return totalProductos >= 40 ? SUPLEMENTO_CONTRAREEMBOLSO : SUPLEMENTO_CONTRAREEMBOLSO_BAJO;
+}
 
 export function getZonaEnvio(provincia: string): ZonaEnvio {
   const p = provincia.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");

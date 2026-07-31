@@ -6,7 +6,7 @@ import { generarNumOper, generarCamposCeca } from "@/lib/cecabank";
 import { stripe } from "@/lib/stripe";
 import type { LineaCarrito, LineaPack } from "@/context/CarritoContext";
 
-import { calcularGastoEnvio, SUPLEMENTO_CONTRAREEMBOLSO } from "@/lib/envio";
+import { calcularGastoEnvio, getSuplementoContrareembolso } from "@/lib/envio";
 import { enviarNotificacionPedido } from "@/lib/email";
 
 // ── Convertir packs a líneas de pedido (explota cada pack en sus componentes) ─
@@ -780,7 +780,7 @@ export async function crearPedidoContrarembolso(
 
   if (gastoEnvioBase === -1) return { ok: false, error: "No realizamos envíos a esa provincia." };
 
-  const gastoEnvio = gastoEnvioBase + SUPLEMENTO_CONTRAREEMBOLSO;
+  const gastoEnvio = gastoEnvioBase + getSuplementoContrareembolso(totalProductos);
   const totalFinal = totalProductos + gastoEnvio;
 
   // 1. Guardar pedido en Supabase
