@@ -558,39 +558,69 @@ export async function sincronizarTodo(page: number = 1): Promise<{
   const configMap = new Map((config ?? []).map((c: any) => [c.clave, c.valor]));
   const precioMultiplicador = Number(configMap.get("precio_multiplicador_b2c") ?? "1") || 1;
 
-  // 2. Cargar catálogo actual de Supabase
-  const supaMap = new Map<string, any>();
-  const supaWooMap = new Map<number, string>();
-  let offset = 0;
-  while (true) {
-    const { data } = await supa.from("productos_padre")
-      .select("id, slug, nombre, woo_id, oferta")
-      .range(offset, offset + 999);
-    if (!data?.length) break;
-    for (const r of data) {
+  // 2. Descargar UNA página de WC primero (para saber qué productos necesitamos)
+  const { data: lastSyncRow } = await supa.from("config_tienda").select("valor").eq("clave", "ultima_sync_wc").single();
+  const lastSync = lastSyncRow?.valor ?? null;
+  const now = new Date().toISOString();
+
+  const url = lastSync
+    ? `/products?status=publish&per_page=50&page=${page}&modified_after=${lastSync}`
+    : `/products?status=publish&per_page=50&page=${page}`;
+  const batch: any[] = await fetchWoo(url);
+  const hasMore = Array.isArray(batch) && batch.length === 50;
+  if (!Array.isArray(batch) || batch.length === 0) {
+    await supa.from("config_tienda").upsert({ clave: "ultima_sync_wc", valor: now }, { onConflict: "clave" });
+    try { await guardarSnapshot(); } catch {}
+    return { ok: 0, nuevos: 0, preciosActualizados: 0, ofertasActualizadas: 0, errores: [], sinCambios: 0, marcasPendientes: [], hasMore: false, nextPage: page };
+  }
+
+  // 3. Cargar SOLO los productos de Supabase que coincidan con woo_ids o slugs de esta página
+  const wooIds = batch.map((p: any) => p.id);
+  const slugs = batch.map((p: any) => p.slug || slugify(p.name));
+
+  const supaWooMap = new Map<number, string>(); // woo_id -> slug
+  const supaMap = new Map<string, any>();        // slug -> producto_padre row
+  const varsMap = new Map<string, { id: string; sku: string; precio_b2c: number }[]>();
+
+  // Buscar por woo_id
+  const { data: byWooId } = await supa.from("productos_padre")
+    .select("id, slug, nombre, woo_id, oferta")
+    .in("woo_id", wooIds);
+  if (byWooId) {
+    for (const r of byWooId) {
       supaMap.set(r.slug, r);
       if (r.woo_id) supaWooMap.set(r.woo_id, r.slug);
     }
-    if (data.length < 1000) break;
-    offset += 1000;
   }
 
-  // 3. Cargar variaciones actuales
-  const varsMap = new Map<string, { id: string; sku: string; precio_b2c: number }[]>();
-  offset = 0;
-  while (true) {
+  // Buscar por slug (para productos que aún no tienen woo_id)
+  const missingSlugs = slugs.filter((s: string) => !supaMap.has(s));
+  if (missingSlugs.length > 0) {
+    const { data: bySlug } = await supa.from("productos_padre")
+      .select("id, slug, nombre, woo_id, oferta")
+      .in("slug", missingSlugs);
+    if (bySlug) {
+      for (const r of bySlug) {
+        supaMap.set(r.slug, r);
+        if (r.woo_id) supaWooMap.set(r.woo_id, r.slug);
+      }
+    }
+  }
+
+  // Cargar variaciones SOLO de los productos encontrados
+  const foundPadreIds = [...supaMap.values()].map((p: any) => p.id);
+  if (foundPadreIds.length > 0) {
     const { data: vars } = await supa.from("productos_variaciones")
       .select("id, producto_padre_id, sku, precio_b2c, activa")
       .eq("activa", true)
-      .range(offset, offset + 999);
-    if (!vars?.length) break;
-    for (const v of vars) {
-      const existing = varsMap.get(v.producto_padre_id) ?? [];
-      existing.push(v);
-      varsMap.set(v.producto_padre_id, existing);
+      .in("producto_padre_id", foundPadreIds);
+    if (vars) {
+      for (const v of vars) {
+        const existing = varsMap.get(v.producto_padre_id) ?? [];
+        existing.push(v);
+        varsMap.set(v.producto_padre_id, existing);
+      }
     }
-    if (vars.length < 1000) break;
-    offset += 1000;
   }
 
   // 4. Cargar categorías y marcas
@@ -598,28 +628,10 @@ export async function sincronizarTodo(page: number = 1): Promise<{
   const brandMappingsCache = await getBrandMappingsCache(supa);
   const marcasPendientes: string[] = [];
 
-  // 5. Descargar productos de WooCommerce — UNA página por invocación (pagina en caller)
-  const { data: lastSyncRow } = await supa.from("config_tienda").select("valor").eq("clave", "ultima_sync_wc").single();
-  const lastSync = lastSyncRow?.valor ?? null;
-  const now = new Date().toISOString();
-
   let preciosActualizados = 0;
   let ofertasActualizadas = 0;
   let nuevosCount = 0;
   let sinCambios = 0;
-
-  // Procesar solo la página pedida — el resto de páginas las pide el caller en llamadas siguientes
-  const url = lastSync
-    ? `/products?status=publish&per_page=100&page=${page}&modified_after=${lastSync}`
-    : `/products?status=publish&per_page=100&page=${page}`;
-  const batch = await fetchWoo(url);
-  const hasMore = Array.isArray(batch) && batch.length === 100;
-  if (!Array.isArray(batch) || batch.length === 0) {
-    // Primera página vacía = no hay productos; guardar timestamp y snapshot
-    await supa.from("config_tienda").upsert({ clave: "ultima_sync_wc", valor: now }, { onConflict: "clave" });
-    try { await guardarSnapshot(); } catch {}
-    return { ok: 0, nuevos: 0, preciosActualizados: 0, ofertasActualizadas: 0, errores: [], sinCambios: 0, marcasPendientes: [], hasMore: false, nextPage: page };
-  }
 
   for (const wp of batch) {
     const slug = wp.slug || slugify(wp.name);
