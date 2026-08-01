@@ -30,7 +30,7 @@ export function BulkEditBar({ productoIds, onClear, subcategoriasPorCategoria = 
   useEffect(() => {
     if (accion !== "marca") return;
     // Refetch marcas cada vez que se selecciona "Asignar marca"
-    fetch("/api/marcas")
+    fetch("/api/marcas", { cache: "no-store" })
       .then(r => r.json())
       .then((data: MarcaOption[]) => {
         const sorted = [...data].sort((a, b) => a.nombre.localeCompare(b.nombre));
