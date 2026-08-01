@@ -46,18 +46,23 @@ export function BulkEditBar({ productoIds, onClear, subcategoriasPorCategoria = 
     if (!accion) return;
     setMsg(null);
     startTransition(async () => {
-      let res: { ok: number; error?: string };
-      if (accion === "categoria") {
-        res = await actualizarCategoriaBulk(productoIds, categoria, subcategoria);
-      } else if (accion === "marca") {
-        res = await asignarMarcaBulk(productoIds, marcaId);
-      } else {
-        res = await toggleActivoBulk(productoIds, accion === "activar");
+      try {
+        let res: { ok: number; error?: string };
+        if (accion === "categoria") {
+          res = await actualizarCategoriaBulk(productoIds, categoria, subcategoria);
+        } else if (accion === "marca") {
+          if (!marcaId) { setMsg("Error: selecciona una marca"); return; }
+          res = await asignarMarcaBulk(productoIds, marcaId);
+        } else {
+          res = await toggleActivoBulk(productoIds, accion === "activar");
+        }
+        if (res.error) { setMsg("Error: " + res.error); return; }
+        setMsg(`✓ ${res.ok} productos actualizados`);
+        onClear();
+        router.refresh();
+      } catch (e) {
+        setMsg("Error: " + (e instanceof Error ? e.message : String(e)));
       }
-      if (res.error) { setMsg("Error: " + res.error); return; }
-      setMsg(`✓ ${res.ok} productos actualizados`);
-      onClear();
-      router.refresh();
     });
   }
 
