@@ -6,6 +6,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { slugifyCategoria } from "@/lib/seo";
 import { redirect } from "next/navigation";
+import type { ProductoVariacion } from "@/types/producto";
 
 // ─── Helper: verificar que el usuario es admin ────────────────────────────────
 const ADMIN_EMAILS = ["ziarresamot@gmail.com"];
@@ -362,9 +363,9 @@ export async function crearVariacion(
 // ─── Actualizar variación ─────────────────────────────────────────────────────
 export async function actualizarVariacion(
   variacionId: string,
-  _prev: { error?: string; ok?: boolean } | null,
+  _prev: { error?: string; ok?: boolean; variacion?: ProductoVariacion } | null,
   formData: FormData
-): Promise<{ error?: string; ok?: boolean }> {
+): Promise<{ error?: string; ok?: boolean; variacion?: ProductoVariacion }> {
   await verificarAdmin();
   const supabase = createAdminClient();
 
@@ -376,13 +377,15 @@ export async function actualizarVariacion(
   const ean_code = (formData.get("ean_code") as string) || null;
   const activa = formData.get("activa") !== "off";
 
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from("productos_variaciones")
     .update({ precio_b2c, precio_b2b, stock, nombre_variacion, imagen_url, ean_code, activa })
-    .eq("id", variacionId);
+    .eq("id", variacionId)
+    .select()
+    .single();
 
   if (error) return { error: error.message };
-  return { ok: true };
+  return { ok: true, variacion: data as ProductoVariacion };
 }
 
 // ─── Eliminar variación (soft delete) ────────────────────────────────────────

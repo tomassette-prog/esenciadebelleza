@@ -1,9 +1,9 @@
 "use client";
 
 import { useFormState, useFormStatus } from "react-dom";
-import { crearVariacion, eliminarVariacion } from "@/actions/productos";
+import { crearVariacion, eliminarVariacion, actualizarVariacion } from "@/actions/productos";
 import type { ProductoVariacion } from "@/types/producto";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 function SubmitBtn({ label }: { label: string }) {
   const { pending } = useFormStatus();
@@ -14,14 +14,98 @@ function SubmitBtn({ label }: { label: string }) {
   );
 }
 
-function FilaVariacion({ v, onEliminar }: { v: ProductoVariacion; onEliminar: (id: string) => void }) {
+function FilaVariacion({ v, onEliminar, onActualizar }: { v: ProductoVariacion; onEliminar: (id: string) => void; onActualizar: (v: ProductoVariacion) => void }) {
   const [editando, setEditando] = useState(false);
+  const accionActualizar = actualizarVariacion.bind(null, v.id);
+  const [state, formAction] = useFormState(accionActualizar, null);
+  const { pending } = useFormStatus();
+
+  useEffect(() => {
+    if (state?.ok && state.variacion) {
+      onActualizar(state.variacion);
+      setEditando(false);
+    }
+  }, [state]);
 
   async function handleEliminar() {
     if (!confirm(`¿Eliminar variación "${v.nombre_variacion}"?`)) return;
     const res = await eliminarVariacion(v.id);
     if (res.error) alert(res.error);
     else onEliminar(v.id);
+  }
+
+  if (editando) {
+    return (
+      <tr className="bg-blue-50/30 border-b border-neutral-100">
+        <td colSpan={7} className="px-3 py-4">
+          <form action={formAction} className="space-y-3">
+            {state?.ok && (
+              <div className="text-sm text-green-700 bg-green-50 border border-green-200 px-3 py-2">
+                ✅ Variación actualizada
+              </div>
+            )}
+            {state?.error && (
+              <div className="text-sm text-red-600 bg-red-50 border border-red-200 px-3 py-2">
+                {state.error}
+              </div>
+            )}
+
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+              <div>
+                <label className="block text-xs uppercase tracking-widest text-neutral-600 mb-1">Nombre</label>
+                <input type="text" name="nombre_variacion" defaultValue={v.nombre_variacion} className="input-clean w-full text-sm" />
+              </div>
+              <div>
+                <label className="block text-xs uppercase tracking-widest text-neutral-600 mb-1">Precio B2C €</label>
+                <input type="number" name="precio_b2c" step="0.01" min="0" defaultValue={v.precio_b2c} className="input-clean w-full text-sm" />
+              </div>
+              <div>
+                <label className="block text-xs uppercase tracking-widest text-neutral-600 mb-1">Precio B2B €</label>
+                <input type="number" name="precio_b2b" step="0.01" min="0" defaultValue={v.precio_b2b ?? ""} className="input-clean w-full text-sm" />
+              </div>
+              <div>
+                <label className="block text-xs uppercase tracking-widest text-neutral-600 mb-1">Stock</label>
+                <input type="number" name="stock" min="0" defaultValue={v.stock} className="input-clean w-full text-sm" />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+              <div>
+                <label className="block text-xs uppercase tracking-widest text-neutral-600 mb-1">EAN</label>
+                <input type="text" name="ean_code" defaultValue={v.ean_code ?? ""} className="input-clean w-full font-mono text-sm" />
+              </div>
+              <div className="lg:col-span-2">
+                <label className="block text-xs uppercase tracking-widest text-neutral-600 mb-1">URL imagen</label>
+                <input type="url" name="imagen_url" defaultValue={v.imagen_url ?? ""} className="input-clean w-full text-sm" />
+              </div>
+              <div className="flex items-end">
+                <label className="flex items-center gap-2 cursor-pointer select-none pb-1">
+                  <input type="checkbox" name="activa" defaultChecked={v.activa} className="w-4 h-4 accent-green-600" />
+                  <span className="text-sm text-neutral-700">Activa</span>
+                </label>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <button
+                type="submit"
+                disabled={pending}
+                className="btn-primary px-4 py-2 text-xs tracking-widest uppercase disabled:opacity-50"
+              >
+                {pending ? "Guardando..." : "Guardar"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setEditando(false)}
+                className="text-xs text-neutral-500 hover:text-neutral-800 underline underline-offset-2"
+              >
+                Cancelar
+              </button>
+            </div>
+          </form>
+        </td>
+      </tr>
+    );
   }
 
   return (
@@ -44,10 +128,10 @@ function FilaVariacion({ v, onEliminar }: { v: ProductoVariacion; onEliminar: (i
         <div className="flex items-center justify-end gap-3">
           <button
             type="button"
-            onClick={() => setEditando(!editando)}
+            onClick={() => setEditando(true)}
             className="text-xs text-neutral-500 hover:text-neutral-800 underline underline-offset-2"
           >
-            {editando ? "Cerrar" : "Editar"}
+            Editar
           </button>
           <button
             type="button"
@@ -57,9 +141,6 @@ function FilaVariacion({ v, onEliminar }: { v: ProductoVariacion; onEliminar: (i
             Eliminar
           </button>
         </div>
-        {editando && (
-          <div className="mt-2 text-xs text-neutral-400">(edición inline próximamente)</div>
-        )}
       </td>
     </tr>
   );
@@ -75,6 +156,10 @@ export function VariacionesManager({ productoId, variacionesIniciales }: {
 
   function handleEliminar(id: string) {
     setVariaciones((prev) => prev.filter((v) => v.id !== id));
+  }
+
+  function handleActualizar(vActualizada: ProductoVariacion) {
+    setVariaciones((prev) => prev.map((v) => (v.id === vActualizada.id ? vActualizada : v)));
   }
 
   return (
@@ -115,7 +200,7 @@ export function VariacionesManager({ productoId, variacionesIniciales }: {
               </tr>
             )}
             {variaciones.map((v) => (
-              <FilaVariacion key={v.id} v={v} onEliminar={handleEliminar} />
+              <FilaVariacion key={v.id} v={v} onEliminar={handleEliminar} onActualizar={handleActualizar} />
             ))}
           </tbody>
         </table>
