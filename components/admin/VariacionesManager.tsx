@@ -3,7 +3,7 @@
 import { useFormState, useFormStatus } from "react-dom";
 import { crearVariacion, eliminarVariacion, actualizarVariacion } from "@/actions/productos";
 import type { ProductoVariacion } from "@/types/producto";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 
 function SubmitBtn({ label }: { label: string }) {
   const { pending } = useFormStatus();
@@ -25,7 +25,7 @@ function FilaVariacion({ v, onEliminar, onActualizar }: { v: ProductoVariacion; 
       onActualizar(state.variacion);
       setEditando(false);
     }
-  }, [state]);
+  }, [state, onActualizar]);
 
   async function handleEliminar() {
     if (!confirm(`¿Eliminar variación "${v.nombre_variacion}"?`)) return;
@@ -158,9 +158,9 @@ export function VariacionesManager({ productoId, variacionesIniciales }: {
     setVariaciones((prev) => prev.filter((v) => v.id !== id));
   }
 
-  function handleActualizar(vActualizada: ProductoVariacion) {
+  const handleActualizar = useCallback((vActualizada: ProductoVariacion) => {
     setVariaciones((prev) => prev.map((v) => (v.id === vActualizada.id ? vActualizada : v)));
-  }
+  }, []);
 
   return (
     <section className="bg-white border border-neutral-200">
