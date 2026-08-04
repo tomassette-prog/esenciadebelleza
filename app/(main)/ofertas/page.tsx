@@ -77,9 +77,9 @@ export default async function OfertasPage({
   const ofertas: ProductoCatalogo[] = (ofertasRaw ?? []).map(toProductoCatalogo);
 
   // Extraer categorías y subcategorías disponibles en ofertas
-  const categoriasDisponibles = [...new Set(ofertas.map((p) => p.categoria).filter(Boolean))].sort();
+  const categoriasDisponibles = [...new Set(ofertas.map((p) => p.categoria).filter((c): c is string => !!c))].sort();
   const subcategoriasDisponibles = cat
-    ? [...new Set(ofertas.filter((p) => p.categoria === cat).map((p) => p.subcategoria).filter(Boolean))].sort()
+    ? [...new Set(ofertas.filter((p) => p.categoria === cat).map((p) => p.subcategoria).filter((s): s is string => !!s))].sort()
     : [];
 
   return (
