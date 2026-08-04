@@ -7,11 +7,22 @@ import type { ProductoCatalogo } from "@/types/producto";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-export const metadata: Metadata = {
-  title: "Ofertas",
-  description: "Productos en oferta con los mejores precios. Descuentos en marcas profesionales de peluquería, estética y perfumería.",
-  alternates: { canonical: "https://esenciadebelleza.es/ofertas" },
-};
+export async function generateMetadata({
+  searchParams,
+}: {
+  searchParams: Promise<{ cat?: string }>;
+}): Promise<Metadata> {
+  const { cat } = await searchParams;
+  const title = cat ? `Ofertas en ${cat}` : "Ofertas";
+  const description = cat
+    ? `Descuentos en productos de ${cat}. Marcas profesionales de peluquería, estética y perfumería.`
+    : "Productos en oferta con los mejores precios. Descuentos en marcas profesionales de peluquería, estética y perfumería.";
+  return {
+    title,
+    description,
+    alternates: { canonical: `https://esenciadebelleza.es/ofertas${cat ? `?cat=${encodeURIComponent(cat)}` : ""}` },
+  };
+}
 
 function toProductoCatalogo(p: any): ProductoCatalogo {
   const variaciones = (p.variaciones ?? []).filter((v: any) => v.activa);
@@ -36,10 +47,15 @@ function toProductoCatalogo(p: any): ProductoCatalogo {
   };
 }
 
-export default async function OfertasPage() {
+export default async function OfertasPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ cat?: string; subcat?: string }>;
+}) {
+  const { cat, subcat } = await searchParams;
   const supabase = createAdminClient();
 
-  const { data: ofertasRaw } = await supabase
+  let query = supabase
     .from("productos_padre")
     .select(
       `id, nombre, slug, categoria, subcategoria,
@@ -51,9 +67,20 @@ export default async function OfertasPage() {
     .eq("oferta", true)
     .eq("variaciones.activa", true)
     .order("nombre")
-    .range(0, 199);
+    .range(0, 999);
+
+  if (cat) query = query.eq("categoria", cat);
+  if (subcat) query = query.eq("subcategoria", subcat);
+
+  const { data: ofertasRaw } = await query;
 
   const ofertas: ProductoCatalogo[] = (ofertasRaw ?? []).map(toProductoCatalogo);
+
+  // Extraer categorías y subcategorías disponibles en ofertas
+  const categoriasDisponibles = [...new Set(ofertas.map((p) => p.categoria).filter(Boolean))].sort();
+  const subcategoriasDisponibles = cat
+    ? [...new Set(ofertas.filter((p) => p.categoria === cat).map((p) => p.subcategoria).filter(Boolean))].sort()
+    : [];
 
   return (
     <div className="container-main py-8">
@@ -63,7 +90,7 @@ export default async function OfertasPage() {
           className="text-3xl md:text-4xl font-light text-neutral-900"
           style={{ fontFamily: "var(--font-cormorant)" }}
         >
-          Ofertas
+          Ofertas{cat ? ` en ${cat}` : ""}
         </h1>
         <p className="text-neutral-500 mt-2 text-sm">
           Aprovecha nuestros descuentos en productos profesionales.
@@ -75,8 +102,60 @@ export default async function OfertasPage() {
       <nav className="text-xs text-neutral-400 mb-6">
         <Link href="/" className="hover:text-neutral-600">Inicio</Link>
         <span className="mx-2">/</span>
-        <span className="text-neutral-600">Ofertas</span>
+        {cat ? (
+          <>
+            <Link href="/ofertas" className="hover:text-neutral-600">Ofertas</Link>
+            <span className="mx-2">/</span>
+            <span className="text-neutral-600">{cat}</span>
+          </>
+        ) : (
+          <span className="text-neutral-600">Ofertas</span>
+        )}
       </nav>
+
+      {/* Filtros de categoría */}
+      {categoriasDisponibles.length > 1 && (
+        <div className="mb-6 space-y-3">
+          <div className="flex flex-wrap gap-2">
+            <Link
+              href="/ofertas"
+              className={`px-3 py-1.5 text-xs border transition-colors ${!cat ? "bg-[#3D2018] text-white border-[#3D2018]" : "border-neutral-300 text-neutral-600 hover:border-neutral-500"}`}
+            >
+              Todas
+            </Link>
+            {categoriasDisponibles.map((c) => (
+              <Link
+                key={c}
+                href={`/ofertas?cat=${encodeURIComponent(c)}`}
+                className={`px-3 py-1.5 text-xs border transition-colors ${cat === c ? "bg-[#3D2018] text-white border-[#3D2018]" : "border-neutral-300 text-neutral-600 hover:border-neutral-500"}`}
+              >
+                {c}
+              </Link>
+            ))}
+          </div>
+
+          {/* Subcategorías — aparecen solo cuando hay categoría seleccionada */}
+          {subcategoriasDisponibles.length > 1 && (
+            <div className="flex flex-wrap gap-2">
+              <Link
+                href={`/ofertas?cat=${encodeURIComponent(cat!)}`}
+                className={`px-3 py-1.5 text-xs border transition-colors ${!subcat ? "bg-[#C4857A] text-white border-[#C4857A]" : "border-neutral-300 text-neutral-600 hover:border-neutral-500"}`}
+              >
+                Todas las subcategorías
+              </Link>
+              {subcategoriasDisponibles.map((s) => (
+                <Link
+                  key={s}
+                  href={`/ofertas?cat=${encodeURIComponent(cat!)}&subcat=${encodeURIComponent(s)}`}
+                  className={`px-3 py-1.5 text-xs border transition-colors ${subcat === s ? "bg-[#C4857A] text-white border-[#C4857A]" : "border-neutral-300 text-neutral-600 hover:border-neutral-500"}`}
+                >
+                  {s}
+                </Link>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Grid */}
       {ofertas.length > 0 ? (
@@ -88,11 +167,18 @@ export default async function OfertasPage() {
       ) : (
         <div className="text-center py-20">
           <p className="text-neutral-400 text-sm">
-            No hay ofertas disponibles en este momento.
+            No hay ofertas disponibles{cat ? ` en ${cat}` : ""} en este momento.
           </p>
-          <Link href="/productos" className="text-[#C4857A] text-sm underline mt-2 inline-block">
-            Ver todos los productos →
-          </Link>
+          {cat && (
+            <Link href="/ofertas" className="text-[#C4857A] text-sm underline mt-2 inline-block">
+              Ver todas las ofertas →
+            </Link>
+          )}
+          {!cat && (
+            <Link href="/productos" className="text-[#C4857A] text-sm underline mt-2 inline-block">
+              Ver todos los productos →
+            </Link>
+          )}
         </div>
       )}
     </div>
