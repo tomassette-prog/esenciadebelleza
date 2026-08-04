@@ -94,35 +94,13 @@ export default async function AdminProductosPage({
     else query = query.eq("id", "00000000-0000-0000-0000-000000000000"); // sin resultados
   }
   else if (extra === "sin_stock") {
-    const supabaseAdmin = createAdminClient();
-
-    // Paginar para obtener TODAS las variaciones (Supabase limita a 1000)
-    const idsConStock = new Set<string>();
-    const idsTodos = new Set<string>();
-    const PAGE = 1000;
-    let offset = 0;
-    let hasMore = true;
-
-    while (hasMore) {
-      const { data: batch } = await supabaseAdmin
-        .from("productos_variaciones")
-        .select("producto_padre_id, activa, stock")
-        .range(offset, offset + PAGE - 1);
-
-      if (!batch || batch.length === 0) break;
-
-      for (const v of batch as { producto_padre_id: string; activa: boolean; stock: number }[]) {
-        idsTodos.add(v.producto_padre_id);
-        if (v.activa && v.stock > 0) idsConStock.add(v.producto_padre_id);
-      }
-
-      hasMore = batch.length === PAGE;
-      offset += PAGE;
-    }
-
-    const sinStockIds = [...idsTodos].filter((id) => !idsConStock.has(id));
-    if (sinStockIds.length > 0) query = query.in("id", sinStockIds);
-    else query = query.eq("id", "00000000-0000-0000-0000-000000000000");
+    // Filtrar por variaciones sin stock usando relación anidada de PostgREST
+    query = query
+      .filter("variaciones", "not", null)
+      .not("variaciones", "any", { operator: "and", filters: [
+        { column: "activa", operator: "eq", value: "true" },
+        { column: "stock", operator: "gt", value: "0" },
+      ]});
   }
   else if (extra === "general") query = query.ilike("subcategoria", "%-general");
   else if (extra === "es_pack") query = query.eq("es_pack", true);
