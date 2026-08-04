@@ -94,13 +94,12 @@ export default async function AdminProductosPage({
     else query = query.eq("id", "00000000-0000-0000-0000-000000000000"); // sin resultados
   }
   else if (extra === "sin_stock") {
-    // Filtrar por variaciones sin stock usando relación anidada de PostgREST
-    query = query
-      .filter("variaciones", "not", null)
-      .not("variaciones", "any", { operator: "and", filters: [
-        { column: "activa", operator: "eq", value: "true" },
-        { column: "stock", operator: "gt", value: "0" },
-      ]});
+    const { data: sinStockIds } = await supabase.rpc("productos_sin_stock");
+    const ids = (sinStockIds ?? []).map((r: string | { productos_sin_stock: string }) =>
+      typeof r === "string" ? r : r.productos_sin_stock
+    );
+    if (ids.length > 0) query = query.in("id", ids.slice(0, 500));
+    else query = query.eq("id", "00000000-0000-0000-0000-000000000000");
   }
   else if (extra === "general") query = query.ilike("subcategoria", "%-general");
   else if (extra === "es_pack") query = query.eq("es_pack", true);
