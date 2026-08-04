@@ -162,6 +162,7 @@ export function FiltrosProductos({
           <option value="">Filtros especiales…</option>
           <option value="sin_marca">Sin marca asignada</option>
           <option value="sin_precio">Sin precio</option>
+          <option value="sin_stock">Sin stock</option>
           <option value="general">Categoría general</option>
           <option value="es_pack">Marcados como pack</option>
         </select>
@@ -177,7 +178,7 @@ export function FiltrosProductos({
           {currentSubcat && <Chip label={currentSubcat} onRemove={() => navigate({ subcat: "" })} />}
           {currentEstado && <Chip label={currentEstado} onRemove={() => navigate({ estado: "" })} />}
           {currentFlag && <Chip label={currentFlag} onRemove={() => navigate({ flag: "" })} />}
-          {currentExtra && <Chip label={{ sin_marca: "Sin marca", sin_precio: "Sin precio", general: "Categoría general" }[currentExtra] ?? currentExtra} onRemove={() => navigate({ extra: "" })} />}
+          {currentExtra && <Chip label={{ sin_marca: "Sin marca", sin_precio: "Sin precio", sin_stock: "Sin stock", general: "Categoría general" }[currentExtra] ?? currentExtra} onRemove={() => navigate({ extra: "" })} />}
           <button onClick={reset} className="text-xs text-neutral-400 hover:text-red-500 underline underline-offset-2 transition-colors ml-1">
             Limpiar todo
           </button>

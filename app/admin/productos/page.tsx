@@ -93,10 +93,35 @@ export default async function AdminProductosPage({
     if (sinPrecioIds.length > 0) query = query.in("id", sinPrecioIds);
     else query = query.eq("id", "00000000-0000-0000-0000-000000000000"); // sin resultados
   }
+  else if (extra === "sin_stock") {
+    const supabaseAdmin = createAdminClient();
+    const { data: varData } = await supabaseAdmin
+      .from("productos_variaciones")
+      .select("producto_padre_id")
+      .or("stock.is.null,stock.eq.0,activa.eq.false");
+    const sinStockIds = [...new Set((varData ?? []).map((v: { producto_padre_id: string }) => v.producto_padre_id))];
+    if (sinStockIds.length > 0) query = query.in("id", sinStockIds);
+    else query = query.eq("id", "00000000-0000-0000-0000-000000000000"); // sin resultados
+  }
   else if (extra === "general") query = query.ilike("subcategoria", "%-general");
   else if (extra === "es_pack") query = query.eq("es_pack", true);
 
-  const { data: productos, count: totalCount } = await query;
+  const { data: rawProductos, count: totalCount } = await query;
+
+  // Ordenar resultados: coincidencia exacta primero, luego prefijo, luego contiene
+  let productos = rawProductos ?? [];
+  if (q?.trim()) {
+    const qNorm = q.trim().toLowerCase();
+    productos = [...productos].sort((a: { nombre: string }, b: { nombre: string }) => {
+      const aNorm = a.nombre.toLowerCase();
+      const bNorm = b.nombre.toLowerCase();
+      const aExact = aNorm === qNorm ? 0 : aNorm.startsWith(qNorm) ? 1 : aNorm.includes(qNorm) ? 2 : 3;
+      const bExact = bNorm === qNorm ? 0 : bNorm.startsWith(qNorm) ? 1 : bNorm.includes(qNorm) ? 2 : 3;
+      if (aExact !== bExact) return aExact - bExact;
+      return aNorm.localeCompare(bNorm);
+    });
+  }
+
   const totalPages = Math.ceil((totalCount ?? 0) / PAGE_SIZE);
 
   const paginaParams = (overrides: Record<string, string>) =>
@@ -144,7 +169,7 @@ export default async function AdminProductosPage({
       </Suspense>
 
       <ProductosTableClient
-        productos={(productos ?? []) as Parameters<typeof ProductosTableClient>[0]["productos"]}
+        productos={productos as Parameters<typeof ProductosTableClient>[0]["productos"]}
         backUrl={`/admin/productos${paginaParams({}) ? `?${paginaParams({})}` : ""}`}
         subcategoriasPorCategoria={subcategoriasPorCategoria}
       />
