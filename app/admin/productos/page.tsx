@@ -95,13 +95,24 @@ export default async function AdminProductosPage({
   }
   else if (extra === "sin_stock") {
     const supabaseAdmin = createAdminClient();
-    const { data: varData } = await supabaseAdmin
+    // Buscar productos que SÍ tienen al menos una variación activa con stock > 0
+    const { data: conStock } = await supabaseAdmin
       .from("productos_variaciones")
       .select("producto_padre_id")
-      .or("stock.is.null,stock.eq.0,activa.eq.false");
-    const sinStockIds = [...new Set((varData ?? []).map((v: { producto_padre_id: string }) => v.producto_padre_id))];
+      .eq("activa", true)
+      .gt("stock", 0);
+    const idsConStock = new Set((conStock ?? []).map((v: { producto_padre_id: string }) => v.producto_padre_id));
+
+    // Buscar TODOS los productos con variaciones
+    const { data: todosConVar } = await supabaseAdmin
+      .from("productos_variaciones")
+      .select("producto_padre_id");
+    const idsTodos = new Set((todosConVar ?? []).map((v: { producto_padre_id: string }) => v.producto_padre_id));
+
+    // Sin stock = tienen variaciones pero ninguna activa con stock
+    const sinStockIds = [...idsTodos].filter((id) => !idsConStock.has(id));
     if (sinStockIds.length > 0) query = query.in("id", sinStockIds);
-    else query = query.eq("id", "00000000-0000-0000-0000-000000000000"); // sin resultados
+    else query = query.eq("id", "00000000-0000-0000-0000-000000000000");
   }
   else if (extra === "general") query = query.ilike("subcategoria", "%-general");
   else if (extra === "es_pack") query = query.eq("es_pack", true);
