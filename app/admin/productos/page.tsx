@@ -95,21 +95,31 @@ export default async function AdminProductosPage({
   }
   else if (extra === "sin_stock") {
     const supabaseAdmin = createAdminClient();
-    // Buscar productos que SÍ tienen al menos una variación activa con stock > 0
-    const { data: conStock } = await supabaseAdmin
-      .from("productos_variaciones")
-      .select("producto_padre_id")
-      .eq("activa", true)
-      .gt("stock", 0);
-    const idsConStock = new Set((conStock ?? []).map((v: { producto_padre_id: string }) => v.producto_padre_id));
 
-    // Buscar TODOS los productos con variaciones
-    const { data: todosConVar } = await supabaseAdmin
-      .from("productos_variaciones")
-      .select("producto_padre_id");
-    const idsTodos = new Set((todosConVar ?? []).map((v: { producto_padre_id: string }) => v.producto_padre_id));
+    // Paginar para obtener TODAS las variaciones (Supabase limita a 1000)
+    const idsConStock = new Set<string>();
+    const idsTodos = new Set<string>();
+    const PAGE = 1000;
+    let offset = 0;
+    let hasMore = true;
 
-    // Sin stock = tienen variaciones pero ninguna activa con stock
+    while (hasMore) {
+      const { data: batch } = await supabaseAdmin
+        .from("productos_variaciones")
+        .select("producto_padre_id, activa, stock")
+        .range(offset, offset + PAGE - 1);
+
+      if (!batch || batch.length === 0) break;
+
+      for (const v of batch as { producto_padre_id: string; activa: boolean; stock: number }[]) {
+        idsTodos.add(v.producto_padre_id);
+        if (v.activa && v.stock > 0) idsConStock.add(v.producto_padre_id);
+      }
+
+      hasMore = batch.length === PAGE;
+      offset += PAGE;
+    }
+
     const sinStockIds = [...idsTodos].filter((id) => !idsConStock.has(id));
     if (sinStockIds.length > 0) query = query.in("id", sinStockIds);
     else query = query.eq("id", "00000000-0000-0000-0000-000000000000");
