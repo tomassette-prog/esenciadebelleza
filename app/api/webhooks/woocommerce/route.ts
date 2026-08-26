@@ -92,7 +92,7 @@ export async function POST(req: NextRequest) {
       // ── Producto creado o actualizado ──────────────────────────────────────
       case "product.created":
       case "product.updated": {
-        await sincronizarProducto(supabase, payload);
+        await sincronizarProducto(supabase, payload, topic === "product.created");
         break;
       }
 
@@ -184,8 +184,15 @@ export async function POST(req: NextRequest) {
 // ── Sincronizar producto completo ─────────────────────────────────────────────
 async function sincronizarProducto(
   supabase: ReturnType<typeof createAdminClient>,
-  p: Record<string, unknown>
+  p: Record<string, unknown>,
+  esNuevo = false
 ) {
+  // Leer multiplicador B2B (fallback 0.75 si no está configurado)
+  let b2bMult = 0.75;
+  try {
+    const { data: cfg } = await supabase.from("config_tienda").select("valor").eq("clave", "precio_multiplicador_b2b").single();
+    if (cfg?.valor) b2bMult = parseFloat(cfg.valor) || 0.75;
+  } catch { /* usar fallback */ }
   const wc_id   = String(p.id);
   const slug    = String(p.slug);
   const { categoria, subcategoria } = mapearCategoria(
@@ -236,17 +243,18 @@ async function sincronizarProducto(
 
   if (tipo === "simple") {
     // Producto simple → una única variación
+    const precioB2c = parseFloat(String(p.price || p.regular_price || "0"));
     await supabase.from("productos_variaciones").upsert(
       {
         producto_padre_id: padre.id,
         sku:               String(p.sku || slug),
         nombre_variacion:  "Unidad",
-        precio_b2c:        parseFloat(String(p.price || p.regular_price || "0")),
-        precio_b2b:        parseFloat(String(p.price || p.regular_price || "0")),
+        precio_b2c:        precioB2c,
+        precio_b2b:        parseFloat((precioB2c * b2bMult).toFixed(2)),
         precio_comparar:   p.sale_price ? parseFloat(String(p.regular_price || "0")) : null,
         imagen_url:        (p.images as { src: string }[])?.[0]?.src ?? null,
         stock:             Number(p.stock_quantity ?? 0),
-        activo:            p.status === "publish",
+        activa:            p.status === "publish",
       },
       { onConflict: "sku" }
     );
@@ -270,11 +278,11 @@ async function sincronizarProducto(
             sku,
             nombre_variacion:  nombreVariacion,
             precio_b2c:        precioB2C,
-            precio_b2b:        precioB2C,
+            precio_b2b:        parseFloat((precioB2C * b2bMult).toFixed(2)),
             precio_comparar:   v.sale_price ? parseFloat(v.regular_price || "0") : null,
             imagen_url:        v.image?.src ?? (p.images as { src: string }[])?.[0]?.src ?? null,
             stock:             Number(v.stock_quantity ?? 0),
-            activo:            v.status === "publish",
+            activa:            v.status === "publish",
           },
           { onConflict: "sku" }
         );
@@ -282,6 +290,31 @@ async function sincronizarProducto(
       console.log(`[WC Webhook] Producto ${wc_id} (variable): ${variaciones.length} variaciones sincronizadas`);
     } catch (err) {
       console.error(`[WC Webhook] Error obteniendo variaciones del producto ${wc_id}:`, err);
+    }
+  }
+
+  // Generar SEO automáticamente para productos nuevos
+  if (esNuevo) {
+    try {
+      const { generarSeoProducto } = await import("@/lib/seo-generator");
+      const marcaNombre = marcaId
+        ? (await supabase.from("marcas").select("nombre").eq("id", marcaId).single()).data?.nombre ?? null
+        : null;
+      const seo = generarSeoProducto({
+        nombre:      String(p.name),
+        marca:       marcaNombre,
+        categoria,
+        subcategoria,
+        descripcion: String(p.description || p.short_description || "") || null,
+      });
+      await supabase.from("productos_padre").update({
+        seo_title:             seo.seo_title,
+        seo_description:       seo.seo_description,
+        texto_enriquecido_seo: seo.texto_enriquecido_seo,
+      }).eq("id", padre.id);
+      console.log(`[WC Webhook] SEO generado para nuevo producto ${wc_id}: "${seo.seo_title}"`);
+    } catch (err) {
+      console.error(`[WC Webhook] Error generando SEO para ${wc_id}:`, err);
     }
   }
 }
