@@ -65,9 +65,9 @@ function reducer(state: EstadoCarrito, accion: AccionCarrito): EstadoCarrito {
       const idx = state.lineas.findIndex((l) => l.variacion_id === item.variacion_id);
       const lineas = idx >= 0
         ? state.lineas.map((l, i) =>
-            i === idx ? { ...l, cantidad: l.cantidad + cantidad } : l
+            i === idx ? { ...l, cantidad: Math.min(l.cantidad + cantidad, 99) } : l
           )
-        : [...state.lineas, { ...item, cantidad }];
+        : [...state.lineas, { ...item, cantidad: Math.min(cantidad, 99) }];
       return { ...state, lineas, abierto: true };
     }
 
@@ -80,7 +80,7 @@ function reducer(state: EstadoCarrito, accion: AccionCarrito): EstadoCarrito {
       return {
         ...state,
         lineas: state.lineas.map((l) =>
-          l.variacion_id === accion.variacion_id ? { ...l, cantidad: accion.cantidad } : l
+          l.variacion_id === accion.variacion_id ? { ...l, cantidad: Math.min(accion.cantidad, 99) } : l
         ),
       };
     }

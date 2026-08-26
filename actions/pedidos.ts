@@ -188,6 +188,8 @@ export async function lanzarPedidoWoo(
   };
 
   try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
     const res = await fetch(`${wooUrl}/wp-json/esencia/v1/order`, {
       method:  "POST",
       headers: {
@@ -195,7 +197,9 @@ export async function lanzarPedidoWoo(
         "X-Esencia-Token": wooToken,
       },
       body: JSON.stringify(body),
+      signal: controller.signal,
     });
+    clearTimeout(timeoutId);
 
     if (!res.ok) {
       const txt = await res.text();

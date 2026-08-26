@@ -92,17 +92,17 @@ export default function ConfirmacionInner() {
             {orderData && (
               <>
                 <Script src="https://apis.google.com/js/platform.js?onload=renderOptIn" strategy="afterInteractive" />
-                <Script id="gcr-optin" strategy="afterInteractive" dangerouslySetInnerHTML={{
+<Script id="gcr-optin" strategy="afterInteractive" dangerouslySetInnerHTML={{
                   __html: `
                     window.renderOptIn = function() {
                       window.gapi.load('surveyoptin', function() {
-                        window.gapi.surveyoptin.render({
-                          "merchant_id": 5816732573,
-                          "order_id": "${orderData.orderId}",
-                          "email": "${orderData.email}",
-                          "delivery_country": "ES",
-                          "estimated_delivery_date": "${new Date(Date.now() + 4 * 86400000).toISOString().split('T')[0]}"
-                        });
+                        window.gapi.surveyoptin.render(${JSON.stringify({
+                          merchant_id: 5816732573,
+                          order_id: orderData.orderId,
+                          email: orderData.email,
+                          delivery_country: "ES",
+                          estimated_delivery_date: new Date(Date.now() + 4 * 86400000).toISOString().split('T')[0],
+                        })});
                       });
                     }
                   `

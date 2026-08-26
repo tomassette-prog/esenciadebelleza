@@ -1,11 +1,10 @@
 "use server";
 
-import { cookies } from "next/headers";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { verificarAdmin } from "@/lib/admin-auth";
 import Anthropic from "@anthropic-ai/sdk";
 
 const claude = new Anthropic();
-const ADMIN_EMAILS = ["ziarresamot@gmail.com"];
 
 export interface EnriquecerProductoInput {
   productoId: string;
@@ -19,34 +18,6 @@ export interface EnriquecerProductoOutput {
   mensaje: string;
   descripcionGenerada?: string;
   error?: string;
-}
-
-/**
- * Verifica que el usuario sea admin leyendo cookies
- */
-async function verificarAdmin(): Promise<void> {
-  try {
-    const cookieStore = await cookies();
-    const authToken = cookieStore.get("sb-yjanobsfzcwpusynvlun-auth-token")?.value;
-
-    if (!authToken) {
-      throw new Error("No autorizado: token no encontrado");
-    }
-
-    try {
-      const parsed = JSON.parse(authToken);
-      const email = parsed.user?.email || parsed.email;
-
-      if (!ADMIN_EMAILS.includes(email)) {
-        throw new Error(`No autorizado: ${email} no está en la lista de admins`);
-      }
-    } catch (parseError) {
-      console.warn("⚠️  No se pudo parsear token auth:", parseError);
-      throw new Error("No autorizado: token inválido");
-    }
-  } catch (error) {
-    throw new Error(`Acceso denegado: ${String(error)}`);
-  }
 }
 
 /**

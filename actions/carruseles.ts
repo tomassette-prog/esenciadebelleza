@@ -1,42 +1,8 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { cookies } from "next/headers";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { createClient } from "@/lib/supabase/server";
-
-const ADMIN_EMAILS = ["ziarresamot@gmail.com"];
-
-async function verificarAdmin() {
-  try {
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (user && ADMIN_EMAILS.includes(user.email ?? "")) return user;
-  } catch { /* ignorar */ }
-  try {
-    const cookieStore = await cookies();
-    const projectRef = "yjanobsfzcwpusynvlun";
-    const cookieName = `sb-${projectRef}-auth-token`;
-    let tokenValue = cookieStore.get(cookieName)?.value;
-    if (!tokenValue) {
-      let combined = "";
-      for (let i = 0; i < 5; i++) {
-        const chunk = cookieStore.get(`${cookieName}.${i}`)?.value;
-        if (!chunk) break;
-        combined += chunk;
-      }
-      if (combined) tokenValue = combined;
-    }
-    if (!tokenValue) return null;
-    const parsed = JSON.parse(tokenValue);
-    const accessToken: string = parsed.access_token;
-    if (!accessToken) return null;
-    const payloadB64 = accessToken.split(".")[1];
-    const payload = JSON.parse(Buffer.from(payloadB64, "base64url").toString());
-    if (payload.sub && payload.exp * 1000 > Date.now()) return { id: payload.sub, email: payload.email };
-    return null;
-  } catch { return null; }
-}
+import { verificarAdmin } from "@/lib/admin-auth";
 
 // ─── Crear carrusel ───────────────────────────────────────────────────────────
 export async function crearCarrusel(

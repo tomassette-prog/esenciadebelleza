@@ -34,6 +34,22 @@ export async function crearOrdenPaypal(
 ): Promise<{ orderId: string | null; gastoEnvio: number; error: string | null }> {
   if (!lineas.length) return { orderId: null, gastoEnvio: 0, error: "El carrito está vacío" };
 
+  // Validar precios contra la base de datos
+  const supabaseValidar = createAdminClient();
+  const variacionIds = lineas.map((l) => l.variacion_id).filter(Boolean);
+  if (variacionIds.length > 0) {
+    const { data: dbVars } = await supabaseValidar
+      .from("productos_variaciones")
+      .select("id, precio_b2c, activa")
+      .in("id", variacionIds);
+    const varsMap = new Map((dbVars ?? []).map((v: { id: string; precio_b2c: number; activa: boolean }) => [v.id, v]));
+    for (const l of lineas) {
+      const dbVar = varsMap.get(l.variacion_id);
+      if (!dbVar || !dbVar.activa) return { orderId: null, gastoEnvio: 0, error: `"${l.nombre}" ya no está disponible.` };
+      if (Math.abs(l.precio - dbVar.precio_b2c) > 0.02) return { orderId: null, gastoEnvio: 0, error: `El precio de "${l.nombre}" ha cambiado. Actualiza la página.` };
+    }
+  }
+
   const totalProductos = lineas.reduce((acc, l) => acc + l.precio * l.cantidad, 0);
   const gastoEnvio     = calcularGastoEnvio(totalProductos, datosEnvio.provincia);
   if (gastoEnvio === -1) return { orderId: null, gastoEnvio: 0, error: "No realizamos envíos a esa provincia." };
@@ -183,9 +199,9 @@ export async function capturarPagoPaypal(
 
         const dir = pedido.direccion_envio as Record<string, string>;
 
-        // Enviar notificación email
-        const { enviarNotificacionPedido } = await import("@/lib/email");
-        void enviarNotificacionPedido({
+        // Enviar notificación al admin y confirmación al cliente
+        const { enviarNotificacionPedido, enviarConfirmacionCliente } = await import("@/lib/email");
+        const emailPayloadPP = {
           pedidoId:   pedido.id,
           email:      pedido.email_cliente,
           nombre:     dir?.nombre    ?? "",
@@ -202,29 +218,11 @@ export async function capturarPagoPaypal(
             cantidad:         l.cantidad,
             precio:           l.precio_unitario,
           })),
-        });
+        };
+        void enviarNotificacionPedido(emailPayloadPP);
+        void enviarConfirmacionCliente(emailPayloadPP);
 
-        // Crear pedido en WooCommerce
-        const { crearPedidoWooCommerce } = await import("@/actions/checkout");
-        try {
-          const lineasNormales = (lineas ?? []).filter((l) => !l.sku.startsWith("PACK-"));
-          const { wc_order_id, error } = await crearPedidoWooCommerce({
-            email:         pedido.email_cliente,
-            nombre:        dir?.nombre        ?? "",
-            apellidos:     dir?.apellidos     ?? "",
-            telefono:      dir?.telefono      ?? "",
-            direccion:     dir?.direccion     ?? "",
-            ciudad:        dir?.ciudad        ?? "",
-            provincia:     dir?.provincia     ?? "",
-            codigo_postal: dir?.codigo_postal ?? "",
-            lineas:        lineasNormales.map((l) => ({ sku: l.sku, cantidad: l.cantidad })),
-            gasto_envio:   pedido.gastos_envio,
-          });
-          if (error) console.error("[PayPal] Error creando pedido WC:", error);
-          else console.log(`[PayPal] Pedido WooCommerce #${wc_order_id} creado para ${pedido.id}`);
-        } catch (err) {
-          console.error("[PayPal] Excepción creando pedido WC:", err);
-        }
+        // WooCommerce se lanza manualmente desde el panel de administración
       }
 
       return { ok: true };

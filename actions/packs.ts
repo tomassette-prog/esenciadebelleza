@@ -1,45 +1,9 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { cookies } from "next/headers";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { createClient } from "@/lib/supabase/server";
 import type { PackRegaloCompleto, PackRegaloItem } from "@/types/producto";
-
-const ADMIN_EMAILS = ["ziarresamot@gmail.com"];
-
-async function verificarAdmin() {
-  try {
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (user && ADMIN_EMAILS.includes(user.email ?? "")) return user;
-  } catch { /* ignorar */ }
-  try {
-    const cookieStore = await cookies();
-    const projectRef = "yjanobsfzcwpusynvlun";
-    const cookieName = `sb-${projectRef}-auth-token`;
-    let tokenValue = cookieStore.get(cookieName)?.value;
-    if (!tokenValue) {
-      let combined = "";
-      for (let i = 0; i < 5; i++) {
-        const chunk = cookieStore.get(`${cookieName}.${i}`)?.value;
-        if (!chunk) break;
-        combined += chunk;
-      }
-      if (combined) tokenValue = combined;
-    }
-    if (tokenValue) {
-      const parsed = JSON.parse(tokenValue);
-      const accessToken: string = parsed.access_token;
-      if (accessToken) {
-        const payloadB64 = accessToken.split(".")[1];
-        const payload = JSON.parse(Buffer.from(payloadB64, "base64").toString("utf8"));
-        if (ADMIN_EMAILS.includes(payload.email ?? "")) return payload;
-      }
-    }
-  } catch { /* ignorar */ }
-  throw new Error("No autorizado");
-}
+import { verificarAdmin } from "@/lib/admin-auth";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 

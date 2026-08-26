@@ -33,9 +33,9 @@ export async function POST(req: NextRequest) {
   }
 
   // Confirmar pedido y crear en WooCommerce
-  const { ok, wc_order_id } = await confirmarPedidoCeca(numOper);
+  const { ok } = await confirmarPedidoCeca(numOper);
   if (ok) {
-    console.log(`[Cecabank Notif] Pedido confirmado. numOper=${numOper} WC#${wc_order_id ?? "?"}`);
+    console.log(`[Cecabank Notif] Pedido confirmado. numOper=${numOper}`);
   } else {
     console.error("[Cecabank Notif] No se encontró pedido para numOper:", numOper);
   }
@@ -44,15 +44,4 @@ export async function POST(req: NextRequest) {
   return new NextResponse("OK", { status: 200, headers: { "Content-Type": "text/plain" } });
 }
 
-// Cecabank a veces envía GET en URL_OK — también aceptamos GET para confirmar
-export async function GET(req: NextRequest) {
-  const p     = req.nextUrl.searchParams;
-  const numOper    = p.get("Num_operacion") ?? "";
-  const resultado  = p.get("resultado")     ?? "";    // nuestro param custom
-
-  if (resultado === "ok" && numOper) {
-    await confirmarPedidoCeca(numOper);
-  }
-
-  return new NextResponse("OK", { status: 200, headers: { "Content-Type": "text/plain" } });
-}
+// GET no se expone: confirmar pedidos sin firma HMAC sería inseguro

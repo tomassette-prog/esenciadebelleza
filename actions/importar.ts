@@ -1,12 +1,11 @@
 "use server";
 
-import { cookies } from "next/headers";
 import { createClient } from "@supabase/supabase-js";
 import { WOO_CAT_MAP } from "@/lib/categorias";
 import { slugifyCategoria } from "@/lib/seo";
 import { suggestCategory } from "@/lib/category-suggester";
+import { verificarAdmin } from "@/lib/admin-auth";
 
-const ADMIN_EMAILS = ["ziarresamot@gmail.com"];
 const WOO_URL  = process.env.WOO_URL!;
 const CK       = process.env.WOO_CONSUMER_KEY!;
 const CS       = process.env.WOO_CONSUMER_SECRET!;

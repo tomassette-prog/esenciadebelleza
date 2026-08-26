@@ -1,50 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createAdminClient } from "@/lib/supabase/admin";
 import Anthropic from "@anthropic-ai/sdk";
-import { cookies, headers } from "next/headers";
+import { verificarAdmin } from "@/lib/admin-auth";
 
 const claude = new Anthropic();
-const ADMIN_EMAILS = ["ziarresamot@gmail.com"];
-
-async function verificarAdmin() {
-  try {
-    const headersList = await headers();
-    const cookieHeader = headersList.get("cookie") || "";
-
-    // Intentar obtener token de cookies
-    const cookieStore = await cookies();
-    let authToken = cookieStore.get("sb-yjanobsfzcwpusynvlun-auth-token")?.value;
-
-    // Si no está en cookieStore, intentar parsear del header
-    if (!authToken && cookieHeader) {
-      const tokenMatch = cookieHeader.match(/sb-yjanobsfzcwpusynvlun-auth-token=([^;]+)/);
-      if (tokenMatch) {
-        authToken = decodeURIComponent(tokenMatch[1]);
-      }
-    }
-
-    if (!authToken) {
-      throw new Error("No autorizado: token no encontrado");
-    }
-
-    try {
-      const parsed = JSON.parse(authToken);
-      const email = parsed.user?.email || parsed.email;
-
-      if (!ADMIN_EMAILS.includes(email)) {
-        throw new Error(`No autorizado: ${email} no está en la lista de admins`);
-      }
-
-      return true;
-    } catch (parseError) {
-      // Si no se puede parsear, intentar verificación alternativa
-      console.log("⚠️ No se pudo parsear token, intentando verificación alternativa");
-      return true;
-    }
-  } catch (error) {
-    throw new Error(`Acceso denegado: ${String(error)}`);
-  }
-}
 
 async function generarDescripcion(
   nombre: string,

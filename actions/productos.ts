@@ -1,12 +1,11 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { cookies } from "next/headers";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { createClient } from "@/lib/supabase/server";
 import { slugifyCategoria } from "@/lib/seo";
 import { redirect } from "next/navigation";
 import type { ProductoVariacion } from "@/types/producto";
+import { verificarAdmin } from "@/lib/admin-auth";
 
 // ─── Helper: verificar que el usuario es admin ────────────────────────────────
 const ADMIN_EMAILS = ["ziarresamot@gmail.com"];

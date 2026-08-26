@@ -7,7 +7,7 @@ import { stripe } from "@/lib/stripe";
 import type { LineaCarrito, LineaPack } from "@/context/CarritoContext";
 
 import { calcularGastoEnvio, getSuplementoContrareembolso } from "@/lib/envio";
-import { enviarNotificacionPedido } from "@/lib/email";
+import { enviarNotificacionPedido, enviarConfirmacionCliente } from "@/lib/email";
 
 // ── Convertir packs a líneas de pedido (explota cada pack en sus componentes) ─
 function explotarPacks(packs: LineaPack[]): {
@@ -192,13 +192,16 @@ export async function confirmarPedidoCeca(
     .single();
 
   if (!pedido) return { ok: false };
-  if (pedido.estado === "pagado") return { ok: true }; // ya procesado (idempotente)
 
-  // Actualizar estado
-  await supabase
+  // UPDATE atómico: solo actualiza si sigue en estado pendiente (evita race condition)
+  const { count } = await supabase
     .from("pedidos")
     .update({ estado: "pagado" })
-    .eq("stripe_payment_id", numOper);
+    .eq("stripe_payment_id", numOper)
+    .eq("estado", "pendiente")
+    .select("id", { count: "exact", head: true });
+
+  if (count === 0) return { ok: true }; // ya procesado por otra llamada concurrente
 
   // Obtener líneas para email y WooCommerce
   const { data: lineas } = await supabase
@@ -208,45 +211,8 @@ export async function confirmarPedidoCeca(
 
   const dir = pedido.direccion_envio as Record<string, string>;
 
-  // Para WooCommerce: separar líneas normales de packs (SKU empieza con PACK-)
-  const lineasNormales = (lineas ?? []).filter((l) => !l.sku.startsWith("PACK-"));
-  const lineasPack     = (lineas ?? []).filter((l) => l.sku.startsWith("PACK-"));
-
-  // Resolver componentes de packs → SKUs individuales para WooCommerce
-  type WooLinea = { sku: string; cantidad: number };
-  const lineasWooExtra: WooLinea[] = [];
-  if (lineasPack.length) {
-    // Obtener los pack_ids de las líneas de pack (SKU = PACK-{pack_id.slice(0,8)})
-    // Los guardamos con variacion_id nulo y sku PACK-xxx → buscamos por sku pattern
-    // Alternativa: buscar todos los packs_regalo_items cuyos pack_id aparecen
-    for (const lp of lineasPack) {
-      const packIdPrefix = lp.sku.replace("PACK-", "");
-      const { data: packItems } = await supabase
-        .from("packs_regalo")
-        .select(`id, packs_regalo_items(variacion_id, cantidad, variacion:productos_variaciones(sku))`)
-        .ilike("id", `${packIdPrefix}%`)
-        .single();
-      if (packItems) {
-        // Supabase devuelve la relación como array; extraemos el primer item
-        const rows = ((packItems as unknown as { packs_regalo_items: { cantidad: number; variacion: unknown }[] }).packs_regalo_items) ?? [];
-        for (const item of rows) {
-          const varArr = item.variacion as { sku: string }[] | null;
-          const sku = Array.isArray(varArr) ? varArr[0]?.sku : (varArr as unknown as { sku: string } | null)?.sku;
-          if (sku) {
-            lineasWooExtra.push({ sku, cantidad: item.cantidad * lp.cantidad });
-          }
-        }
-      }
-    }
-  }
-
-  const todasLineasWoo: WooLinea[] = [
-    ...lineasNormales.map((l) => ({ sku: l.sku, cantidad: l.cantidad })),
-    ...lineasWooExtra,
-  ];
-
-  // Enviar notificación por email al admin
-  void enviarNotificacionPedido({
+  // Enviar notificación al admin y confirmación al cliente
+  const emailPayload = {
     pedidoId:   pedido.id,
     email:      pedido.email_cliente,
     nombre:     dir.nombre    ?? "",
@@ -263,23 +229,12 @@ export async function confirmarPedidoCeca(
       cantidad:         l.cantidad,
       precio:           l.precio_unitario,
     })),
-  });
+  };
+  void enviarNotificacionPedido(emailPayload);
+  void enviarConfirmacionCliente(emailPayload);
 
-  const { wc_order_id } = await crearPedidoWooCommerce({
-    email:         pedido.email_cliente,
-    nombre:        dir.nombre        ?? "",
-    apellidos:     dir.apellidos     ?? "",
-    telefono:      dir.telefono      ?? "",
-    direccion:     dir.direccion     ?? "",
-    ciudad:        dir.ciudad        ?? "",
-    provincia:     dir.provincia     ?? "",
-    codigo_postal: dir.codigo_postal ?? "",
-    lineas:        todasLineasWoo as unknown as LineaCarrito[],
-    ceca_num_oper: numOper,
-    gasto_envio:   pedido.gastos_envio,
-  });
-
-  return { ok: true, wc_order_id: wc_order_id ?? undefined, email: pedido.email_cliente, pedidoId: pedido.id };
+  // WooCommerce se lanza manualmente desde el panel de administración
+  return { ok: true, email: pedido.email_cliente, pedidoId: pedido.id };
 }
 
 // ── Crear pedido en WooCommerce ───────────────────────────────────────────────
@@ -567,6 +522,17 @@ export async function iniciarPagoStripe(
   const totalFinal = totalProductos + gastoEnvio;
   const siteUrl    = process.env.NEXT_PUBLIC_SITE_URL ?? "https://esenciadebelleza.es";
 
+  // Detectar perfil B2B (igual que en Ceca/PayPal)
+  let tipoPrecioStripe: "b2c" | "b2b" = "b2c";
+  if (user) {
+    const { data: perfil } = await authClient
+      .from("perfiles_usuario")
+      .select("b2b_aprobado, tipo_cliente")
+      .eq("id", user.id)
+      .single();
+    if (perfil?.tipo_cliente === "b2b" && perfil?.b2b_aprobado === true) tipoPrecioStripe = "b2b";
+  }
+
   // Guardar pedido pendiente
   const { data: pedido } = await supabase.from("pedidos").insert({
     usuario_id:      user?.id ?? null,
@@ -574,7 +540,7 @@ export async function iniciarPagoStripe(
     subtotal:        totalProductos,
     gastos_envio:    gastoEnvio,
     total:           totalFinal,
-    tipo_precio:     "b2c",
+    tipo_precio:     tipoPrecioStripe,
     metodo_pago:     "stripe",
     email_cliente:   datosEnvio.email,
     notas:           datosEnvio.notas ?? "",
@@ -656,7 +622,7 @@ export async function confirmarPedidoStripe(
     .single();
 
   if (!pedido) return { ok: false };
-  if (pedido.estado === "pagado") return { ok: true, pedidoId: pedido.id, email: pedido.email_cliente }; // ya procesado (idempotente)
+  if (pedido.estado === "pagado") return { ok: true, pedidoId: pedido.id, email: pedido.email_cliente };
 
   // Verificar la sesión con Stripe API
   const session = await stripe.checkout.sessions.retrieve(sessionId);
@@ -665,11 +631,15 @@ export async function confirmarPedidoStripe(
     return { ok: false };
   }
 
-  // Actualizar estado a pagado
-  await supabase
+  // UPDATE atómico: solo actualiza si sigue pendiente (evita race condition)
+  const { count } = await supabase
     .from("pedidos")
     .update({ estado: "pagado" })
-    .eq("stripe_payment_id", sessionId);
+    .eq("stripe_payment_id", sessionId)
+    .eq("estado", "pendiente")
+    .select("id", { count: "exact", head: true });
+
+  if (count === 0) return { ok: true, pedidoId: pedido.id, email: pedido.email_cliente };
 
   // Obtener líneas para email y WooCommerce
   const { data: lineas } = await supabase
@@ -679,40 +649,8 @@ export async function confirmarPedidoStripe(
 
   const dir = pedido.direccion_envio as Record<string, string>;
 
-  // Preparar líneas para WooCommerce
-  const lineasNormales = (lineas ?? []).filter((l) => !l.sku.startsWith("PACK-"));
-  const lineasPack     = (lineas ?? []).filter((l) => l.sku.startsWith("PACK-"));
-
-  type WooLinea = { sku: string; cantidad: number };
-  const lineasWooExtra: WooLinea[] = [];
-  if (lineasPack.length) {
-    for (const lp of lineasPack) {
-      const packIdPrefix = lp.sku.replace("PACK-", "");
-      const { data: packItems } = await supabase
-        .from("packs_regalo")
-        .select(`id, packs_regalo_items(variacion_id, cantidad, variacion:productos_variaciones(sku))`)
-        .ilike("id", `${packIdPrefix}%`)
-        .single();
-      if (packItems) {
-        const rows = ((packItems as unknown as { packs_regalo_items: { cantidad: number; variacion: unknown }[] }).packs_regalo_items) ?? [];
-        for (const item of rows) {
-          const varArr = item.variacion as { sku: string }[] | null;
-          const sku = Array.isArray(varArr) ? varArr[0]?.sku : (varArr as unknown as { sku: string } | null)?.sku;
-          if (sku) {
-            lineasWooExtra.push({ sku, cantidad: item.cantidad * lp.cantidad });
-          }
-        }
-      }
-    }
-  }
-
-  const todasLineasWoo: WooLinea[] = [
-    ...lineasNormales.map((l) => ({ sku: l.sku, cantidad: l.cantidad })),
-    ...lineasWooExtra,
-  ];
-
-  // Enviar notificación email al admin
-  void enviarNotificacionPedido({
+  // Enviar notificación al admin y confirmación al cliente
+  const emailPayloadStripe = {
     pedidoId:   pedido.id,
     email:      pedido.email_cliente,
     nombre:     dir.nombre    ?? "",
@@ -729,23 +667,12 @@ export async function confirmarPedidoStripe(
       cantidad:         l.cantidad,
       precio:           l.precio_unitario,
     })),
-  });
+  };
+  void enviarNotificacionPedido(emailPayloadStripe);
+  void enviarConfirmacionCliente(emailPayloadStripe);
 
-  // Crear pedido en WooCommerce
-  const { wc_order_id } = await crearPedidoWooCommerce({
-    email:         pedido.email_cliente,
-    nombre:        dir.nombre        ?? "",
-    apellidos:     dir.apellidos     ?? "",
-    telefono:      dir.telefono      ?? "",
-    direccion:     dir.direccion     ?? "",
-    ciudad:        dir.ciudad        ?? "",
-    provincia:     dir.provincia     ?? "",
-    codigo_postal: dir.codigo_postal ?? "",
-    lineas:        todasLineasWoo as unknown as LineaCarrito[],
-    gasto_envio:   pedido.gastos_envio,
-  });
-
-  return { ok: true, wc_order_id: wc_order_id ?? undefined, email: pedido.email_cliente, pedidoId: pedido.id };
+  // WooCommerce se lanza manualmente desde el panel de administración
+  return { ok: true, email: pedido.email_cliente, pedidoId: pedido.id };
 }
 
 // ── Crear pedido contra reembolso ──────────────────────────────────────────
@@ -828,8 +755,8 @@ export async function crearPedidoContrarembolso(
   // 3. NO crear en WooCommerce aquí — el admin usará "Lanzar pedido" cuando revise el pedido
   //    Esto sigue el mismo flujo que Stripe/Cecabank: pedido en Supabase → admin revisa → envía a depeluqueria
 
-  // 4. Email notificación
-  void enviarNotificacionPedido({
+  // 4. Email al admin y confirmación al cliente
+  const emailCR = {
     pedidoId: pedido.id, email: datosEnvio.email,
     nombre: datosEnvio.nombre, apellidos: datosEnvio.apellidos,
     total: totalFinal, gastoEnvio, metodoPago: "Contra reembolso",
@@ -838,7 +765,9 @@ export async function crearPedidoContrarembolso(
       nombre: l.nombre, nombre_variacion: l.nombre_variacion,
       cantidad: l.cantidad, precio: l.precio,
     })),
-  });
+  };
+  void enviarNotificacionPedido(emailCR);
+  void enviarConfirmacionCliente(emailCR);
 
   return { ok: true, pedidoId: pedido.id };
 }
