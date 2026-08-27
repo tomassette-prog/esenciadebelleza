@@ -10,7 +10,6 @@ export default function LoginPage({
   searchParams: { redirectTo?: string; redirect?: string; error?: string };
 }) {
   const [verPassword, setVerPassword] = useState(false);
-  const [verPassword, setVerPassword] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const redirectTo = searchParams.redirectTo ?? searchParams.redirect ?? "/cuenta";
