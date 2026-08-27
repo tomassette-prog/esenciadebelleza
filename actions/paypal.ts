@@ -51,7 +51,7 @@ export async function crearOrdenPaypal(
   }
 
   const totalProductos = lineas.reduce((acc, l) => acc + l.precio * l.cantidad, 0);
-  const gastoEnvio     = calcularGastoEnvio(totalProductos, datosEnvio.provincia);
+  const gastoEnvio     = calcularGastoEnvio(totalProductos, datosEnvio.provincia, datosEnvio.ciudad);
   if (gastoEnvio === -1) return { orderId: null, gastoEnvio: 0, error: "No realizamos envíos a esa provincia." };
 
   const totalFinal = totalProductos + gastoEnvio;

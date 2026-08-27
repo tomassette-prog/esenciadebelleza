@@ -17,7 +17,7 @@ export async function POST(req: NextRequest) {
     const { data: { user } } = await authClient.auth.getUser();
 
     const totalProductos = lineas.reduce((acc: number, l: { precio: number; cantidad: number }) => acc + l.precio * l.cantidad, 0);
-    const gastoEnvio     = calcularGastoEnvio(totalProductos, datosEnvio.provincia);
+    const gastoEnvio     = calcularGastoEnvio(totalProductos, datosEnvio.provincia, datosEnvio.ciudad);
     if (gastoEnvio === -1) {
       return NextResponse.json({ error: "No realizamos envíos a esa provincia." }, { status: 400 });
     }

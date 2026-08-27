@@ -96,8 +96,8 @@ export async function POST(req: NextRequest) {
         precio:           l.precio_unitario,
       })),
     };
-    void enviarNotificacionPedido(emailPayload);
-    void enviarConfirmacionCliente(emailPayload);
+    await enviarNotificacionPedido(emailPayload);
+    await enviarConfirmacionCliente(emailPayload);
   }
 
   if (event.type === "checkout.session.expired") {

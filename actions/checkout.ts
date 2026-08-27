@@ -93,7 +93,7 @@ export async function iniciarPagoCeca(
 
   const totalProductos = lineas.reduce((acc, l) => acc + l.precio * l.cantidad, 0)
                        + packs.reduce((acc, p) => acc + p.precio * p.cantidad, 0);
-  const gastoEnvio     = calcularGastoEnvio(totalProductos, datosEnvio.provincia);
+  const gastoEnvio     = calcularGastoEnvio(totalProductos, datosEnvio.provincia, datosEnvio.ciudad);
 
   if (gastoEnvio === -1) {
     return { gatewayUrl: null, campos: null, gastoEnvio: 0, error: "Lo sentimos, no realizamos envíos a esa provincia." };
@@ -230,8 +230,8 @@ export async function confirmarPedidoCeca(
       precio:           l.precio_unitario,
     })),
   };
-  void enviarNotificacionPedido(emailPayload);
-  void enviarConfirmacionCliente(emailPayload);
+  await enviarNotificacionPedido(emailPayload);
+  await enviarConfirmacionCliente(emailPayload);
 
   // WooCommerce se lanza manualmente desde el panel de administración
   return { ok: true, email: pedido.email_cliente, pedidoId: pedido.id };
@@ -277,7 +277,7 @@ export async function iniciarPagoWooCommerce(
   }
 
   const totalProductos = lineas.reduce((acc, l) => acc + l.precio * l.cantidad, 0);
-  const gastoEnvio     = calcularGastoEnvio(totalProductos, datosEnvio.provincia);
+  const gastoEnvio     = calcularGastoEnvio(totalProductos, datosEnvio.provincia, datosEnvio.ciudad);
   if (gastoEnvio === -1) return { pagoUrl: null, pedidoId: null, gastoEnvio: 0, error: "No realizamos envíos a esa provincia." };
 
   const totalFinal = totalProductos + gastoEnvio;
@@ -516,7 +516,7 @@ export async function iniciarPagoStripe(
 
   const totalProductos = lineas.reduce((acc, l) => acc + l.precio * l.cantidad, 0)
                        + packs.reduce((acc, p) => acc + p.precio * p.cantidad, 0);
-  const gastoEnvio     = calcularGastoEnvio(totalProductos, datosEnvio.provincia);
+  const gastoEnvio     = calcularGastoEnvio(totalProductos, datosEnvio.provincia, datosEnvio.ciudad);
   if (gastoEnvio === -1) return { url: null, error: "No realizamos envíos a esa provincia." };
 
   const totalFinal = totalProductos + gastoEnvio;
@@ -668,8 +668,8 @@ export async function confirmarPedidoStripe(
       precio:           l.precio_unitario,
     })),
   };
-  void enviarNotificacionPedido(emailPayloadStripe);
-  void enviarConfirmacionCliente(emailPayloadStripe);
+  await enviarNotificacionPedido(emailPayloadStripe);
+  await enviarConfirmacionCliente(emailPayloadStripe);
 
   // WooCommerce se lanza manualmente desde el panel de administración
   return { ok: true, email: pedido.email_cliente, pedidoId: pedido.id };
@@ -703,7 +703,7 @@ export async function crearPedidoContrarembolso(
 
   const totalProductos = lineas.reduce((acc, l) => acc + l.precio * l.cantidad, 0)
                        + packs.reduce((acc, p) => acc + p.precio * p.cantidad, 0);
-  const gastoEnvioBase = calcularGastoEnvio(totalProductos, datosEnvio.provincia);
+  const gastoEnvioBase = calcularGastoEnvio(totalProductos, datosEnvio.provincia, datosEnvio.ciudad);
 
   if (gastoEnvioBase === -1) return { ok: false, error: "No realizamos envíos a esa provincia." };
 
@@ -766,8 +766,8 @@ export async function crearPedidoContrarembolso(
       cantidad: l.cantidad, precio: l.precio,
     })),
   };
-  void enviarNotificacionPedido(emailCR);
-  void enviarConfirmacionCliente(emailCR);
+  await enviarNotificacionPedido(emailCR);
+  await enviarConfirmacionCliente(emailCR);
 
   return { ok: true, pedidoId: pedido.id };
 }

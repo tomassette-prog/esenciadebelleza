@@ -169,6 +169,7 @@ export async function lanzarPedidoWoo(
                   ? `${l.nombre_producto} — ${l.nombre_variacion}`
                   : l.nombre_producto,
       sku:      l.sku,
+      price:    l.precio_unitario.toFixed(2),
       quantity: l.cantidad,
       subtotal: l.subtotal.toFixed(2),
       total:    l.subtotal.toFixed(2),
