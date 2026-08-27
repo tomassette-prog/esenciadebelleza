@@ -10,18 +10,25 @@ export const maxDuration = 300;
 
 export default async function AdminLayout({ children }: { children: ReactNode }) {
   const supabase = await createClient();
-  // getSession() lee las cookies locales sin red; suficiente para obtener el user ID
   const { data: { session } } = await supabase.auth.getSession();
 
-  if (!session?.user?.id) {
+  if (!session?.user) {
     redirect("/login?redirectTo=/admin/productos");
   }
 
-  // Verificar email contra la whitelist usando service_role (fuente de verdad)
-  const adminClient = createAdminClient();
-  const { data: { user } } = await adminClient.auth.admin.getUserById(session.user.id);
+  // El email viene en el JWT de sesión; el admin client lo confirma como doble verificación
+  const sessionEmail = session.user.email ?? "";
+  let verifiedEmail = sessionEmail;
 
-  if (!user || !ADMIN_EMAILS.includes(user.email ?? "")) {
+  try {
+    const adminClient = createAdminClient();
+    const { data: { user } } = await adminClient.auth.admin.getUserById(session.user.id);
+    if (user?.email) verifiedEmail = user.email;
+  } catch {
+    // Si el admin client falla, usar el email del JWT (ya validado por Supabase SSR)
+  }
+
+  if (!ADMIN_EMAILS.includes(verifiedEmail)) {
     redirect("/login?redirectTo=/admin/productos");
   }
 

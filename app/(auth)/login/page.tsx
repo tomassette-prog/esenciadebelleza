@@ -1,22 +1,8 @@
 "use client";
 
-import { useFormState, useFormStatus } from "react-dom";
 import { useState } from "react";
 import Link from "next/link";
-import { login } from "@/actions/auth";
-
-function SubmitButton() {
-  const { pending } = useFormStatus();
-  return (
-    <button
-      type="submit"
-      disabled={pending}
-      className="w-full py-3 px-6 bg-neutral-900 text-white text-xs tracking-widest uppercase font-medium hover:bg-neutral-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-    >
-      {pending ? "Entrando..." : "Iniciar sesión"}
-    </button>
-  );
-}
+import { createClient } from "@/lib/supabase/client";
 
 export default function LoginPage({
   searchParams,
@@ -24,9 +10,39 @@ export default function LoginPage({
   searchParams: { redirectTo?: string; redirect?: string; error?: string };
 }) {
   const [verPassword, setVerPassword] = useState(false);
+  const [verPassword, setVerPassword] = useState(false);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
   const redirectTo = searchParams.redirectTo ?? searchParams.redirect ?? "/cuenta";
 
-  const [state, formAction] = useFormState(login, null);
+  const ADMIN_EMAILS = ["ziarresamot@gmail.com"];
+
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setError("");
+    setLoading(true);
+
+    const form = e.currentTarget;
+    const email = (form.elements.namedItem("email") as HTMLInputElement).value.trim().toLowerCase();
+    const password = (form.elements.namedItem("password") as HTMLInputElement).value;
+
+    const supabase = createClient();
+    const { data, error: authError } = await supabase.auth.signInWithPassword({ email, password });
+
+    if (authError) {
+      setError("Credenciales incorrectas. Verifica tu email y contraseña.");
+      setLoading(false);
+      return;
+    }
+
+    const destino = redirectTo !== "/cuenta"
+      ? redirectTo
+      : ADMIN_EMAILS.includes(data.user?.email ?? "")
+        ? "/admin/productos"
+        : "/cuenta";
+
+    window.location.href = destino;
+  }
 
   return (
     <div className="w-full max-w-md">
@@ -51,12 +67,11 @@ export default function LoginPage({
       )}
 
       {/* Formulario */}
-      <form action={formAction} className="space-y-4 bg-white border border-neutral-100 p-8">
-        <input type="hidden" name="redirectTo" value={redirectTo} />
+      <form onSubmit={handleSubmit} className="space-y-4 bg-white border border-neutral-100 p-8">
         {/* Error */}
-        {(state?.error || searchParams?.error === "credenciales") && (
+        {(error || searchParams?.error === "credenciales") && (
           <div className="p-3 bg-red-50 border border-red-200 text-red-700 text-sm">
-            {state?.error || "Credenciales incorrectas. Verifica tu email y contraseña."}
+            {error || "Credenciales incorrectas. Verifica tu email y contraseña."}
           </div>
         )}
 
@@ -120,7 +135,13 @@ export default function LoginPage({
           </div>
         </div>
 
-        <SubmitButton />
+        <button
+          type="submit"
+          disabled={loading}
+          className="w-full py-3 px-6 bg-neutral-900 text-white text-xs tracking-widest uppercase font-medium hover:bg-neutral-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+        >
+          {loading ? "Entrando..." : "Iniciar sesión"}
+        </button>
       </form>
 
       {/* Registro */}
