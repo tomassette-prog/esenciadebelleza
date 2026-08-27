@@ -51,18 +51,18 @@ export async function POST(req: NextRequest) {
     }
 
     // UPDATE atómico: solo actualiza si sigue pendiente (evita race condition y devuelve error trazable)
-    const { error: errUpdate, count } = await supabase
+    const { error: errUpdate, data: updatedRows } = await supabase
       .from("pedidos")
       .update({ estado: "pagado" })
       .eq("id", pedido.id)
       .eq("estado", "pendiente")
-      .select("id", { count: "exact", head: true });
+      .select("id");
 
     if (errUpdate) {
       console.error(`[Stripe Webhook] Error marcando pagado ${pedido.id}:`, errUpdate);
       return NextResponse.json({ error: "db_error" }, { status: 500 }); // Stripe reintenta
     }
-    if (count === 0) {
+    if (!updatedRows || updatedRows.length === 0) {
       console.log(`[Stripe Webhook] Pedido ${pedido.id} ya estaba pagado (concurrente)`);
       return NextResponse.json({ received: true });
     }

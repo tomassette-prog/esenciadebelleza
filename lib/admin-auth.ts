@@ -2,7 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 
-export const ADMIN_EMAILS = ["ziarresamot@gmail.com"];
+const ADMIN_EMAILS = ["ziarresamot@gmail.com"];
 
 /** Verifica que el usuario autenticado sea admin usando getUser() (valida contra Supabase). */
 export async function verificarAdmin() {

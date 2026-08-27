@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { verificarAdmin } from "@/lib/admin-auth";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 const claude = new Anthropic();
 

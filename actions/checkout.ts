@@ -194,14 +194,14 @@ export async function confirmarPedidoCeca(
   if (!pedido) return { ok: false };
 
   // UPDATE atómico: solo actualiza si sigue en estado pendiente (evita race condition)
-  const { count } = await supabase
+  const { data: updated202 } = await supabase
     .from("pedidos")
     .update({ estado: "pagado" })
     .eq("stripe_payment_id", numOper)
     .eq("estado", "pendiente")
-    .select("id", { count: "exact", head: true });
+    .select("id");
 
-  if (count === 0) return { ok: true }; // ya procesado por otra llamada concurrente
+  if (!updated202 || updated202.length === 0) return { ok: true }; // ya procesado por otra llamada concurrente
 
   // Obtener líneas para email y WooCommerce
   const { data: lineas } = await supabase
@@ -632,14 +632,14 @@ export async function confirmarPedidoStripe(
   }
 
   // UPDATE atómico: solo actualiza si sigue pendiente (evita race condition)
-  const { count } = await supabase
+  const { data: updated640 } = await supabase
     .from("pedidos")
     .update({ estado: "pagado" })
     .eq("stripe_payment_id", sessionId)
     .eq("estado", "pendiente")
-    .select("id", { count: "exact", head: true });
+    .select("id");
 
-  if (count === 0) return { ok: true, pedidoId: pedido.id, email: pedido.email_cliente };
+  if (!updated640 || updated640.length === 0) return { ok: true, pedidoId: pedido.id, email: pedido.email_cliente };
 
   // Obtener líneas para email y WooCommerce
   const { data: lineas } = await supabase
