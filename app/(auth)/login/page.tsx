@@ -1,8 +1,22 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useFormState, useFormStatus } from "react-dom";
+import { useState } from "react";
 import Link from "next/link";
 import { login } from "@/actions/auth";
+
+function SubmitButton() {
+  const { pending } = useFormStatus();
+  return (
+    <button
+      type="submit"
+      disabled={pending}
+      className="w-full py-3 px-6 bg-neutral-900 text-white text-xs tracking-widest uppercase font-medium hover:bg-neutral-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+    >
+      {pending ? "Entrando..." : "Iniciar sesión"}
+    </button>
+  );
+}
 
 export default function LoginPage({
   searchParams,
@@ -12,7 +26,7 @@ export default function LoginPage({
   const [verPassword, setVerPassword] = useState(false);
   const redirectTo = searchParams.redirectTo ?? searchParams.redirect ?? "/cuenta";
 
-  const [state, formAction, pending] = useActionState(login, null);
+  const [state, formAction] = useFormState(login, null);
 
   return (
     <div className="w-full max-w-md">
@@ -106,13 +120,7 @@ export default function LoginPage({
           </div>
         </div>
 
-        <button
-          type="submit"
-          disabled={pending}
-          className="w-full py-3 px-6 bg-neutral-900 text-white text-xs tracking-widest uppercase font-medium hover:bg-neutral-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-        >
-          {pending ? "Entrando..." : "Iniciar sesión"}
-        </button>
+        <SubmitButton />
       </form>
 
       {/* Registro */}
