@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useActionState, useState } from "react";
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/client";
+import { login } from "@/actions/auth";
 
 export default function LoginPage({
   searchParams,
@@ -10,39 +10,9 @@ export default function LoginPage({
   searchParams: { redirectTo?: string; redirect?: string; error?: string };
 }) {
   const [verPassword, setVerPassword] = useState(false);
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
   const redirectTo = searchParams.redirectTo ?? searchParams.redirect ?? "/cuenta";
 
-  const ADMIN_EMAILS = ["ziarresamot@gmail.com"];
-
-  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    setError("");
-    setLoading(true);
-
-    const form = e.currentTarget;
-    const email = (form.elements.namedItem("email") as HTMLInputElement).value.trim().toLowerCase();
-    const password = (form.elements.namedItem("password") as HTMLInputElement).value;
-
-    const supabase = createClient();
-    const { data, error: authError } = await supabase.auth.signInWithPassword({ email, password });
-
-    if (authError) {
-      setError("Credenciales incorrectas. Verifica tu email y contraseña.");
-      setLoading(false);
-      return;
-    }
-
-    // Si es admin y no hay redirectTo específico, ir al panel admin
-    const destino = redirectTo !== "/cuenta"
-      ? redirectTo
-      : ADMIN_EMAILS.includes(data.user?.email ?? "")
-        ? "/admin/productos"
-        : "/cuenta";
-
-    window.location.href = destino;
-  }
+  const [state, formAction, pending] = useActionState(login, null);
 
   return (
     <div className="w-full max-w-md">
@@ -67,11 +37,12 @@ export default function LoginPage({
       )}
 
       {/* Formulario */}
-      <form onSubmit={handleSubmit} className="space-y-4 bg-white border border-neutral-100 p-8">
+      <form action={formAction} className="space-y-4 bg-white border border-neutral-100 p-8">
+        <input type="hidden" name="redirectTo" value={redirectTo} />
         {/* Error */}
-        {(error || searchParams?.error === "credenciales") && (
+        {(state?.error || searchParams?.error === "credenciales") && (
           <div className="p-3 bg-red-50 border border-red-200 text-red-700 text-sm">
-            {error || "Credenciales incorrectas. Verifica tu email y contraseña."}
+            {state?.error || "Credenciales incorrectas. Verifica tu email y contraseña."}
           </div>
         )}
 
@@ -137,10 +108,10 @@ export default function LoginPage({
 
         <button
           type="submit"
-          disabled={loading}
+          disabled={pending}
           className="w-full py-3 px-6 bg-neutral-900 text-white text-xs tracking-widest uppercase font-medium hover:bg-neutral-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
-          {loading ? "Entrando..." : "Iniciar sesión"}
+          {pending ? "Entrando..." : "Iniciar sesión"}
         </button>
       </form>
 
