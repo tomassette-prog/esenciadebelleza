@@ -219,8 +219,8 @@ export async function capturarPagoPaypal(
             precio:           l.precio_unitario,
           })),
         };
-        void enviarNotificacionPedido(emailPayloadPP);
-        void enviarConfirmacionCliente(emailPayloadPP);
+        await enviarNotificacionPedido(emailPayloadPP);
+        await enviarConfirmacionCliente(emailPayloadPP);
 
         // WooCommerce se lanza manualmente desde el panel de administración
       }
