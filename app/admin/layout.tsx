@@ -1,34 +1,43 @@
-﻿import { redirect } from "next/navigation";
+﻿import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
 import { type ReactNode } from "react";
 import { AdminSidebar } from "@/components/admin/AdminSidebar";
-import { createClient } from "@/lib/supabase/server";
-import { createAdminClient } from "@/lib/supabase/admin";
 
 const ADMIN_EMAILS = ["ziarresamot@gmail.com"];
+const PROJECT_REF = "yjanobsfzcwpusynvlun";
 
 export const maxDuration = 300;
 
-export default async function AdminLayout({ children }: { children: ReactNode }) {
-  const supabase = await createClient();
-  const { data: { session } } = await supabase.auth.getSession();
+async function getSessionEmail(): Promise<string | null> {
+  const cookieStore = await cookies();
+  const cookieName = `sb-${PROJECT_REF}-auth-token`;
 
-  if (!session?.user) {
-    redirect("/login?redirectTo=/admin/productos");
+  // Leer cookie completa o reconstruir desde chunks
+  let raw = cookieStore.get(cookieName)?.value ?? "";
+  if (!raw) {
+    for (let i = 0; ; i++) {
+      const chunk = cookieStore.get(`${cookieName}.${i}`)?.value;
+      if (!chunk) break;
+      raw += chunk;
+    }
   }
-
-  // El email viene en el JWT de sesión; el admin client lo confirma como doble verificación
-  const sessionEmail = session.user.email ?? "";
-  let verifiedEmail = sessionEmail;
+  if (!raw) return null;
 
   try {
-    const adminClient = createAdminClient();
-    const { data: { user } } = await adminClient.auth.admin.getUserById(session.user.id);
-    if (user?.email) verifiedEmail = user.email;
+    // Next.js puede devolver el valor URL-encoded
+    const decoded = raw.startsWith("%") ? decodeURIComponent(raw) : raw;
+    const parsed = JSON.parse(decoded);
+    // El email está en parsed.user.email (session object de Supabase)
+    return parsed?.user?.email ?? null;
   } catch {
-    // Si el admin client falla, usar el email del JWT (ya validado por Supabase SSR)
+    return null;
   }
+}
 
-  if (!ADMIN_EMAILS.includes(verifiedEmail)) {
+export default async function AdminLayout({ children }: { children: ReactNode }) {
+  const email = await getSessionEmail();
+
+  if (!email || !ADMIN_EMAILS.includes(email)) {
     redirect("/login?redirectTo=/admin/productos");
   }
 
