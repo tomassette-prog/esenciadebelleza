@@ -7,48 +7,6 @@ import { redirect } from "next/navigation";
 import type { ProductoVariacion } from "@/types/producto";
 import { verificarAdmin } from "@/lib/admin-auth";
 
-// ─── Helper: verificar que el usuario es admin ────────────────────────────────
-const ADMIN_EMAILS = ["ziarresamot@gmail.com"];
-
-async function verificarAdmin() {
-  // 1. Intentar con server client estándar
-  try {
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (user && ADMIN_EMAILS.includes(user.email ?? "")) return user;
-  } catch { /* ignorar */ }
-
-  // 2. Fallback: leer JWT directamente desde cookie del browser client
-  try {
-    const cookieStore = await cookies();
-    const projectRef = "yjanobsfzcwpusynvlun";
-    const cookieName = `sb-${projectRef}-auth-token`;
-    let tokenValue = cookieStore.get(cookieName)?.value;
-    if (!tokenValue) {
-      let combined = "";
-      for (let i = 0; i < 5; i++) {
-        const chunk = cookieStore.get(`${cookieName}.${i}`)?.value;
-        if (!chunk) break;
-        combined += chunk;
-      }
-      if (combined) tokenValue = combined;
-    }
-    if (tokenValue) {
-      const parsed = JSON.parse(tokenValue);
-      const accessToken: string = parsed.access_token;
-      if (accessToken) {
-        const payloadB64 = accessToken.split(".")[1];
-        const payload = JSON.parse(Buffer.from(payloadB64, "base64url").toString());
-        if (payload.sub && payload.exp * 1000 > Date.now() && ADMIN_EMAILS.includes(payload.email)) {
-          return { id: payload.sub, email: payload.email };
-        }
-      }
-    }
-  } catch { /* ignorar */ }
-
-  throw new Error("No autorizado");
-}
-
 // ─── Generar slug único ────────────────────────────────────────────────────────
 async function generarSlugUnico(nombre: string, excluirId?: string): Promise<string> {
   const supabase = createAdminClient();

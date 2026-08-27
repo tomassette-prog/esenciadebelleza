@@ -35,29 +35,6 @@ function adminClient() {
   );
 }
 
-async function verificarAdmin() {
-  try {
-    const cookieStore = await cookies();
-    const cookieName = `sb-yjanobsfzcwpusynvlun-auth-token`;
-    let tokenValue = cookieStore.get(cookieName)?.value;
-    if (!tokenValue) {
-      let combined = "";
-      for (let i = 0; i < 5; i++) {
-        const chunk = cookieStore.get(`${cookieName}.${i}`)?.value;
-        if (!chunk) break;
-        combined += chunk;
-      }
-      if (combined) tokenValue = combined;
-    }
-    if (tokenValue) {
-      const parsed = JSON.parse(tokenValue);
-      const payload = JSON.parse(Buffer.from(parsed.access_token.split(".")[1], "base64url").toString());
-      if (payload.sub && payload.exp * 1000 > Date.now() && ADMIN_EMAILS.includes(payload.email)) return;
-    }
-  } catch { /* ignorar */ }
-  throw new Error("No autorizado");
-}
-
 async function fetchWoo(path: string) {
   const auth = Buffer.from(`${CK}:${CS}`).toString("base64");
   const res = await fetch(`${WOO_URL}/wp-json/wc/v3${path}`, {
