@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
+export const maxDuration = 300; // 300s en Pro / capped a 60s en Hobby
+
 // Vercel Cron usa el header Authorization: Bearer <CRON_SECRET>
 const CRON_SECRET = process.env.CRON_SECRET;
 
