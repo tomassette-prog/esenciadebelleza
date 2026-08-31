@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+﻿import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { WOO_CAT_MAP } from "@/lib/categorias";
 
@@ -42,7 +42,7 @@ async function fetchWoo<T = unknown>(path: string): Promise<T> {
   return res.json() as Promise<T>;
 }
 
-// ── Tipos WooCommerce ─────────────────────────────────────────────────────────
+// â”€â”€ Tipos WooCommerce â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 interface WooProduct {
   id: number; type: string; sku: string; name: string; slug: string;
   status: string;
@@ -72,14 +72,14 @@ export async function GET(req: NextRequest) {
 
   const supa = adminClient();
 
-  // ── Configuración ──────────────────────────────────────────────────────────
+  // â”€â”€ ConfiguraciÃ³n â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   let b2bMult = 0.75;
   try {
     const { data } = await supa.from("config_tienda").select("valor").eq("clave", "precio_multiplicador_b2b").single();
     if (data?.valor) b2bMult = parseFloat(data.valor) || 0.75;
   } catch { /* fallback */ }
 
-  // ── Cargar todas las variaciones Supabase (sku → id) ──────────────────────
+  // â”€â”€ Cargar todas las variaciones Supabase (sku â†’ id) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const allVars: Array<{ id: string; sku: string | null; producto_padre_id: string }> = [];
   let offset = 0;
   while (true) {
@@ -91,7 +91,7 @@ export async function GET(req: NextRequest) {
   }
   const varsBySku = new Map(allVars.filter(v => v.sku).map(v => [v.sku as string, v]));
 
-  // ── Cargar todos los productos_padre (woo_id → id) ────────────────────────
+  // â”€â”€ Cargar todos los productos_padre (woo_id â†’ id) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const allPadres: Array<{ id: string; woo_id: string | null }> = [];
   offset = 0;
   while (true) {
@@ -103,11 +103,11 @@ export async function GET(req: NextRequest) {
   }
   const padresByWooId = new Map(allPadres.filter(p => p.woo_id).map(p => [p.woo_id as string, p.id]));
 
-  // ── Cargar marcas existentes (slug → id) para lookup rápido ───────────────
+  // â”€â”€ Cargar marcas existentes (slug â†’ id) para lookup rÃ¡pido â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const { data: marcasData } = await supa.from("marcas").select("id, slug");
   const marcasBySlug = new Map((marcasData ?? []).map(m => [m.slug as string, m.id as string]));
 
-  // ── Iteración por páginas WooCommerce ─────────────────────────────────────
+  // â”€â”€ IteraciÃ³n por pÃ¡ginas WooCommerce â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   let page = 1;
   const wooIdsVistos = new Set<string>();
   let totalActualizados = 0;
@@ -121,12 +121,12 @@ export async function GET(req: NextRequest) {
         `/products?per_page=100&page=${page}&status=publish&_fields=id,type,sku,name,slug,status,regular_price,sale_price,price,stock_quantity,stock_status,images,categories,attributes,description,short_description,variations`
       );
     } catch (err) {
-      console.error(`[cron/sync] Error página ${page}:`, err);
+      console.error(`[cron/sync] Error pÃ¡gina ${page}:`, err);
       break;
     }
     if (!Array.isArray(products) || products.length === 0) break;
 
-    // Precargar mapa woo_id → padre_id para productos de esta página
+    // Precargar mapa woo_id â†’ padre_id para productos de esta pÃ¡gina
     const wooIds = products.map(p => String(p.id));
     const varsByPadreId = new Map<string, typeof allVars>();
     for (const v of allVars) {
@@ -135,7 +135,7 @@ export async function GET(req: NextRequest) {
       varsByPadreId.set(v.producto_padre_id, arr);
     }
 
-    // ── Upsert batch de padres (metadatos + woo_id) ─────────────────────────
+    // â”€â”€ Upsert batch de padres (metadatos + woo_id) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     const padreUpserts: object[] = [];
 
     for (const wp of products) {
@@ -183,14 +183,14 @@ export async function GET(req: NextRequest) {
       await supa.from("productos_padre").upsert(padreUpserts, { onConflict: "woo_id" });
     }
 
-    // Recargar el mapa woo_id → padre_id con los recién insertados
+    // Recargar el mapa woo_id â†’ padre_id con los reciÃ©n insertados
     const { data: padresRecargados } = await supa.from("productos_padre")
       .select("id, woo_id").in("woo_id", wooIds);
     for (const p of padresRecargados ?? []) {
       if (p.woo_id) padresByWooId.set(p.woo_id, p.id);
     }
 
-    // ── Sync de precios, stock y variaciones ───────────────────────────────
+    // â”€â”€ Sync de precios, stock y variaciones â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     for (const wp of products) {
       const wooId = String(wp.id);
       const padreId = padresByWooId.get(wooId);
@@ -230,7 +230,7 @@ export async function GET(req: NextRequest) {
             const vOferta = vSale > 0 && vSale < vReg;
             const vB2c = vOferta ? vSale : vReg;
             const sku = wv.sku || `${wp.slug}-${wv.id}`;
-            const nombreVariacion = wv.attributes.map(a => a.option).join(" · ") || "Unidad";
+            const nombreVariacion = wv.attributes.map(a => a.option).join(" Â· ") || "Unidad";
             return {
               producto_padre_id: padreId,
               sku,
@@ -255,7 +255,7 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    // ── Contar nuevos creados en esta página ──────────────────────────────
+    // â”€â”€ Contar nuevos creados en esta pÃ¡gina â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     for (const wp of products) {
       const wooId = String(wp.id);
       if (!padresByWooId.has(wooId)) totalCreados++;
@@ -265,14 +265,14 @@ export async function GET(req: NextRequest) {
     page++;
   }
 
-  // ── Desactivar productos que ya no existen en WooCommerce ─────────────────
+  // â”€â”€ Desactivar productos que ya no existen en WooCommerce â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const wooIdsActivosEnSupa = allPadres
     .filter(p => p.woo_id)
     .map(p => p.woo_id as string);
 
   const wooIdsADesactivar = wooIdsActivosEnSupa.filter(id => !wooIdsVistos.has(id));
   if (wooIdsADesactivar.length > 0) {
-    // Desactivar en lotes de 200 para no sobrepasar límites de URL
+    // Desactivar en lotes de 200 para no sobrepasar lÃ­mites de URL
     for (let i = 0; i < wooIdsADesactivar.length; i += 200) {
       await supa.from("productos_padre")
         .update({ activo: false })
@@ -292,141 +292,3 @@ export async function GET(req: NextRequest) {
 }
 
 
-function adminClient() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    { auth: { autoRefreshToken: false, persistSession: false } }
-  );
-}
-
-async function fetchWoo(path: string) {
-  const auth = Buffer.from(`${process.env.WOO_CONSUMER_KEY}:${process.env.WOO_CONSUMER_SECRET}`).toString("base64");
-  const res = await fetch(`${process.env.WOO_URL}/wp-json/wc/v3${path}`, {
-    headers: { Authorization: `Basic ${auth}` },
-    cache: "no-store",
-  });
-  if (!res.ok) throw new Error(`WooCommerce ${res.status}: ${path}`);
-  return res.json();
-}
-
-export async function GET(req: NextRequest) {
-  // Verificar que la llamada es de Vercel Cron (o de un admin con el secret)
-  const auth = req.headers.get("authorization");
-  if (!CRON_SECRET || auth !== `Bearer ${CRON_SECRET}`) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  const supa = adminClient();
-
-  let precioMultiplicadorB2b = 0.75;
-  try {
-    const { data } = await supa.from("config_tienda").select("valor").eq("clave", "precio_multiplicador_b2b").single();
-    if (data?.valor) precioMultiplicadorB2b = parseFloat(data.valor) || 0.75;
-  } catch { /* usar fallback */ }
-
-  // Cargar todas las variaciones por SKU de una vez
-  const allVars: Array<{ id: string; sku: string | null; producto_padre_id: string }> = [];
-  let offset = 0;
-  while (true) {
-    const { data } = await supa.from("productos_variaciones").select("id, sku, producto_padre_id").range(offset, offset + 999);
-    if (!data?.length) break;
-    allVars.push(...data);
-    if (data.length < 1000) break;
-    offset += 1000;
-  }
-  const varsBySku = new Map(allVars.filter(v => v.sku).map(v => [v.sku as string, v]));
-
-  let page = 1;
-  let totalActualizados = 0;
-  let totalNoEncontrados = 0;
-
-  while (true) {
-    type WooProduct = {
-      id: number; type: string; sku: string; name: string;
-      regular_price: string; sale_price: string; price: string;
-      stock_quantity: number | null; stock_status: string;
-      variations: number[];
-    };
-
-    const products: WooProduct[] = await fetchWoo(`/products?per_page=100&page=${page}&status=publish`);
-    if (!Array.isArray(products) || products.length === 0) break;
-
-    // Precargar mapa woo_id → padre_id para esta página
-    const wooIds = products.map(p => p.id);
-    const padresPorWooId = new Map<number, string>();
-    const { data: padres } = await supa.from("productos_padre").select("id, woo_id").in("woo_id", wooIds);
-    for (const p of padres ?? []) if (p.woo_id) padresPorWooId.set(p.woo_id, p.id);
-    const varsByPadreId = new Map<string, typeof allVars>();
-    for (const v of allVars) {
-      const arr = varsByPadreId.get(v.producto_padre_id) ?? [];
-      arr.push(v);
-      varsByPadreId.set(v.producto_padre_id, arr);
-    }
-
-    for (const wp of products) {
-      const precioRegular = parseFloat(wp.regular_price || wp.price) || 0;
-      const precioVenta = parseFloat(wp.sale_price) || 0;
-      const isOferta = precioVenta > 0 && precioVenta < precioRegular;
-      const precioB2c = isOferta ? precioVenta : precioRegular;
-      const precioB2b = parseFloat((precioB2c * precioMultiplicadorB2b).toFixed(2));
-      const stock = wp.stock_quantity ?? 0;
-      const activa = wp.stock_status !== "outofstock";
-
-      if (wp.type === "simple") {
-        let varRow = wp.sku ? varsBySku.get(wp.sku) : undefined;
-        if (!varRow) {
-          const padreId = padresPorWooId.get(wp.id);
-          if (padreId) varRow = varsByPadreId.get(padreId)?.[0];
-        }
-        if (!varRow) { totalNoEncontrados++; continue; }
-
-        await supa.from("productos_variaciones").update({
-          precio_b2c: precioB2c, precio_b2b: precioB2b,
-          precio_comparar: isOferta ? precioRegular : null,
-          stock, activa,
-        }).eq("id", varRow.id);
-        await supa.from("productos_padre").update({ oferta: isOferta }).eq("id", varRow.producto_padre_id);
-        totalActualizados++;
-
-      } else if (wp.type === "variable" && wp.variations?.length) {
-        type WooVar = { id: number; sku: string; regular_price: string; sale_price: string; price: string; stock_quantity: number | null; stock_status: string };
-        try {
-          const wcVars: WooVar[] = await fetchWoo(`/products/${wp.id}/variations?per_page=100`);
-          let matchedAny = false;
-          for (const wv of wcVars) {
-            const varRow = wv.sku ? varsBySku.get(wv.sku) : undefined;
-            if (!varRow) continue;
-            const vReg = parseFloat(wv.regular_price || wv.price) || 0;
-            const vSale = parseFloat(wv.sale_price) || 0;
-            const vOferta = vSale > 0 && vSale < vReg;
-            const vB2c = vOferta ? vSale : vReg;
-            await supa.from("productos_variaciones").update({
-              precio_b2c: vB2c,
-              precio_b2b: parseFloat((vB2c * precioMultiplicadorB2b).toFixed(2)),
-              precio_comparar: vOferta ? vReg : null,
-              stock: wv.stock_quantity ?? 0,
-              activa: wv.stock_status !== "outofstock",
-            }).eq("id", varRow.id);
-            matchedAny = true;
-            totalActualizados++;
-          }
-          if (matchedAny) {
-            const padreId = padresPorWooId.get(wp.id);
-            if (padreId) await supa.from("productos_padre").update({ oferta: isOferta }).eq("id", padreId);
-          } else {
-            totalNoEncontrados++;
-          }
-          await new Promise(r => setTimeout(r, 200));
-        } catch { totalNoEncontrados++; }
-      }
-    }
-
-    if (products.length < 100) break;
-    page++;
-    await new Promise(r => setTimeout(r, 500));
-  }
-
-  console.log(`[cron/sync-precios] actualizados=${totalActualizados} noEncontrados=${totalNoEncontrados}`);
-  return NextResponse.json({ ok: true, actualizados: totalActualizados, noEncontrados: totalNoEncontrados });
-}
