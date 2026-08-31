@@ -59,11 +59,12 @@ export function CheckoutCliente({
     notas:         "",
   });
 
-  const zona        = getZonaEnvio(datos.provincia);
-  const gastoEnvio   = zona === "no_disponible" ? 0 : calcularGastoEnvio(totalPrecio, datos.provincia);
+  const zona        = getZonaEnvio(datos.provincia, datos.ciudad);
+  const gastoEnvio   = zona === "no_disponible" ? 0 : calcularGastoEnvio(totalPrecio, datos.provincia, datos.ciudad);
   const totalFinal   = totalPrecio + gastoEnvio;
 
   const infoEnvio = (() => {
+    if (zona === "ibiza")   return "Envío a Ibiza/Formentera: 12,00 €";
     if (zona === "baleares") return "Envío a Baleares: 7,00 €";
     if (zona === "valencia") return totalPrecio >= 35 ? "Envío gratis (pedido ≥ 35 €)" : "Envío: 5,00 € (gratis desde 35 €)";
     return totalPrecio >= 40 ? "Envío gratis (pedido ≥ 40 €)" : "Envío: 5,00 € (gratis desde 40 €)";
@@ -79,7 +80,7 @@ export function CheckoutCliente({
     setError(null);
 
     // Solo validar dirección y calcular gasto de envío (sin crear pedido aún)
-    const envioCalc = calcularGastoEnvio(totalPrecio, datos.provincia);
+    const envioCalc = calcularGastoEnvio(totalPrecio, datos.provincia, datos.ciudad);
     if (envioCalc === -1) {
       setError("No realizamos envíos a esa provincia.");
       setCargando(false);

@@ -34,7 +34,6 @@ export default function LoginPage({
       return;
     }
 
-    // Si es admin y no hay redirectTo específico, ir al panel admin
     const destino = redirectTo !== "/cuenta"
       ? redirectTo
       : ADMIN_EMAILS.includes(data.user?.email ?? "")

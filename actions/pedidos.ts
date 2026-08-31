@@ -169,6 +169,7 @@ export async function lanzarPedidoWoo(
                   ? `${l.nombre_producto} — ${l.nombre_variacion}`
                   : l.nombre_producto,
       sku:      l.sku,
+      price:    l.precio_unitario.toFixed(2),
       quantity: l.cantidad,
       subtotal: l.subtotal.toFixed(2),
       total:    l.subtotal.toFixed(2),
@@ -188,6 +189,8 @@ export async function lanzarPedidoWoo(
   };
 
   try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
     const res = await fetch(`${wooUrl}/wp-json/esencia/v1/order`, {
       method:  "POST",
       headers: {
@@ -195,7 +198,9 @@ export async function lanzarPedidoWoo(
         "X-Esencia-Token": wooToken,
       },
       body: JSON.stringify(body),
+      signal: controller.signal,
     });
+    clearTimeout(timeoutId);
 
     if (!res.ok) {
       const txt = await res.text();

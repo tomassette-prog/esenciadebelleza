@@ -55,13 +55,14 @@ export default function EnviosPage() {
             <tbody className="divide-y divide-neutral-100">
               <tr><td className="py-2 pr-4">Provincia de Valencia</td><td className="py-2">Gratis desde 35 € · 5,00 € resto</td></tr>
               <tr><td className="py-2 pr-4">Resto de Península</td><td className="py-2">Gratis desde 40 € · 5,00 € resto</td></tr>
-              <tr><td className="py-2 pr-4">Islas Baleares</td><td className="py-2">12,00 €</td></tr>
+              <tr><td className="py-2 pr-4">Baleares (Mallorca y Menorca)</td><td className="py-2">7,00 €</td></tr>
+              <tr><td className="py-2 pr-4">Ibiza y Formentera</td><td className="py-2">12,00 €</td></tr>
             </tbody>
           </table>
         </div>
 
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm text-blue-800 mt-4">
-          <strong>Contra reembolso:</strong> disponible para toda España peninsular y Baleares. Se aplica un suplemento de 3,00 € sobre los gastos de envío estándar. Pagas en efectivo al repartidor cuando recibas tu pedido.
+          <strong>Contra reembolso:</strong> disponible para Península, Baleares, Ibiza y Formentera. Se aplica un suplemento sobre los gastos de envío estándar: <strong>3,00 €</strong> en pedidos de 40 € o más, y <strong>7,50 €</strong> en pedidos inferiores a 40 €. Pagas en efectivo al repartidor cuando recibas tu pedido.
           <p className="mt-2 text-xs text-blue-600">
             <strong>Nota:</strong> las compras a contrarembolso implican una responsabilidad por parte del cliente. El rechazo de un pedido de este tipo puede ser considerado fraude y exigirse responsabilidades al mismo. Los plazos de entrega para pedidos contra reembolso se computan de inmediato, sin necesidad de confirmación de pago previa.
           </p>

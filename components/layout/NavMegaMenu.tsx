@@ -354,8 +354,19 @@ export function NavMegaMenu({ navItems }: { navItems: NavItem[] }) {
               ))}
             </nav>
 
-            {/* CTA Área Profesional */}
-            <div className="px-5 py-5 border-t border-neutral-100 shrink-0">
+            {/* CTA inferior */}
+            <div className="px-5 py-5 border-t border-neutral-100 shrink-0 space-y-3">
+              <Link
+                href="/login"
+                className="flex items-center justify-center gap-2 w-full py-3 text-xs tracking-widest uppercase border border-neutral-200 text-neutral-600 hover:bg-neutral-50 transition-colors"
+                onClick={() => setMobileOpen(false)}
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+                    d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3 0l3-3m0 0l-3-3m3 3H9" />
+                </svg>
+                Mi cuenta / Entrar
+              </Link>
               <Link
                 href="/profesionales"
                 className="flex items-center justify-center w-full py-3 text-xs tracking-widest uppercase border border-neutral-900 text-neutral-900 hover:bg-neutral-900 hover:text-white transition-colors"

@@ -1,0 +1,60 @@
+﻿
+> esencia-belleza@1.0.0 build
+> next build
+
+  Ôû▓ Next.js 14.2.35
+
+   Creating an optimized production build ...
+node.exe : <w> [webpack.cache.PackFileCacheStrategy] Serializing big strings 
+(102kiB) impacts deserialization performance (consider using Buffer instead 
+and decode when needed)
+En línea: 1 Carácter: 1
++ & "C:\Program Files\nodejs/node.exe" "C:\Program Files\nodejs/node_mo ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (<w> [webpack.ca...de when needed) 
+   :String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+<w> [webpack.cache.PackFileCacheStrategy] Serializing big strings (250kiB) 
+impacts deserialization performance (consider using Buffer instead and decode 
+when needed)
+ ÔÜá Compiled with warnings
+
+./node_modules/@supabase/supabase-js/dist/index.mjs
+A Node.js API is used (process.version at line: 27) which is not supported in 
+the Edge Runtime.
+Learn more: https://nextjs.org/docs/api-reference/edge-runtime
+
+Import trace for requested module:
+./node_modules/@supabase/supabase-js/dist/index.mjs
+./node_modules/@supabase/ssr/dist/index.mjs
+
+ Ô£ô Compiled successfully
+   Linting and checking validity of types ...
+
+./app/layout.tsx
+82:9  Warning: Prefer `next/script` component when using the inline script for Google Analytics. See: https://nextjs.org/docs/messages/next-script-for-ga  @next/next/next-script-for-ga
+
+./components/admin/ProductosNuevosClient.tsx
+303:65  Warning: Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+info  - Need to disable some ESLint rules? Learn more here: https://nextjs.org/docs/basic-features/eslint#disabling-rules
+Failed to compile.
+
+./actions/checkout.ts:202:19
+Type error: Expected 0-1 arguments, but got 2.
+
+[0m [90m 200 |[39m     
+[33m.[39meq([32m"stripe_payment_id"[39m[33m,[39m numOper)[0m
+[0m [90m 201 |[39m     [33m.[39meq([32m"estado"[39m[33m,[39m 
+[32m"pendiente"[39m)[0m
+[0m[31m[1m>[22m[39m[90m 202 |[39m     
+[33m.[39mselect([32m"id"[39m[33m,[39m { count[33m:[39m 
+[32m"exact"[39m[33m,[39m head[33m:[39m [36mtrue[39m })[33m;[39m[0m
+[0m [90m     |[39m                   [31m[1m^[22m[39m[0m
+[0m [90m 203 |[39m[0m
+[0m [90m 204 |[39m   [36mif[39m (count [33m===[39m [35m0[39m) 
+[36mreturn[39m { ok[33m:[39m [36mtrue[39m }[33m;[39m [90m// ya 
+procesado por otra llamada concurrente[39m[0m
+[0m [90m 205 |[39m[0m
+Next.js build worker exited with code: 1 and signal: null

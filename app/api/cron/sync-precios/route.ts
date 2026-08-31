@@ -1,22 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { WOO_CAT_MAP } from "@/lib/categorias";
 
-/**
- * Vercel Cron Job — sincronización diaria automática
- *
- * Ejecuta a las 03:00 UTC cada día (configurado en vercel.json).
- * Tres fases: importar productos nuevos → actualizar precios/stock → actualizar ofertas.
- *
- * Autenticación: Vercel envía automáticamente `Authorization: Bearer <CRON_SECRET>`.
- * Si CRON_SECRET no está configurado, el endpoint rechaza toda petición.
- */
+export const maxDuration = 300; // 300s en Pro / capped a 60s en Hobby
 
-export const maxDuration = 300; // 5 minutos — suficiente para ~3000 productos
-export const dynamic = "force-dynamic";
+const CRON_SECRET = process.env.CRON_SECRET;
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-function supa() {
+function adminClient() {
   return createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
@@ -24,362 +14,419 @@ function supa() {
   );
 }
 
-const WOO_URL = process.env.WOO_URL!;
-const CK = process.env.WOO_CONSUMER_KEY!;
-const CS = process.env.WOO_CONSUMER_SECRET!;
+function mapearCategoria(cats: { id: number; slug: string }[]): { categoria: string; subcategoria: string } {
+  for (const cat of cats) {
+    if (WOO_CAT_MAP[cat.id]) return WOO_CAT_MAP[cat.id];
+  }
+  const SLUG_FALLBACK: Record<string, { categoria: string; subcategoria: string }> = {
+    peluqueria: { categoria: "peluqueria",  subcategoria: "peluqueria-general" },
+    tintes:     { categoria: "peluqueria",  subcategoria: "tintes"             },
+    estetica:   { categoria: "estetica",    subcategoria: "estetica-general"   },
+    perfumeria: { categoria: "perfumeria",  subcategoria: "perfumeria-general" },
+    barberia:   { categoria: "barberia",    subcategoria: "barberia-general"   },
+    maquillaje: { categoria: "maquillaje",  subcategoria: "maquillaje-general" },
+  };
+  for (const cat of cats) {
+    if (SLUG_FALLBACK[cat.slug]) return SLUG_FALLBACK[cat.slug];
+  }
+  return { categoria: "otros", subcategoria: "general" };
+}
 
-async function fetchWoo(path: string) {
-  const auth = Buffer.from(`${CK}:${CS}`).toString("base64");
-  const res = await fetch(`${WOO_URL}/wp-json/wc/v3${path}`, {
+async function fetchWoo<T = unknown>(path: string): Promise<T> {
+  const auth = Buffer.from(`${process.env.WOO_CONSUMER_KEY}:${process.env.WOO_CONSUMER_SECRET}`).toString("base64");
+  const res = await fetch(`${process.env.WOO_URL}/wp-json/wc/v3${path}`, {
     headers: { Authorization: `Basic ${auth}` },
     cache: "no-store",
   });
-  if (!res.ok) throw new Error(`WooCommerce ${res.status}: ${await res.text().catch(() => "")}`);
-  return res.json();
+  if (!res.ok) throw new Error(`WooCommerce ${res.status}: ${path}`);
+  return res.json() as Promise<T>;
 }
 
-function normalizarNombre(nombre: string): string {
-  return nombre
-    .toLowerCase()
-    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
-    .replace(/[.,;:()[\]"'ºª-]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
+// ── Tipos WooCommerce ─────────────────────────────────────────────────────────
+interface WooProduct {
+  id: number; type: string; sku: string; name: string; slug: string;
+  status: string;
+  regular_price: string; sale_price: string; price: string;
+  stock_quantity: number | null; stock_status: string;
+  images: { src: string }[];
+  categories: { id: number; slug: string }[];
+  attributes: { name: string; options: string[] }[];
+  description: string; short_description: string;
+  variations: number[];
 }
 
-function slugify(text: string): string {
-  return text.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+interface WooVariation {
+  id: number; sku: string; price: string;
+  regular_price: string; sale_price: string;
+  stock_quantity: number | null; stock_status: string;
+  attributes: { name: string; option: string }[];
+  image: { src: string } | null;
+  status: string;
 }
 
-// ── Fase 1: Importar productos nuevos ────────────────────────────────────────
-
-async function importarNuevos(db: ReturnType<typeof supa>): Promise<{ nuevos: number; errores: number }> {
-  const { data: lastSyncRow } = await db.from("config_tienda").select("valor").eq("clave", "ultima_import_wc").single();
-  const lastSync = lastSyncRow?.valor ?? null;
-  const now = new Date().toISOString();
-
-  // Cargar mapa de productos existentes (woo_id y slug)
-  const existentesPorWooId = new Map<number, string>();
-  const existentesPorSlug = new Map<string, boolean>();
-  let offset = 0;
-  while (true) {
-    const { data } = await db.from("productos_padre").select("id, woo_id, slug").range(offset, offset + 999);
-    if (!data?.length) break;
-    for (const r of data) {
-      if (r.woo_id) existentesPorWooId.set(r.woo_id, r.id);
-      if (r.slug) existentesPorSlug.set(r.slug, true);
-    }
-    if (data.length < 1000) break;
-    offset += 1000;
+export async function GET(req: NextRequest) {
+  const auth = req.headers.get("authorization");
+  if (!CRON_SECRET || auth !== `Bearer ${CRON_SECRET}`) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  // Cargar multiplicador B2C
-  let precioMultiplicador = 1;
+  const supa = adminClient();
+
+  // ── Configuración ──────────────────────────────────────────────────────────
+  let b2bMult = 0.75;
   try {
-    const { data: cfg } = await db.from("config_tienda").select("valor").eq("clave", "precio_multiplicador_b2c").single();
-    if (cfg?.valor) precioMultiplicador = parseFloat(cfg.valor) || 1;
+    const { data } = await supa.from("config_tienda").select("valor").eq("clave", "precio_multiplicador_b2b").single();
+    if (data?.valor) b2bMult = parseFloat(data.valor) || 0.75;
   } catch { /* fallback */ }
 
-  let totalNuevos = 0;
-  let totalErrores = 0;
-  let page = 1;
-
-  while (true) {
-    const url = lastSync
-      ? `/products?per_page=100&page=${page}&status=publish&modified_after=${lastSync}`
-      : `/products?per_page=100&page=${page}&status=publish`;
-    const batch: any[] = await fetchWoo(url);
-    if (!Array.isArray(batch) || batch.length === 0) break;
-
-    for (const p of batch) {
-      const slug = p.slug || slugify(p.name);
-      if (existentesPorWooId.has(p.id) || existentesPorSlug.has(slug)) continue;
-
-      try {
-        // Resolver marca
-        let marcaId: string | null = null;
-        const nombreLower = p.name.toLowerCase();
-        const { data: marcas } = await db.from("marcas").select("id, nombre");
-        if (marcas) {
-          for (const m of marcas) {
-            if (nombreLower.includes(m.nombre.toLowerCase())) { marcaId = m.id; break; }
-          }
-        }
-
-        // Insertar producto padre
-        const { data: inserted, error: insertErr } = await db.from("productos_padre").insert({
-          nombre: p.name,
-          slug,
-          woo_id: p.id,
-          descripcion: p.description || "",
-          descripcion_corta: p.short_description || "",
-          imagen_principal_url: p.images?.[0]?.src ?? null,
-          marca_id: marcaId,
-          activo: true,
-          oferta: false,
-        }).select("id").single();
-
-        if (insertErr || !inserted) { totalErrores++; continue; }
-
-        // Insertar variaciones
-        if (p.type === "simple") {
-          const precioRegular = parseFloat(p.regular_price || p.price) || 0;
-          const precioVenta = parseFloat(p.sale_price) || 0;
-          const isOferta = precioVenta > 0 && precioVenta < precioRegular;
-          const precioB2c = isOferta ? precioVenta : precioRegular;
-
-          await db.from("productos_variaciones").insert({
-            producto_padre_id: inserted.id,
-            sku: p.sku || `WC-${p.id}`,
-            nombre_variacion: "Unidad",
-            precio_b2c: precioB2c,
-            precio_b2b: parseFloat((precioB2c * precioMultiplicador).toFixed(2)),
-            precio_comparar: isOferta ? precioRegular : null,
-            stock: p.stock_quantity ?? 0,
-            activa: true,
-            imagen_url: p.images?.[0]?.src ?? null,
-          });
-        } else if (p.type === "variable" && p.variations?.length > 0) {
-          try {
-            const wcVars: any[] = await fetchWoo(`/products/${p.id}/variations?per_page=100`);
-            for (const wv of wcVars) {
-              const precioRegular = parseFloat(wv.regular_price || wv.price) || 0;
-              const precioVenta = parseFloat(wv.sale_price) || 0;
-              const isOferta = precioVenta > 0 && precioVenta < precioRegular;
-              const precioB2c = isOferta ? precioVenta : precioRegular;
-
-              await db.from("productos_variaciones").insert({
-                producto_padre_id: inserted.id,
-                sku: wv.sku || `WC-${p.id}-${wv.id}`,
-                nombre_variacion: wv.attributes?.map((a: any) => a.option).join(" / ") || "Variante",
-                precio_b2c: precioB2c,
-                precio_b2b: parseFloat((precioB2c * precioMultiplicador).toFixed(2)),
-                precio_comparar: isOferta ? precioRegular : null,
-                stock: wv.stock_quantity ?? 0,
-                activa: true,
-                imagen_url: wv.image?.src ?? null,
-              });
-            }
-          } catch { /* si falla la descarga de variaciones, al menos el padre queda creado */ }
-        }
-
-        totalNuevos++;
-        existentesPorWooId.set(p.id, inserted.id);
-        existentesPorSlug.set(slug, true);
-      } catch { totalErrores++; }
-    }
-
-    if (batch.length < 100) break;
-    page++;
-  }
-
-  // Guardar timestamp de última importación
-  await db.from("config_tienda").upsert({ clave: "ultima_import_wc", valor: now }, { onConflict: "clave" });
-  return { nuevos: totalNuevos, errores: totalErrores };
-}
-
-// ── Fase 2: Actualizar precios y stock ───────────────────────────────────────
-
-async function sincronizarPrecios(db: ReturnType<typeof supa>): Promise<{ actualizados: number; noEncontrados: number }> {
-  // Cargar multiplicador B2B
-  let precioMultiplicador = 0.75;
-  try {
-    const { data: cfg } = await db.from("config_tienda").select("valor").eq("clave", "precio_multiplicador_b2b").single();
-    if (cfg?.valor) precioMultiplicador = parseFloat(cfg.valor) || 0.75;
-  } catch { /* fallback */ }
-
-  // Cargar productos padre (por woo_id y nombre)
-  const padresPorWooId = new Map<number, string>();
-  const padresPorNombre = new Map<string, string>();
-  let offset = 0;
-  while (true) {
-    const { data } = await db.from("productos_padre").select("id, woo_id, nombre").range(offset, offset + 999);
-    if (!data?.length) break;
-    for (const r of data) {
-      if (r.woo_id) padresPorWooId.set(r.woo_id, r.id);
-      padresPorNombre.set(normalizarNombre(r.nombre), r.id);
-    }
-    if (data.length < 1000) break;
-    offset += 1000;
-  }
-
-  // Cargar variaciones existentes
+  // ── Cargar todas las variaciones Supabase (sku → id) ──────────────────────
   const allVars: Array<{ id: string; sku: string | null; producto_padre_id: string }> = [];
-  offset = 0;
+  let offset = 0;
   while (true) {
-    const { data } = await db.from("productos_variaciones").select("id, sku, producto_padre_id").range(offset, offset + 999);
+    const { data } = await supa.from("productos_variaciones").select("id, sku, producto_padre_id").range(offset, offset + 999);
     if (!data?.length) break;
     allVars.push(...data);
     if (data.length < 1000) break;
     offset += 1000;
   }
   const varsBySku = new Map(allVars.filter(v => v.sku).map(v => [v.sku as string, v]));
-  const varsByPadreId = new Map<string, typeof allVars>();
-  for (const v of allVars) {
-    const arr = varsByPadreId.get(v.producto_padre_id) ?? [];
-    arr.push(v);
-    varsByPadreId.set(v.producto_padre_id, arr);
-  }
 
-  let actualizados = 0;
-  const noEncontradosSet = new Set<string>();
-  const ofertaPorPadre = new Map<string, boolean>();
-  const wooIdsPorBackfillear = new Map<string, number>();
-
-  async function updateVar(varId: string, padreId: string, precioB2c: number, precioRegular: number, isOferta: boolean, stock: number, activa: boolean) {
-    await db.from("productos_variaciones").update({
-      precio_b2c: precioB2c,
-      precio_b2b: parseFloat((precioB2c * precioMultiplicador).toFixed(2)),
-      precio_comparar: isOferta ? precioRegular : null,
-      stock,
-      activa,
-    }).eq("id", varId);
-    ofertaPorPadre.set(padreId, ofertaPorPadre.get(padreId) || isOferta);
-    actualizados++;
-  }
-
-  let page = 1;
+  // ── Cargar todos los productos_padre (woo_id → id) ────────────────────────
+  const allPadres: Array<{ id: string; woo_id: string | null }> = [];
+  offset = 0;
   while (true) {
-    const wooProducts: any[] = await fetchWoo(`/products?per_page=100&page=${page}&status=publish`);
-    if (!Array.isArray(wooProducts) || wooProducts.length === 0) break;
+    const { data } = await supa.from("productos_padre").select("id, woo_id").range(offset, offset + 999);
+    if (!data?.length) break;
+    allPadres.push(...data);
+    if (data.length < 1000) break;
+    offset += 1000;
+  }
+  const padresByWooId = new Map(allPadres.filter(p => p.woo_id).map(p => [p.woo_id as string, p.id]));
 
-    // Simple products
-    for (const wp of wooProducts) {
-      if (wp.type !== "simple") continue;
+  // ── Cargar marcas existentes (slug → id) para lookup rápido ───────────────
+  const { data: marcasData } = await supa.from("marcas").select("id, slug");
+  const marcasBySlug = new Map((marcasData ?? []).map(m => [m.slug as string, m.id as string]));
+
+  // ── Iteración por páginas WooCommerce ─────────────────────────────────────
+  let page = 1;
+  const wooIdsVistos = new Set<string>();
+  let totalActualizados = 0;
+  let totalCreados = 0;
+  let totalErrores = 0;
+
+  while (true) {
+    let products: WooProduct[];
+    try {
+      products = await fetchWoo<WooProduct[]>(
+        `/products?per_page=100&page=${page}&status=publish&_fields=id,type,sku,name,slug,status,regular_price,sale_price,price,stock_quantity,stock_status,images,categories,attributes,description,short_description,variations`
+      );
+    } catch (err) {
+      console.error(`[cron/sync] Error página ${page}:`, err);
+      break;
+    }
+    if (!Array.isArray(products) || products.length === 0) break;
+
+    // Precargar mapa woo_id → padre_id para productos de esta página
+    const wooIds = products.map(p => String(p.id));
+    const varsByPadreId = new Map<string, typeof allVars>();
+    for (const v of allVars) {
+      const arr = varsByPadreId.get(v.producto_padre_id) ?? [];
+      arr.push(v);
+      varsByPadreId.set(v.producto_padre_id, arr);
+    }
+
+    // ── Upsert batch de padres (metadatos + woo_id) ─────────────────────────
+    const padreUpserts: object[] = [];
+
+    for (const wp of products) {
+      const wooId = String(wp.id);
+      wooIdsVistos.add(wooId);
+
+      const { categoria, subcategoria } = mapearCategoria(wp.categories ?? []);
+      const imagen = wp.images?.[0]?.src ?? null;
+      const activo = wp.status === "publish";
+
+      // Obtener o crear marca
+      let marcaId: string | null = null;
+      const marcaAttr = wp.attributes?.find(a => a.name.toLowerCase().includes("marca"));
+      if (marcaAttr?.options?.[0]) {
+        const nombreMarca = marcaAttr.options[0];
+        const slugMarca = nombreMarca.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
+        if (marcasBySlug.has(slugMarca)) {
+          marcaId = marcasBySlug.get(slugMarca)!;
+        } else {
+          // Crear marca nueva (solo si es genuinamente nueva)
+          const { data: nuevaMarca } = await supa.from("marcas")
+            .upsert({ nombre: nombreMarca, slug: slugMarca, activa: true }, { onConflict: "slug" })
+            .select("id").single();
+          if (nuevaMarca) {
+            marcaId = nuevaMarca.id;
+            marcasBySlug.set(slugMarca, nuevaMarca.id);
+          }
+        }
+      }
+
+      padreUpserts.push({
+        woo_id: wooId,
+        nombre: wp.name,
+        slug: wp.slug,
+        categoria,
+        subcategoria,
+        imagen_principal_url: imagen,
+        activo,
+        ...(marcaId ? { marca_id: marcaId } : {}),
+      });
+    }
+
+    // Upsert batch de padres por woo_id
+    if (padreUpserts.length > 0) {
+      await supa.from("productos_padre").upsert(padreUpserts, { onConflict: "woo_id" });
+    }
+
+    // Recargar el mapa woo_id → padre_id con los recién insertados
+    const { data: padresRecargados } = await supa.from("productos_padre")
+      .select("id, woo_id").in("woo_id", wooIds);
+    for (const p of padresRecargados ?? []) {
+      if (p.woo_id) padresByWooId.set(p.woo_id, p.id);
+    }
+
+    // ── Sync de precios, stock y variaciones ───────────────────────────────
+    for (const wp of products) {
+      const wooId = String(wp.id);
+      const padreId = padresByWooId.get(wooId);
+      if (!padreId) { totalErrores++; continue; }
+
       const precioRegular = parseFloat(wp.regular_price || wp.price) || 0;
       const precioVenta = parseFloat(wp.sale_price) || 0;
       const isOferta = precioVenta > 0 && precioVenta < precioRegular;
       const precioB2c = isOferta ? precioVenta : precioRegular;
+      const precioB2b = parseFloat((precioB2c * b2bMult).toFixed(2));
       const stock = wp.stock_quantity ?? 0;
       const activa = wp.stock_status !== "outofstock";
 
-      let existingVar = wp.sku ? varsBySku.get(wp.sku) : undefined;
-      if (!existingVar) {
-        const padreId = padresPorWooId.get(wp.id);
-        if (padreId) existingVar = varsByPadreId.get(padreId)?.[0];
-      }
-      if (!existingVar) {
-        const padreId = padresPorNombre.get(normalizarNombre(wp.name));
-        if (padreId) {
-          existingVar = varsByPadreId.get(padreId)?.[0];
-          if (existingVar && !padresPorWooId.has(wp.id)) wooIdsPorBackfillear.set(padreId, wp.id);
-        }
-      }
-      if (!existingVar) { noEncontradosSet.add(wp.name); continue; }
-      await updateVar(existingVar.id, existingVar.producto_padre_id, precioB2c, precioRegular, isOferta, stock, activa);
-    }
+      if (wp.type === "simple") {
+        const sku = wp.sku || wp.slug;
+        await supa.from("productos_variaciones").upsert({
+          producto_padre_id: padreId,
+          sku,
+          nombre_variacion: "Unidad",
+          precio_b2c: precioB2c,
+          precio_b2b: precioB2b,
+          precio_comparar: isOferta ? precioRegular : null,
+          stock,
+          activa,
+        }, { onConflict: "sku" });
+        await supa.from("productos_padre").update({ oferta: isOferta }).eq("id", padreId);
+        totalActualizados++;
 
-    // Variable products
-    const variableProducts = wooProducts.filter(wp => wp.type === "variable" && wp.variations?.length > 0);
-    for (const wp of variableProducts) {
-      try {
-        const wcVars: any[] = await fetchWoo(`/products/${wp.id}/variations?per_page=100`);
-        if (!Array.isArray(wcVars) || wcVars.length === 0) { noEncontradosSet.add(wp.name); continue; }
-
-        const resueltoPorNombre = !padresPorWooId.has(wp.id);
-        const padreId = padresPorWooId.get(wp.id) ?? padresPorNombre.get(normalizarNombre(wp.name));
-        const padreVars = padreId ? varsByPadreId.get(padreId) : undefined;
-        let matchedAny = false;
-
-        for (const wv of wcVars) {
-          const existingVar = wv.sku ? varsBySku.get(wv.sku) : undefined;
-          if (!existingVar) continue;
-          const precioRegular = parseFloat(wv.regular_price || wv.price) || 0;
-          const precioVenta = parseFloat(wv.sale_price) || 0;
-          const isOferta = precioVenta > 0 && precioVenta < precioRegular;
-          const precioB2c = isOferta ? precioVenta : precioRegular;
-          const stock = wv.stock_quantity ?? 0;
-          const activa = wv.stock_status !== "outofstock";
-          matchedAny = true;
-          await updateVar(existingVar.id, existingVar.producto_padre_id, precioB2c, precioRegular, isOferta, stock, activa);
-        }
-
-        if (!matchedAny && padreVars?.length === 1) {
-          const precioRegular = parseFloat(wp.regular_price || wp.price) || 0;
-          if (precioRegular > 0) {
-            const precioVenta = parseFloat(wp.sale_price) || 0;
-            const isOferta = precioVenta > 0 && precioVenta < precioRegular;
-            const precioB2c = isOferta ? precioVenta : precioRegular;
-            const stock = wp.stock_quantity ?? 0;
-            const activa = wp.stock_status !== "outofstock";
-            matchedAny = true;
-            await updateVar(padreVars[0].id, padreVars[0].producto_padre_id, precioB2c, precioRegular, isOferta, stock, activa);
+      } else if (wp.type === "variable" && wp.variations?.length) {
+        try {
+          const wcVars = await fetchWoo<WooVariation[]>(
+            `/products/${wp.id}/variations?per_page=100&_fields=id,sku,price,regular_price,sale_price,stock_quantity,stock_status,attributes,image,status`
+          );
+          const varUpserts = wcVars.map(wv => {
+            const vReg = parseFloat(wv.regular_price || wv.price) || 0;
+            const vSale = parseFloat(wv.sale_price) || 0;
+            const vOferta = vSale > 0 && vSale < vReg;
+            const vB2c = vOferta ? vSale : vReg;
+            const sku = wv.sku || `${wp.slug}-${wv.id}`;
+            const nombreVariacion = wv.attributes.map(a => a.option).join(" · ") || "Unidad";
+            return {
+              producto_padre_id: padreId,
+              sku,
+              nombre_variacion: nombreVariacion,
+              precio_b2c: vB2c,
+              precio_b2b: parseFloat((vB2c * b2bMult).toFixed(2)),
+              precio_comparar: vOferta ? vReg : null,
+              stock: wv.stock_quantity ?? 0,
+              activa: wv.stock_status !== "outofstock",
+              imagen_url: wv.image?.src ?? null,
+            };
+          });
+          if (varUpserts.length > 0) {
+            await supa.from("productos_variaciones").upsert(varUpserts, { onConflict: "sku" });
           }
+          await supa.from("productos_padre").update({ oferta: isOferta }).eq("id", padreId);
+          totalActualizados += varUpserts.length;
+        } catch (err) {
+          console.error(`[cron/sync] Error variaciones producto ${wooId}:`, err);
+          totalErrores++;
         }
-
-        if (matchedAny && resueltoPorNombre && padreId) wooIdsPorBackfillear.set(padreId, wp.id);
-        if (!matchedAny) noEncontradosSet.add(wp.name);
-        await new Promise(r => setTimeout(r, 300));
-      } catch { noEncontradosSet.add(wp.name); }
+      }
     }
 
-    if (wooProducts.length < 100) break;
+    // ── Contar nuevos creados en esta página ──────────────────────────────
+    for (const wp of products) {
+      const wooId = String(wp.id);
+      if (!padresByWooId.has(wooId)) totalCreados++;
+    }
+
+    if (products.length < 100) break;
     page++;
   }
 
-  // Actualizar flags de oferta en productos padre
-  for (const [padreId, isOferta] of Array.from(ofertaPorPadre)) {
-    await db.from("productos_padre").update({ oferta: isOferta }).eq("id", padreId);
+  // ── Desactivar productos que ya no existen en WooCommerce ─────────────────
+  const wooIdsActivosEnSupa = allPadres
+    .filter(p => p.woo_id)
+    .map(p => p.woo_id as string);
+
+  const wooIdsADesactivar = wooIdsActivosEnSupa.filter(id => !wooIdsVistos.has(id));
+  if (wooIdsADesactivar.length > 0) {
+    // Desactivar en lotes de 200 para no sobrepasar límites de URL
+    for (let i = 0; i < wooIdsADesactivar.length; i += 200) {
+      await supa.from("productos_padre")
+        .update({ activo: false })
+        .in("woo_id", wooIdsADesactivar.slice(i, i + 200));
+    }
   }
 
-  // Backfill woo_id
-  for (const [padreId, wooId] of Array.from(wooIdsPorBackfillear)) {
-    await db.from("productos_padre").update({ woo_id: wooId }).eq("id", padreId);
-  }
-
-  return { actualizados, noEncontrados: noEncontradosSet.size };
+  const resumen = {
+    ok: true,
+    actualizados: totalActualizados,
+    creados: totalCreados,
+    desactivados: wooIdsADesactivar.length,
+    errores: totalErrores,
+  };
+  console.log("[cron/sync]", resumen);
+  return NextResponse.json(resumen);
 }
 
-// ── Endpoint ─────────────────────────────────────────────────────────────────
 
-export async function GET(request: NextRequest) {
-  // 1. Verificar autenticación
-  const cronSecret = process.env.CRON_SECRET;
-  if (!cronSecret) {
-    console.error("[CRON] CRON_SECRET no configurado — rechazando petición");
-    return NextResponse.json({ error: "CRON_SECRET not configured" }, { status: 500 });
-  }
+function adminClient() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { autoRefreshToken: false, persistSession: false } }
+  );
+}
 
-  const authHeader = request.headers.get("authorization");
-  if (authHeader !== `Bearer ${cronSecret}`) {
+async function fetchWoo(path: string) {
+  const auth = Buffer.from(`${process.env.WOO_CONSUMER_KEY}:${process.env.WOO_CONSUMER_SECRET}`).toString("base64");
+  const res = await fetch(`${process.env.WOO_URL}/wp-json/wc/v3${path}`, {
+    headers: { Authorization: `Basic ${auth}` },
+    cache: "no-store",
+  });
+  if (!res.ok) throw new Error(`WooCommerce ${res.status}: ${path}`);
+  return res.json();
+}
+
+export async function GET(req: NextRequest) {
+  // Verificar que la llamada es de Vercel Cron (o de un admin con el secret)
+  const auth = req.headers.get("authorization");
+  if (!CRON_SECRET || auth !== `Bearer ${CRON_SECRET}`) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const startTime = Date.now();
-  console.log("[CRON] Iniciando sincronización diaria…");
+  const supa = adminClient();
 
+  let precioMultiplicadorB2b = 0.75;
   try {
-    const db = supa();
+    const { data } = await supa.from("config_tienda").select("valor").eq("clave", "precio_multiplicador_b2b").single();
+    if (data?.valor) precioMultiplicadorB2b = parseFloat(data.valor) || 0.75;
+  } catch { /* usar fallback */ }
 
-    // Fase 1: Importar productos nuevos
-    console.log("[CRON] Fase 1: Importar productos nuevos…");
-    const importResult = await importarNuevos(db);
-    console.log(`[CRON] Fase 1 completa: ${importResult.nuevos} nuevos, ${importResult.errores} errores`);
-
-    // Fase 2: Actualizar precios y stock
-    console.log("[CRON] Fase 2: Actualizar precios y stock…");
-    const precioResult = await sincronizarPrecios(db);
-    console.log(`[CRON] Fase 2 completa: ${precioResult.actualizados} actualizados, ${precioResult.noEncontrados} sin match`);
-
-    // Guardar timestamp de última sincronización
-    await db.from("config_tienda").upsert(
-      { clave: "ultima_sync_cron", valor: new Date().toISOString() },
-      { onConflict: "clave" }
-    );
-
-    const duration = ((Date.now() - startTime) / 1000).toFixed(1);
-    const summary = {
-      ok: true,
-      duration: `${duration}s`,
-      importacion: importResult,
-      precios: precioResult,
-    };
-    console.log(`[CRON] Sincronización completada en ${duration}s`, summary);
-    return NextResponse.json(summary);
-  } catch (e) {
-    const duration = ((Date.now() - startTime) / 1000).toFixed(1);
-    console.error(`[CRON] Error después de ${duration}s:`, e);
-    return NextResponse.json({ error: String(e), duration: `${duration}s` }, { status: 500 });
+  // Cargar todas las variaciones por SKU de una vez
+  const allVars: Array<{ id: string; sku: string | null; producto_padre_id: string }> = [];
+  let offset = 0;
+  while (true) {
+    const { data } = await supa.from("productos_variaciones").select("id, sku, producto_padre_id").range(offset, offset + 999);
+    if (!data?.length) break;
+    allVars.push(...data);
+    if (data.length < 1000) break;
+    offset += 1000;
   }
+  const varsBySku = new Map(allVars.filter(v => v.sku).map(v => [v.sku as string, v]));
+
+  let page = 1;
+  let totalActualizados = 0;
+  let totalNoEncontrados = 0;
+
+  while (true) {
+    type WooProduct = {
+      id: number; type: string; sku: string; name: string;
+      regular_price: string; sale_price: string; price: string;
+      stock_quantity: number | null; stock_status: string;
+      variations: number[];
+    };
+
+    const products: WooProduct[] = await fetchWoo(`/products?per_page=100&page=${page}&status=publish`);
+    if (!Array.isArray(products) || products.length === 0) break;
+
+    // Precargar mapa woo_id → padre_id para esta página
+    const wooIds = products.map(p => p.id);
+    const padresPorWooId = new Map<number, string>();
+    const { data: padres } = await supa.from("productos_padre").select("id, woo_id").in("woo_id", wooIds);
+    for (const p of padres ?? []) if (p.woo_id) padresPorWooId.set(p.woo_id, p.id);
+    const varsByPadreId = new Map<string, typeof allVars>();
+    for (const v of allVars) {
+      const arr = varsByPadreId.get(v.producto_padre_id) ?? [];
+      arr.push(v);
+      varsByPadreId.set(v.producto_padre_id, arr);
+    }
+
+    for (const wp of products) {
+      const precioRegular = parseFloat(wp.regular_price || wp.price) || 0;
+      const precioVenta = parseFloat(wp.sale_price) || 0;
+      const isOferta = precioVenta > 0 && precioVenta < precioRegular;
+      const precioB2c = isOferta ? precioVenta : precioRegular;
+      const precioB2b = parseFloat((precioB2c * precioMultiplicadorB2b).toFixed(2));
+      const stock = wp.stock_quantity ?? 0;
+      const activa = wp.stock_status !== "outofstock";
+
+      if (wp.type === "simple") {
+        let varRow = wp.sku ? varsBySku.get(wp.sku) : undefined;
+        if (!varRow) {
+          const padreId = padresPorWooId.get(wp.id);
+          if (padreId) varRow = varsByPadreId.get(padreId)?.[0];
+        }
+        if (!varRow) { totalNoEncontrados++; continue; }
+
+        await supa.from("productos_variaciones").update({
+          precio_b2c: precioB2c, precio_b2b: precioB2b,
+          precio_comparar: isOferta ? precioRegular : null,
+          stock, activa,
+        }).eq("id", varRow.id);
+        await supa.from("productos_padre").update({ oferta: isOferta }).eq("id", varRow.producto_padre_id);
+        totalActualizados++;
+
+      } else if (wp.type === "variable" && wp.variations?.length) {
+        type WooVar = { id: number; sku: string; regular_price: string; sale_price: string; price: string; stock_quantity: number | null; stock_status: string };
+        try {
+          const wcVars: WooVar[] = await fetchWoo(`/products/${wp.id}/variations?per_page=100`);
+          let matchedAny = false;
+          for (const wv of wcVars) {
+            const varRow = wv.sku ? varsBySku.get(wv.sku) : undefined;
+            if (!varRow) continue;
+            const vReg = parseFloat(wv.regular_price || wv.price) || 0;
+            const vSale = parseFloat(wv.sale_price) || 0;
+            const vOferta = vSale > 0 && vSale < vReg;
+            const vB2c = vOferta ? vSale : vReg;
+            await supa.from("productos_variaciones").update({
+              precio_b2c: vB2c,
+              precio_b2b: parseFloat((vB2c * precioMultiplicadorB2b).toFixed(2)),
+              precio_comparar: vOferta ? vReg : null,
+              stock: wv.stock_quantity ?? 0,
+              activa: wv.stock_status !== "outofstock",
+            }).eq("id", varRow.id);
+            matchedAny = true;
+            totalActualizados++;
+          }
+          if (matchedAny) {
+            const padreId = padresPorWooId.get(wp.id);
+            if (padreId) await supa.from("productos_padre").update({ oferta: isOferta }).eq("id", padreId);
+          } else {
+            totalNoEncontrados++;
+          }
+          await new Promise(r => setTimeout(r, 200));
+        } catch { totalNoEncontrados++; }
+      }
+    }
+
+    if (products.length < 100) break;
+    page++;
+    await new Promise(r => setTimeout(r, 500));
+  }
+
+  console.log(`[cron/sync-precios] actualizados=${totalActualizados} noEncontrados=${totalNoEncontrados}`);
+  return NextResponse.json({ ok: true, actualizados: totalActualizados, noEncontrados: totalNoEncontrados });
 }

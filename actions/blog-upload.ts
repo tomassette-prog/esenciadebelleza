@@ -1,48 +1,9 @@
 "use server";
 
-import { cookies } from "next/headers";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { createClient } from "@/lib/supabase/server";
+import { verificarAdmin } from "@/lib/admin-auth";
 
-const ADMIN_EMAILS = ["ziarresamot@gmail.com"];
 const BUCKET = "blog";
-
-async function verificarAdmin() {
-  try {
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (user && ADMIN_EMAILS.includes(user.email ?? "")) return true;
-  } catch { /* ignorar */ }
-
-  try {
-    const cookieStore = await cookies();
-    const projectRef = "yjanobsfzcwpusynvlun";
-    const cookieName = `sb-${projectRef}-auth-token`;
-    let tokenValue = cookieStore.get(cookieName)?.value;
-    if (!tokenValue) {
-      let combined = "";
-      for (let i = 0; i < 5; i++) {
-        const chunk = cookieStore.get(`${cookieName}.${i}`)?.value;
-        if (!chunk) break;
-        combined += chunk;
-      }
-      if (combined) tokenValue = combined;
-    }
-    if (!tokenValue) return false;
-    const parsed = JSON.parse(tokenValue);
-    const accessToken: string = parsed.access_token;
-    if (!accessToken) return false;
-    const payloadB64 = accessToken.split(".")[1];
-    const payload = JSON.parse(Buffer.from(payloadB64, "base64url").toString());
-    const userId: string = payload.sub;
-    if (!userId) return false;
-    const admin = createAdminClient();
-    const { data: { user } } = await admin.auth.admin.getUserById(userId);
-    return !!(user && ADMIN_EMAILS.includes(user.email ?? ""));
-  } catch {
-    return false;
-  }
-}
 
 export async function subirImagenBlog(
   formData: FormData

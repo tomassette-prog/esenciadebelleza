@@ -1,12 +1,11 @@
 "use server";
 
-import { cookies } from "next/headers";
 import { createClient } from "@supabase/supabase-js";
 import { WOO_CAT_MAP } from "@/lib/categorias";
 import { slugifyCategoria } from "@/lib/seo";
 import { suggestCategory } from "@/lib/category-suggester";
+import { verificarAdmin } from "@/lib/admin-auth";
 
-const ADMIN_EMAILS = ["ziarresamot@gmail.com"];
 const WOO_URL  = process.env.WOO_URL!;
 const CK       = process.env.WOO_CONSUMER_KEY!;
 const CS       = process.env.WOO_CONSUMER_SECRET!;
@@ -34,29 +33,6 @@ function adminClient() {
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
     { auth: { autoRefreshToken: false, persistSession: false } }
   );
-}
-
-async function verificarAdmin() {
-  try {
-    const cookieStore = await cookies();
-    const cookieName = `sb-yjanobsfzcwpusynvlun-auth-token`;
-    let tokenValue = cookieStore.get(cookieName)?.value;
-    if (!tokenValue) {
-      let combined = "";
-      for (let i = 0; i < 5; i++) {
-        const chunk = cookieStore.get(`${cookieName}.${i}`)?.value;
-        if (!chunk) break;
-        combined += chunk;
-      }
-      if (combined) tokenValue = combined;
-    }
-    if (tokenValue) {
-      const parsed = JSON.parse(tokenValue);
-      const payload = JSON.parse(Buffer.from(parsed.access_token.split(".")[1], "base64url").toString());
-      if (payload.sub && payload.exp * 1000 > Date.now() && ADMIN_EMAILS.includes(payload.email)) return;
-    }
-  } catch { /* ignorar */ }
-  throw new Error("No autorizado");
 }
 
 async function fetchWoo(path: string) {

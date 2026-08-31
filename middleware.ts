@@ -18,11 +18,10 @@ const LEGACY_BLOCK_PATTERNS: RegExp[] = [
   /\/(config|setup|install|backup|dump|db)\.(sql|zip|tar|gz|rar)$/i,
 ];
 
-// ─── Rutas que requieren sesión activa ───────────────────────────────────────
-const PROTECTED_ROUTES = ["/cuenta", "/admin"];
+// ─── Rutas que requieren sesión activa (solo /cuenta) ─────────────────────────
+const PROTECTED_ROUTES = ["/cuenta"];
 
-// ─── Rutas exclusivas de admin ───────────────────────────────────────────────
-const ADMIN_ROUTES = ["/admin"];
+// /admin no se protege aquí — el layout app/admin/layout.tsx gestiona su propia auth
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -81,50 +80,11 @@ export async function middleware(request: NextRequest) {
     data: { session },
   } = await supabase.auth.getSession();
 
-  // Intentar también leer el JWT directamente si getSession falla
-  let user = session?.user ?? null;
-  if (!user) {
-    try {
-      const projectRef = "yjanobsfzcwpusynvlun";
-      const cookieName = `sb-${projectRef}-auth-token`;
-      let tokenValue = request.cookies.get(cookieName)?.value;
-      if (!tokenValue) {
-        let combined = "";
-        for (let i = 0; i < 5; i++) {
-          const chunk = request.cookies.get(`${cookieName}.${i}`)?.value;
-          if (!chunk) break;
-          combined += chunk;
-        }
-        if (combined) tokenValue = combined;
-      }
-      if (tokenValue) {
-        const parsed = JSON.parse(tokenValue);
-        const accessToken: string = parsed.access_token;
-        if (accessToken) {
-          const payloadB64 = accessToken.split(".")[1];
-          const payload = JSON.parse(Buffer.from(payloadB64, "base64url").toString());
-          if (payload.sub && payload.exp * 1000 > Date.now()) {
-            user = { id: payload.sub, email: payload.email } as unknown as typeof user;
-          }
-        }
-      }
-    } catch {
-      // ignorar
-    }
-  }
+  const user = session?.user ?? null;
 
-  // 4. Proteger rutas de cuenta y checkout
+  // 4. Proteger rutas de cuenta
   const isProtected = PROTECTED_ROUTES.some((r) => pathname.startsWith(r));
   if (isProtected && !user) {
-    const loginUrl = new URL("/login", request.url);
-    loginUrl.searchParams.set("redirectTo", pathname);
-    return NextResponse.redirect(loginUrl);
-  }
-
-  // 5. Proteger rutas de administración — verificar solo que hay sesión activa
-  // El rol 'admin' se verifica en el layout con createAdminClient (más fiable)
-  const isAdminRoute = ADMIN_ROUTES.some((r) => pathname.startsWith(r));
-  if (isAdminRoute && !user) {
     const loginUrl = new URL("/login", request.url);
     loginUrl.searchParams.set("redirectTo", pathname);
     return NextResponse.redirect(loginUrl);

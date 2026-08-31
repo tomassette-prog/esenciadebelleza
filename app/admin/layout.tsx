@@ -1,68 +1,43 @@
 ﻿import { cookies } from "next/headers";
-import { createClient as createSupabaseAdmin } from "@supabase/supabase-js";
 import { redirect } from "next/navigation";
 import { type ReactNode } from "react";
 import { AdminSidebar } from "@/components/admin/AdminSidebar";
 
+const ADMIN_EMAILS = ["ziarresamot@gmail.com"];
+const PROJECT_REF = "yjanobsfzcwpusynvlun";
+
 export const maxDuration = 300;
 
-// Emails con acceso admin
-const ADMIN_EMAILS = ["ziarresamot@gmail.com"];
-
-async function getAdminUser(): Promise<{ email: string } | null> {
+async function getSessionEmail(): Promise<string | null> {
   const cookieStore = await cookies();
-  
-  // Intentar leer el token desde la cookie que escribe createBrowserClient
-  const projectRef = "yjanobsfzcwpusynvlun";
-  const cookieName = `sb-${projectRef}-auth-token`;
-  
-  // También puede estar en chunks .0, .1...
-  let tokenValue = cookieStore.get(cookieName)?.value;
-  if (!tokenValue) {
-    const chunk0 = cookieStore.get(`${cookieName}.0`)?.value;
-    if (chunk0) {
-      let i = 0;
-      let combined = "";
-      while (true) {
-        const chunk = cookieStore.get(`${cookieName}.${i}`)?.value;
-        if (!chunk) break;
-        combined += chunk;
-        i++;
-      }
-      tokenValue = combined;
+  const cookieName = `sb-${PROJECT_REF}-auth-token`;
+
+  // Leer cookie completa o reconstruir desde chunks
+  let raw = cookieStore.get(cookieName)?.value ?? "";
+  if (!raw) {
+    for (let i = 0; ; i++) {
+      const chunk = cookieStore.get(`${cookieName}.${i}`)?.value;
+      if (!chunk) break;
+      raw += chunk;
     }
   }
-
-  if (!tokenValue) return null;
+  if (!raw) return null;
 
   try {
-    const parsed = JSON.parse(tokenValue);
-    const accessToken: string = parsed.access_token;
-    if (!accessToken) return null;
-
-    // Decodificar el JWT para obtener el sub (user id)
-    const payloadB64 = accessToken.split(".")[1];
-    const payload = JSON.parse(Buffer.from(payloadB64, "base64url").toString());
-    const userId: string = payload.sub;
-    if (!userId) return null;
-
-    // Verificar con el servicio admin de Supabase
-    const adminClient = createSupabaseAdmin(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!,
-      { auth: { autoRefreshToken: false, persistSession: false } }
-    );
-    const { data: { user } } = await adminClient.auth.admin.getUserById(userId);
-    return user ? { email: user.email ?? "" } : null;
+    // Next.js puede devolver el valor URL-encoded
+    const decoded = raw.startsWith("%") ? decodeURIComponent(raw) : raw;
+    const parsed = JSON.parse(decoded);
+    // El email está en parsed.user.email (session object de Supabase)
+    return parsed?.user?.email ?? null;
   } catch {
     return null;
   }
 }
 
 export default async function AdminLayout({ children }: { children: ReactNode }) {
-  const user = await getAdminUser();
+  const email = await getSessionEmail();
 
-  if (!user || !ADMIN_EMAILS.includes(user.email)) {
+  if (!email || !ADMIN_EMAILS.includes(email)) {
     redirect("/login?redirectTo=/admin/productos");
   }
 

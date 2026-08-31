@@ -174,13 +174,14 @@ export async function Header() {
             ) : (
               <Link
                 href="/login"
-                className="hidden sm:flex items-center gap-1.5 px-3 py-2 text-xs tracking-wider uppercase text-neutral-500 hover:text-neutral-900 transition-colors"
+                className="flex items-center gap-1.5 px-3 py-2 text-xs tracking-wider uppercase text-neutral-500 hover:text-neutral-900 transition-colors"
+                aria-label="Iniciar sesión"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
                     d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3 0l3-3m0 0l-3-3m3 3H9" />
                 </svg>
-                Entrar
+                <span className="hidden sm:inline">Entrar</span>
               </Link>
             )}
 

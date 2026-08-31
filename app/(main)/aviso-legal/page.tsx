@@ -119,7 +119,7 @@ export default function AvisoLegalPage() {
           Cuarta — Formas de pago
         </h2>
         <p>
-          <strong>Contra reembolso:</strong> podrá abonar su compra pagándola al repartidor de la empresa de transportes en el momento de la entrega de la mercancía. Se aplica un suplemento de 3,00 € sobre los gastos de envío estándar. Las compras a contrarembolso implican una responsabilidad por parte del cliente, y el rechazo de un pedido de este tipo puede ser considerado fraude ante un tribunal y exigirse responsabilidades al mismo. Los plazos de entrega para pedidos contra reembolso se computan de inmediato, sin necesidad de confirmación de pago previa.
+          <strong>Contra reembolso:</strong> podrá abonar su compra pagándola al repartidor de la empresa de transportes en el momento de la entrega de la mercancía. Se aplica un suplemento sobre los gastos de envío estándar: <strong>3,00 €</strong> en pedidos de 40 € o más, y <strong>7,50 €</strong> en pedidos inferiores a 40 €. Las compras a contrarembolso implican una responsabilidad por parte del cliente, y el rechazo de un pedido de este tipo puede ser considerado fraude ante un tribunal y exigirse responsabilidades al mismo. Los plazos de entrega para pedidos contra reembolso se computan de inmediato, sin necesidad de confirmación de pago previa.
         </p>
         <p>
           <strong>Tarjeta de débito/crédito:</strong> pago a través de nuestro TPV virtual seguro (Stripe), que garantiza la seguridad y fiabilidad del pago. Aceptamos Visa, Mastercard, American Express, Apple Pay, Google Pay y Bizum.

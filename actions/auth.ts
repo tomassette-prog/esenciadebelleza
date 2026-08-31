@@ -4,6 +4,8 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 
+const ADMIN_EMAILS = ["ziarresamot@gmail.com"];
+
 // ── Login ─────────────────────────────────────────────────────────────────────
 export async function login(
   _prevState: { error: string; redirectTo?: string } | null,
@@ -11,7 +13,7 @@ export async function login(
 ): Promise<{ error: string; redirectTo?: string }> {
   const supabase = await createClient();
 
-  const { error } = await supabase.auth.signInWithPassword({
+  const { data, error } = await supabase.auth.signInWithPassword({
     email: (formData.get("email") as string).trim().toLowerCase(),
     password: formData.get("password") as string,
   });
@@ -20,7 +22,16 @@ export async function login(
     return { error: "Credenciales incorrectas. Verifica tu email y contraseña." };
   }
 
-  const redirectTo = (formData.get("redirectTo") as string) || "/cuenta";
+  const isAdmin = ADMIN_EMAILS.includes(data.user?.email ?? "");
+  const rawRedirect = (formData.get("redirectTo") as string) || "/cuenta";
+
+  // Si el redirectTo es sólo /admin (sin subpágina), corregir a /admin/productos
+  const redirectTo = rawRedirect === "/admin" || rawRedirect === "/admin/"
+    ? "/admin/productos"
+    : rawRedirect === "/cuenta" && isAdmin
+      ? "/admin/productos"
+      : rawRedirect;
+
   revalidatePath("/", "layout");
   redirect(redirectTo);
 }
