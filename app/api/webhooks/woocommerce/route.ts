@@ -1,7 +1,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { NextRequest, NextResponse } from "next/server";
 import * as crypto from "crypto";
-import { WOO_CAT_MAP } from "@/lib/categorias";
+import { resolverCategoriaSimple } from "@/lib/woo-cat-resolver";
 
 // ── Verificación de firma HMAC-SHA256 de WooCommerce ─────────────────────────
 function verificarFirmaWC(body: string, signature: string, secret: string): boolean {
@@ -13,31 +13,6 @@ function verificarFirmaWC(body: string, signature: string, secret: string): bool
   } catch {
     return false;
   }
-}
-
-// ── Mapeo categorías WooCommerce → estructura Supabase ────────────────────────
-function mapearCategoria(cats: { id: number; slug: string }[]): { categoria: string; subcategoria: string } {
-  // Primero intentar por ID numérico (más preciso)
-  for (const cat of cats) {
-    if (WOO_CAT_MAP[cat.id]) return WOO_CAT_MAP[cat.id];
-  }
-  // Fallback por slug
-  const SLUG_MAP: Record<string, { categoria: string; subcategoria: string }> = {
-    peluqueria:        { categoria: "peluqueria",  subcategoria: "peluqueria-general" },
-    tintes:            { categoria: "peluqueria",  subcategoria: "tintes"      },
-    decolorantes:      { categoria: "peluqueria",  subcategoria: "decoloracion"},
-    champu:            { categoria: "peluqueria",  subcategoria: "champus"     },
-    acondicionadores:  { categoria: "peluqueria",  subcategoria: "acondicionadores" },
-    mascarillas:       { categoria: "peluqueria",  subcategoria: "mascarillas" },
-    estetica:          { categoria: "estetica",    subcategoria: "estetica-general"  },
-    perfumeria:        { categoria: "perfumeria",  subcategoria: "perfumeria-general"},
-    barberia:          { categoria: "barberia",    subcategoria: "barberia-general"  },
-    maquillaje:        { categoria: "maquillaje",  subcategoria: "maquillaje-general"},
-  };
-  for (const cat of cats) {
-    if (SLUG_MAP[cat.slug]) return SLUG_MAP[cat.slug];
-  }
-  return { categoria: "otros", subcategoria: "general" };
 }
 
 // ── Llamada autenticada a la API REST de WooCommerce ─────────────────────────
@@ -195,7 +170,7 @@ async function sincronizarProducto(
   } catch { /* usar fallback */ }
   const wc_id   = String(p.id);
   const slug    = String(p.slug);
-  const { categoria, subcategoria } = mapearCategoria(
+  const { categoria, subcategoria } = await resolverCategoriaSimple(
     (p.categories as { id: number; slug: string }[]) ?? []
   );
 

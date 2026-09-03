@@ -1,6 +1,6 @@
 ﻿import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { WOO_CAT_MAP } from "@/lib/categorias";
+import { resolverCategoriaSimple } from "@/lib/woo-cat-resolver";
 
 export const maxDuration = 300; // 300s en Pro / capped a 60s en Hobby
 
@@ -12,24 +12,6 @@ function adminClient() {
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
     { auth: { autoRefreshToken: false, persistSession: false } }
   );
-}
-
-function mapearCategoria(cats: { id: number; slug: string }[]): { categoria: string; subcategoria: string } {
-  for (const cat of cats) {
-    if (WOO_CAT_MAP[cat.id]) return WOO_CAT_MAP[cat.id];
-  }
-  const SLUG_FALLBACK: Record<string, { categoria: string; subcategoria: string }> = {
-    peluqueria: { categoria: "peluqueria",  subcategoria: "peluqueria-general" },
-    tintes:     { categoria: "peluqueria",  subcategoria: "tintes"             },
-    estetica:   { categoria: "estetica",    subcategoria: "estetica-general"   },
-    perfumeria: { categoria: "perfumeria",  subcategoria: "perfumeria-general" },
-    barberia:   { categoria: "barberia",    subcategoria: "barberia-general"   },
-    maquillaje: { categoria: "maquillaje",  subcategoria: "maquillaje-general" },
-  };
-  for (const cat of cats) {
-    if (SLUG_FALLBACK[cat.slug]) return SLUG_FALLBACK[cat.slug];
-  }
-  return { categoria: "otros", subcategoria: "general" };
 }
 
 async function fetchWoo<T = unknown>(path: string): Promise<T> {
@@ -142,7 +124,7 @@ export async function GET(req: NextRequest) {
       const wooId = String(wp.id);
       wooIdsVistos.add(wooId);
 
-      const { categoria, subcategoria } = mapearCategoria(wp.categories ?? []);
+      const { categoria, subcategoria } = await resolverCategoriaSimple(wp.categories ?? []);
       const imagen = wp.images?.[0]?.src ?? null;
       const activo = wp.status === "publish";
 

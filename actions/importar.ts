@@ -5,6 +5,7 @@ import { WOO_CAT_MAP } from "@/lib/categorias";
 import { slugifyCategoria } from "@/lib/seo";
 import { suggestCategory } from "@/lib/category-suggester";
 import { verificarAdmin } from "@/lib/admin-auth";
+import { resolverCategoriaSimple, saveCatMapping } from "@/lib/woo-cat-resolver";
 
 const WOO_URL  = process.env.WOO_URL!;
 const CK       = process.env.WOO_CONSUMER_KEY!;
@@ -50,12 +51,9 @@ function slugify(text: string): string {
     .replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
 }
 
-function resolverCategoria(cats: { id: number }[], catMap: Map<number, { categoria: string; subcategoria: string }>) {
-  for (const cat of cats) {
-    const mapped = catMap.get(cat.id);
-    if (mapped) return mapped;
-  }
-  return { categoria: "peluqueria", subcategoria: "peluqueria-general" };
+async function resolverCategoria(cats: { id: number; slug: string }[]) {
+  // Usa la utilidad compartida: DB + hardcoded + slug fallback
+  return resolverCategoriaSimple(cats);
 }
 
 // ─── Brand extraction helpers ─────────────────────────────────────────────────
@@ -917,8 +915,8 @@ export async function aplicarCambios(
       const slug = p.slug || slugify(p.name);
       const marcaId = resolvedBrandMap.get(brandNameForProduct(p)) ?? null;
 
-      // Resolve category: first try catMap, then use AI suggester
-      let cat = resolverCategoria(p.categories, catMap);
+      // Resolve category: first try shared resolver (DB + hardcoded + slug), then AI suggester
+      let cat = await resolverCategoria(p.categories);
       const hasMappedCategory = p.categories.some(c => catMap.has(c.id));
       if (!hasMappedCategory && p.categories.length > 0) {
         // Use AI suggester for unmapped categories
@@ -1322,7 +1320,7 @@ export async function publicarAprobados(payload: ReviewPayload): Promise<SmartAp
     
     for (const p of fetched) {
       const slug = p.slug || slugify(p.name);
-      const cat = slugToCat.get(slug) ?? resolverCategoria(p.categories, new Map(Object.entries(WOO_CAT_MAP).map(([k,v]) => [Number(k),v])));
+      const cat = slugToCat.get(slug) ?? await resolverCategoria(p.categories);
       let ex = existMap.get(slug);
 
       // Fallback anti-duplicado: si no existe por slug, buscar por nombre
