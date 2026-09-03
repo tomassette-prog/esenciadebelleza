@@ -210,7 +210,7 @@ export async function resolverCategoriaSimple(
   };
 
   for (const cat of wooCategories) {
-    if (SLUG_MAP[cat.slug]) return SLUG_MAP[cat.slug];
+    if (cat.slug && SLUG_MAP[cat.slug]) return SLUG_MAP[cat.slug];
   }
 
   // 3. Fallback final
