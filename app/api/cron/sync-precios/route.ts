@@ -271,20 +271,28 @@ export async function GET(req: NextRequest) {
     .map(p => p.woo_id as string);
 
   const wooIdsADesactivar = wooIdsActivosEnSupa.filter(id => !wooIdsVistos.has(id));
-  if (wooIdsADesactivar.length > 0) {
-    // Desactivar en lotes de 200 para no sobrepasar lÃ­mites de URL
+
+  // Salvaguarda: NO desactivar si la API devolvio 0 productos o si se desactivarian mas del 20% del catalogo
+  let desactivados = 0;
+  if (wooIdsVistos.size === 0) {
+    console.warn("[cron/sync] WooCommerce devolvio 0 productos. NO se desactiva nada (posible fallo de API).");
+  } else if (wooIdsADesactivar.length > wooIdsActivosEnSupa.length * 0.2) {
+    console.warn(`[cron/sync] Se desactivarian ${wooIdsADesactivar.length} de ${wooIdsActivosEnSupa.length} productos (${Math.round(wooIdsADesactivar.length / wooIdsActivosEnSupa.length * 100)}%). NO se desactiva nada (posible fallo de paginacion).`);
+  } else if (wooIdsADesactivar.length > 0) {
+    // Desactivar en lotes de 200 para no sobrepasar limites de URL
     for (let i = 0; i < wooIdsADesactivar.length; i += 200) {
       await supa.from("productos_padre")
         .update({ activo: false })
         .in("woo_id", wooIdsADesactivar.slice(i, i + 200));
     }
+    desactivados = wooIdsADesactivar.length;
   }
 
   const resumen = {
     ok: true,
     actualizados: totalActualizados,
     creados: totalCreados,
-    desactivados: wooIdsADesactivar.length,
+    desactivados,
     errores: totalErrores,
   };
   console.log("[cron/sync]", resumen);
