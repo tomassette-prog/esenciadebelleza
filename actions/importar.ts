@@ -917,8 +917,8 @@ export async function aplicarCambios(
 
       // Resolve category: first try shared resolver (DB + hardcoded + slug), then AI suggester
       let cat = await resolverCategoria(p.categories);
-      // Validate by product name (correct WC misclassifications)
-      cat = validarCategoriaPorNombre(p.name, cat);
+      // Validate by product name + description (correct WC misclassifications)
+      cat = validarCategoriaPorNombre(p.name, cat, p.description || p.short_description);
       const hasMappedCategory = p.categories.some(c => catMap.has(c.id));
       if (!hasMappedCategory && p.categories.length > 0) {
         // Use AI suggester for unmapped categories
@@ -1322,7 +1322,7 @@ export async function publicarAprobados(payload: ReviewPayload): Promise<SmartAp
     
     for (const p of fetched) {
       const slug = p.slug || slugify(p.name);
-      const cat = validarCategoriaPorNombre(p.name, slugToCat.get(slug) ?? await resolverCategoria(p.categories));
+      const cat = validarCategoriaPorNombre(p.name, slugToCat.get(slug) ?? await resolverCategoria(p.categories), p.description || p.short_description);
       let ex = existMap.get(slug);
 
       // Fallback anti-duplicado: si no existe por slug, buscar por nombre

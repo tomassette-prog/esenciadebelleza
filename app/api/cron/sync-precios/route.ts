@@ -125,7 +125,7 @@ export async function GET(req: NextRequest) {
       wooIdsVistos.add(wooId);
 
       const catBase = await resolverCategoriaSimple(wp.categories ?? []);
-      const { categoria, subcategoria } = validarCategoriaPorNombre(wp.name, catBase);
+      const { categoria, subcategoria } = validarCategoriaPorNombre(wp.name, catBase, wp.description || wp.short_description);
       const imagen = wp.images?.[0]?.src ?? null;
       const activo = wp.status === "publish";
 

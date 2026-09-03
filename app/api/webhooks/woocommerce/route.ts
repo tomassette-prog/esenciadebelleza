@@ -173,7 +173,7 @@ async function sincronizarProducto(
   const catBase = await resolverCategoriaSimple(
     (p.categories as { id: number; slug: string }[]) ?? []
   );
-  const { categoria, subcategoria } = validarCategoriaPorNombre(String(p.name), catBase);
+  const { categoria, subcategoria } = validarCategoriaPorNombre(String(p.name), catBase, String(p.description || p.short_description || ""));
 
   // Buscar o crear marca
   let marcaId: string | null = null;
