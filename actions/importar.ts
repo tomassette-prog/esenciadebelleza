@@ -5,7 +5,7 @@ import { WOO_CAT_MAP } from "@/lib/categorias";
 import { slugifyCategoria } from "@/lib/seo";
 import { suggestCategory } from "@/lib/category-suggester";
 import { verificarAdmin } from "@/lib/admin-auth";
-import { resolverCategoriaSimple, saveCatMapping } from "@/lib/woo-cat-resolver";
+import { resolverCategoriaSimple, saveCatMapping, validarCategoriaPorNombre } from "@/lib/woo-cat-resolver";
 
 const WOO_URL  = process.env.WOO_URL!;
 const CK       = process.env.WOO_CONSUMER_KEY!;
@@ -917,6 +917,8 @@ export async function aplicarCambios(
 
       // Resolve category: first try shared resolver (DB + hardcoded + slug), then AI suggester
       let cat = await resolverCategoria(p.categories);
+      // Validate by product name (correct WC misclassifications)
+      cat = validarCategoriaPorNombre(p.name, cat);
       const hasMappedCategory = p.categories.some(c => catMap.has(c.id));
       if (!hasMappedCategory && p.categories.length > 0) {
         // Use AI suggester for unmapped categories
@@ -1320,7 +1322,7 @@ export async function publicarAprobados(payload: ReviewPayload): Promise<SmartAp
     
     for (const p of fetched) {
       const slug = p.slug || slugify(p.name);
-      const cat = slugToCat.get(slug) ?? await resolverCategoria(p.categories);
+      const cat = validarCategoriaPorNombre(p.name, slugToCat.get(slug) ?? await resolverCategoria(p.categories));
       let ex = existMap.get(slug);
 
       // Fallback anti-duplicado: si no existe por slug, buscar por nombre

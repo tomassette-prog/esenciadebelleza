@@ -1,6 +1,6 @@
 ﻿import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { resolverCategoriaSimple } from "@/lib/woo-cat-resolver";
+import { resolverCategoriaSimple, validarCategoriaPorNombre } from "@/lib/woo-cat-resolver";
 
 export const maxDuration = 300; // 300s en Pro / capped a 60s en Hobby
 
@@ -124,7 +124,8 @@ export async function GET(req: NextRequest) {
       const wooId = String(wp.id);
       wooIdsVistos.add(wooId);
 
-      const { categoria, subcategoria } = await resolverCategoriaSimple(wp.categories ?? []);
+      const catBase = await resolverCategoriaSimple(wp.categories ?? []);
+      const { categoria, subcategoria } = validarCategoriaPorNombre(wp.name, catBase);
       const imagen = wp.images?.[0]?.src ?? null;
       const activo = wp.status === "publish";
 

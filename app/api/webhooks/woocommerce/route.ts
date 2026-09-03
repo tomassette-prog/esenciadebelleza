@@ -1,7 +1,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { NextRequest, NextResponse } from "next/server";
 import * as crypto from "crypto";
-import { resolverCategoriaSimple } from "@/lib/woo-cat-resolver";
+import { resolverCategoriaSimple, validarCategoriaPorNombre } from "@/lib/woo-cat-resolver";
 
 // ── Verificación de firma HMAC-SHA256 de WooCommerce ─────────────────────────
 function verificarFirmaWC(body: string, signature: string, secret: string): boolean {
@@ -170,9 +170,10 @@ async function sincronizarProducto(
   } catch { /* usar fallback */ }
   const wc_id   = String(p.id);
   const slug    = String(p.slug);
-  const { categoria, subcategoria } = await resolverCategoriaSimple(
+  const catBase = await resolverCategoriaSimple(
     (p.categories as { id: number; slug: string }[]) ?? []
   );
+  const { categoria, subcategoria } = validarCategoriaPorNombre(String(p.name), catBase);
 
   // Buscar o crear marca
   let marcaId: string | null = null;

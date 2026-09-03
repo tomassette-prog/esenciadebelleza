@@ -216,3 +216,65 @@ export async function resolverCategoriaSimple(
   // 3. Fallback final
   return { categoria: "peluqueria", subcategoria: "peluqueria-general" };
 }
+
+// ─── Validación por nombre de producto ────────────────────────────────────────
+
+/**
+ * Corrige la categoría asignada si el nombre del producto indica claramente
+ * una categoría diferente. Útil cuando WC tiene el producto en la categoría equivocada.
+ *
+ * Llamar DESPUÉS de resolverCategoria/resolverCategoriaSimple.
+ */
+export function validarCategoriaPorNombre(
+  nombre: string,
+  categoriaActual: CategoriaMapping
+): CategoriaMapping {
+  const n = nombre.toUpperCase();
+
+  // Champoo
+  if (/CHAMP[UÚ]|SHAMPOO|SHAMPO/.test(n) && categoriaActual.subcategoria !== "champus") {
+    return { categoria: "peluqueria", subcategoria: "champus" };
+  }
+
+  // Acondicionador
+  if (/ACONDICIONADOR|CONDITIONER|BALSAMO/.test(n) && categoriaActual.subcategoria !== "acondicionadores") {
+    return { categoria: "peluqueria", subcategoria: "acondicionadores" };
+  }
+
+  // Tinte
+  if (/TINTE|COLORACION|IGORA|MAJI|DIACOLOR|NUTRISSE/.test(n) && categoriaActual.subcategoria !== "tintes") {
+    return { categoria: "peluqueria", subcategoria: "tintes" };
+  }
+
+  // Decoloración
+  if (/DECOLOR|PLATIBLOND|DECOLORANTE|POWDER LIGHTENER/.test(n) && categoriaActual.subcategoria !== "decoloracion") {
+    return { categoria: "peluqueria", subcategoria: "decoloracion" };
+  }
+
+  // Oxigenada
+  if (/OXIGENADA|PEROXIDO|DEVELOPER/.test(n) && categoriaActual.subcategoria !== "oxigenadas") {
+    return { categoria: "peluqueria", subcategoria: "oxigenadas" };
+  }
+
+  // Tijera
+  if (/TIJERA/.test(n) && categoriaActual.subcategoria !== "tijeras") {
+    return { categoria: "peluqueria", subcategoria: "tijeras" };
+  }
+
+  // Máquina de corte
+  if (/MAQUINA|CORTAPELO/.test(n) && categoriaActual.subcategoria !== "maquinas-corte") {
+    return { categoria: "peluqueria", subcategoria: "maquinas-corte" };
+  }
+
+  // Barbería
+  if (/BARBER|BARBA|AFEITAD|NAVAJA/.test(n) && !categoriaActual.subcategoria.includes("barber")) {
+    return { categoria: "barberia", subcategoria: "cuidado-caballero" };
+  }
+
+  // Perfume
+  if (/EAU DE PARFUM|EDP[^A-Z]|EAU DE TOILETTE|EDT[^A-Z]/.test(n) && categoriaActual.subcategoria !== "eau-de-parfum") {
+    return { categoria: "perfumeria", subcategoria: "eau-de-parfum" };
+  }
+
+  return categoriaActual; // Sin cambio
+}
