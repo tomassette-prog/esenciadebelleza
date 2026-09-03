@@ -51,7 +51,7 @@ function slugify(text: string): string {
     .replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
 }
 
-async function resolverCategoria(cats: { id: number; slug: string }[]) {
+async function resolverCategoria(cats: { id: number; slug?: string }[]) {
   // Usa la utilidad compartida: DB + hardcoded + slug fallback
   return resolverCategoriaSimple(cats);
 }
