@@ -176,7 +176,7 @@ export async function resolverCategoria(
  * Usa solo DB + hardcoded + slug fallback.
  */
 export async function resolverCategoriaSimple(
-  wooCategories: { id: number; slug: string }[]
+  wooCategories: { id: number; slug?: string }[]
 ): Promise<CategoriaMapping> {
   const dbMap = await getDbCatMap();
 
