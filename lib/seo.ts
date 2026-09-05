@@ -124,7 +124,9 @@ export function buildProductJsonLd(
   // Variaciones genéricas no aportan info al título en Google Merchant Center
   const GENERIC_VARIATION = /^(unidad|único|unico|single|1\s*ud?\.?)$/i;
 
-  const offers = producto.variaciones.map((v) => ({
+  const offers = producto.variaciones
+    .filter((v) => v.precio_b2c > 0)
+    .map((v) => ({
     "@type": "Offer",
     sku: v.sku,
     ...(!GENERIC_VARIATION.test(v.nombre_variacion.trim()) && { name: v.nombre_variacion }),
