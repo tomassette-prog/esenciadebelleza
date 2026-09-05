@@ -9,9 +9,12 @@ export function WhatsAppFloat() {
       aria-label="Contactar por WhatsApp"
       className="fixed bottom-6 right-6 z-40 group md:bottom-8 md:right-8"
     >
-      {/* Tooltip — desktop only */}
-      <span className="absolute bottom-full right-0 mb-3 hidden md:block whitespace-nowrap rounded-lg bg-neutral-800 px-3 py-1.5 text-xs text-white opacity-0 shadow-lg transition-opacity duration-200 group-hover:opacity-100 pointer-events-none">
-        ¿Hablamos por WhatsApp?
+      {/* Label — mobile: pill left of button; desktop: hover tooltip */}
+      <span className="absolute right-full mr-3 top-1/2 -translate-y-1/2 md:hidden whitespace-nowrap rounded-full bg-neutral-800/80 backdrop-blur-sm px-3 py-1 text-[11px] text-white/90 pointer-events-none">
+        ¿Dudas? Escríbenos
+      </span>
+      <span className="absolute bottom-full right-0 mb-2 hidden md:block whitespace-nowrap rounded-md bg-neutral-800/85 backdrop-blur-sm px-3 py-1.5 text-xs text-white opacity-0 transition-opacity duration-200 group-hover:opacity-100 pointer-events-none">
+        ¿Dudas? Escríbenos por WhatsApp
       </span>
 
       {/* Pulse ring — fades after 3s via CSS animation */}
