@@ -224,7 +224,7 @@ export async function seleccionarKeyword(
   }
 
   // Priorizar: consejo > comparativa > tendencia > producto
-  const priority = { consejo: 4, comparativa: 3, tendencia: 2, producto: 1 };
+  const priority: Record<string, number> = { consejo: 4, comparativa: 3, tendencia: 2, producto: 1 };
   available.sort((a, b) => (priority[b.tipo] || 0) - (priority[a.tipo] || 0));
 
   // Elegir entre los top 5 para variedad
