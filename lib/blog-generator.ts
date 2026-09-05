@@ -242,7 +242,7 @@ export async function generarPostConGemini(
   productosContexto: string[]
 ): Promise<BlogPostDraft> {
   const apiKey = process.env.GEMINI_API_KEY!;
-  const model = "gemini-3.6-flash";
+  const model = "gemini-flash-latest";
 
   const productosInfo = productosContexto.length > 0
     ? `\n\nProductos de la tienda que puedes mencionar (enlaza con [ENLACE_PRODUCTO: NOMBRE]):\n${productosContexto.map((p) => `- ${p}`).join("\n")}`
