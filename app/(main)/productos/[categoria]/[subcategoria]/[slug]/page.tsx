@@ -107,7 +107,7 @@ export default async function ProductoPage({ params, searchParams }: PageProps) 
   let descuentoB2b = 0;
   let debugAuth = `user=${user ? user.email : 'null'}`;
   if (user) {
-    const { data: perfil } = await supabase
+    const { data: perfil } = await supabaseAdmin
       .from("perfiles_usuario")
       .select("b2b_aprobado, tipo_cliente, descuento_b2b")
       .eq("id", user.id)
