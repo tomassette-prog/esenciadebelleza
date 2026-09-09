@@ -105,6 +105,7 @@ export default async function ProductoPage({ params, searchParams }: PageProps) 
   // Comprobar si el usuario es profesional aprobado
   let b2bAprobado = false;
   let descuentoB2b = 0;
+  let debugAuth = `user=${user ? user.email : 'null'}`;
   if (user) {
     const { data: perfil } = await supabase
       .from("perfiles_usuario")
@@ -113,6 +114,8 @@ export default async function ProductoPage({ params, searchParams }: PageProps) 
       .single();
     b2bAprobado = perfil?.tipo_cliente === "b2b" && perfil?.b2b_aprobado === true;
     descuentoB2b = b2bAprobado ? (perfil?.descuento_b2b ?? 0) : 0;
+    debugAuth += ` | perfil=${JSON.stringify(perfil)}`;
+  }
   }
 
   const p = producto as ProductoCompleto;
@@ -165,6 +168,8 @@ export default async function ProductoPage({ params, searchParams }: PageProps) 
       />
 
       <div className="container-main py-8 lg:py-16">
+        {/* DEBUG — eliminar después */}
+        <div data-debug-auth={debugAuth} className="hidden" />
         {/* ── Breadcrumb ── */}
         <Breadcrumb
           items={[
