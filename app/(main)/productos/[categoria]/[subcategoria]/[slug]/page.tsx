@@ -1,5 +1,6 @@
 ﻿import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { cookies } from "next/headers";
 import Image from "next/image";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -81,17 +82,47 @@ export default async function ProductoPage({ params, searchParams }: PageProps) 
 
   const supabase = await createClient();
   const supabaseAdmin = createAdminClient();
-  const [{ data: producto, error }, { data: { user } }] = await Promise.all([
-    supabaseAdmin
-      .from("productos_padre")
-      .select("*, marca:marcas(*), variaciones:productos_variaciones(*)")
-      .eq("slug", slug)
-      .eq("activo", true)
-      .single(),
-    supabase.auth.getUser(),
-  ]);
+  const { data: producto, error } = await supabaseAdmin
+    .from("productos_padre")
+    .select("*, marca:marcas(*), variaciones:productos_variaciones(*)")
+    .eq("slug", slug)
+    .eq("activo", true)
+    .single();
 
   if (error || !producto) notFound();
+
+  // Leer usuario — intenta SSR client, fallback a cookie directa
+  let user: { id: string; email: string } | null = null;
+  try {
+    const { data: { user: u } } = await supabase.auth.getUser();
+    if (u) user = { id: u.id, email: u.email ?? "" };
+  } catch { /* ignorar */ }
+
+  if (!user) {
+    try {
+      const cookieStore = await cookies();
+      const projectRef = "yjanobsfzcwpusynvlun";
+      const cookieName = `sb-${projectRef}-auth-token`;
+      let tokenValue = cookieStore.get(cookieName)?.value;
+      if (!tokenValue) {
+        let combined = "";
+        for (let i = 0; i < 5; i++) {
+          const chunk = cookieStore.get(`${cookieName}.${i}`)?.value;
+          if (!chunk) break;
+          combined += chunk;
+        }
+        if (combined) tokenValue = combined;
+      }
+      if (tokenValue) {
+        const parsed = JSON.parse(tokenValue);
+        const payloadB64 = parsed.access_token.split(".")[1];
+        const payload = JSON.parse(Buffer.from(payloadB64, "base64url").toString());
+        if (payload.sub && payload.exp * 1000 > Date.now()) {
+          user = { id: payload.sub, email: payload.email ?? "" };
+        }
+      }
+    } catch { /* ignorar */ }
+  }
 
   // Comprobar si el usuario es profesional aprobado
   let b2bAprobado = false;
