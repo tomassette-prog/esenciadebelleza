@@ -25,7 +25,7 @@ export async function login(
   }
 
   const isAdmin = ADMIN_EMAILS.includes(data.user?.email ?? "");
-  const rawRedirect = (formData.get("redirectTo") as string) || "/cuenta";
+  const rawRedirect = (formData.get("redirectTo") as string) || "/";
 
   // Si el redirectTo es sólo /admin (sin subpágina), corregir a /admin/productos
   const redirectTo = rawRedirect === "/admin" || rawRedirect === "/admin/"

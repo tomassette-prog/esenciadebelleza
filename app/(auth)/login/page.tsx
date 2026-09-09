@@ -12,7 +12,7 @@ export default function LoginPage({
   const [verPassword, setVerPassword] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const redirectTo = searchParams.redirectTo ?? searchParams.redirect ?? "/cuenta";
+  const redirectTo = searchParams.redirectTo ?? searchParams.redirect ?? "/";
 
   const ADMIN_EMAILS = ["ziarresamot@gmail.com"];
 
@@ -38,7 +38,7 @@ export default function LoginPage({
       ? redirectTo
       : ADMIN_EMAILS.includes(data.user?.email ?? "")
         ? "/admin/productos"
-        : "/cuenta";
+        : "/";
 
     window.location.href = destino;
   }
