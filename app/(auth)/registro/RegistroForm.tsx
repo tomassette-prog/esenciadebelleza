@@ -45,7 +45,7 @@ export default function RegistroForm() {
   }, [searchParams]);
 
   return (
-    <div className="w-full max-w-lg">
+    <div className="w-full max-w-xl">
       {/* Título */}
       <div className="text-center mb-8">
         <h1
@@ -131,7 +131,24 @@ export default function RegistroForm() {
           />
         </div>
 
-        {/* Teléfono (solo B2B como obligatorio) */}
+        {/* Teléfono (B2C opcional) */}
+        {tipo === "b2c" && (
+          <div>
+            <label htmlFor="telefono" className="block text-xs tracking-wider uppercase text-neutral-600 mb-1.5">
+              Teléfono <span className="text-neutral-400 normal-case">(opcional)</span>
+            </label>
+            <input
+              id="telefono"
+              name="telefono"
+              type="tel"
+              autoComplete="tel"
+              placeholder="+34 600 000 000"
+              className="w-full border border-neutral-200 px-4 py-3 text-sm placeholder:text-neutral-400 focus:outline-none focus:border-neutral-900 transition-colors"
+            />
+          </div>
+        )}
+
+        {/* Teléfono (B2B obligatorio) */}
         {tipo === "b2b" && (
           <div>
             <label htmlFor="telefono_contacto" className="block text-xs tracking-wider uppercase text-neutral-600 mb-1.5">
@@ -180,7 +197,9 @@ export default function RegistroForm() {
                   name="nif_cif"
                   type="text"
                   required
-                  placeholder="B12345678"
+                  pattern="[0-9]{8}[A-Za-z]|[A-Za-z][0-9]{7}[0-9A-Za-z]|[XYZxyz][0-9]{7}[A-Za-z]"
+                  title="NIF: 12345678Z | CIF: B12345678 | NIE: X1234567L"
+                  placeholder="12345678Z / B12345678"
                   className="w-full border border-neutral-200 px-4 py-3 text-sm placeholder:text-neutral-400 focus:outline-none focus:border-neutral-900 transition-colors"
                 />
               </div>
@@ -233,7 +252,7 @@ export default function RegistroForm() {
               />
             </div>
 
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div>
                 <label htmlFor="dir_cp" className="block text-xs tracking-wider uppercase text-neutral-600 mb-1.5">
                   CP <span className="text-red-500">*</span>
@@ -305,7 +324,7 @@ export default function RegistroForm() {
                     className="w-full border border-neutral-200 px-4 py-3 text-sm placeholder:text-neutral-400 focus:outline-none focus:border-neutral-900 transition-colors"
                   />
                 </div>
-                <div className="grid grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div>
                     <label htmlFor="fac_cp" className="block text-xs tracking-wider uppercase text-neutral-600 mb-1.5">
                       CP <span className="text-red-500">*</span>
