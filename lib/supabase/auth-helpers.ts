@@ -1,4 +1,4 @@
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 
 /**
  * Lee el usuario autenticado directamente desde la cookie de Supabase.
@@ -6,19 +6,42 @@ import { cookies } from "next/headers";
  */
 export async function getUserFromCookie(): Promise<{ id: string; email: string } | null> {
   try {
-    const cookieStore = await cookies();
     const projectRef = "yjanobsfzcwpusynvlun";
     const cookieName = `sb-${projectRef}-auth-token`;
-    let tokenValue = cookieStore.get(cookieName)?.value;
 
-    if (!tokenValue) {
-      let combined = "";
-      for (let i = 0; i < 5; i++) {
-        const chunk = cookieStore.get(`${cookieName}.${i}`)?.value;
-        if (!chunk) break;
-        combined += chunk;
+    // Intento 1: cookies() API
+    let tokenValue: string | null = null;
+    try {
+      const cookieStore = await cookies();
+      tokenValue = cookieStore.get(cookieName)?.value ?? null;
+      if (!tokenValue) {
+        let combined = "";
+        for (let i = 0; i < 5; i++) {
+          const chunk = cookieStore.get(`${cookieName}.${i}`)?.value;
+          if (!chunk) break;
+          combined += chunk;
+        }
+        if (combined) tokenValue = combined;
       }
-      if (combined) tokenValue = combined;
+    } catch { /* ignorar */ }
+
+    // Intento 2: headers().get('cookie') — parse manual
+    if (!tokenValue) {
+      try {
+        const cookieHeader = headers().get("cookie") ?? "";
+        const match = cookieHeader.match(new RegExp(`${cookieName}=([^;]+)`));
+        if (match) tokenValue = decodeURIComponent(match[1]);
+        if (!tokenValue) {
+          let combined = "";
+          for (let i = 0; i < 5; i++) {
+            const re = new RegExp(`${cookieName}\\.${i}=([^;]+)`);
+            const m = cookieHeader.match(re);
+            if (!m) break;
+            combined += decodeURIComponent(m[1]);
+          }
+          if (combined) tokenValue = combined;
+        }
+      } catch { /* ignorar */ }
     }
 
     if (!tokenValue) return null;
@@ -28,7 +51,12 @@ export async function getUserFromCookie(): Promise<{ id: string; email: string }
     if (!accessToken) return null;
 
     const payloadB64 = accessToken.split(".")[1];
-    const payload = JSON.parse(Buffer.from(payloadB64, "base64url").toString());
+    // Decode base64url — compatible con edge y node
+    const base64 = payloadB64.replace(/-/g, "+").replace(/_/g, "/");
+    const jsonPayload = typeof Buffer !== "undefined"
+      ? Buffer.from(base64, "base64").toString()
+      : atob(base64);
+    const payload = JSON.parse(jsonPayload);
 
     if (!payload.sub || payload.exp * 1000 < Date.now()) return null;
 
