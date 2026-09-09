@@ -116,7 +116,6 @@ export default async function ProductoPage({ params, searchParams }: PageProps) 
     descuentoB2b = b2bAprobado ? (perfil?.descuento_b2b ?? 0) : 0;
     debugAuth += ` | perfil=${JSON.stringify(perfil)}`;
   }
-  }
 
   const p = producto as ProductoCompleto;
 

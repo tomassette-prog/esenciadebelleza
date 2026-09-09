@@ -25,10 +25,11 @@ export async function getUserFromCookie(): Promise<{ id: string; email: string }
       }
     } catch { /* ignorar */ }
 
-    // Intento 2: headers().get('cookie') — parse manual
+    // Intento 2: headers — parse manual
     if (!tokenValue) {
       try {
-        const cookieHeader = headers().get("cookie") ?? "";
+        const hdrs = await headers();
+        const cookieHeader = hdrs.get("cookie") ?? "";
         const match = cookieHeader.match(new RegExp(`${cookieName}=([^;]+)`));
         if (match) tokenValue = decodeURIComponent(match[1]);
         if (!tokenValue) {
