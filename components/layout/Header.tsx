@@ -1,7 +1,7 @@
 ﻿import Link from "next/link";
-import { cookies } from "next/headers";
 import { createClient } from "@supabase/supabase-js";
 import { createClient as createServerClient } from "@/lib/supabase/server";
+import { getUserFromCookie } from "@/lib/supabase/auth-helpers";
 import { construirNavItems } from "@/lib/categorias-dinamicas";
 import { BotonesCarritoHeader } from "@/components/carrito/BotonesCarritoHeader";
 import { LogoEsencia } from "@/components/layout/LogoEsencia";
@@ -10,34 +10,7 @@ import { LogoutBtn } from "@/components/layout/LogoutBtn";
 
 const ADMIN_EMAILS = ["ziarresamot@gmail.com"];
 
-// Lee el email del usuario directamente desde la cookie del browser client
-async function getUserFromCookie(): Promise<{ id: string; email: string } | null> {
-  try {
-    const cookieStore = await cookies();
-    const projectRef = "yjanobsfzcwpusynvlun";
-    const cookieName = `sb-${projectRef}-auth-token`;
-    let tokenValue = cookieStore.get(cookieName)?.value;
-    if (!tokenValue) {
-      let combined = "";
-      for (let i = 0; i < 5; i++) {
-        const chunk = cookieStore.get(`${cookieName}.${i}`)?.value;
-        if (!chunk) break;
-        combined += chunk;
-      }
-      if (combined) tokenValue = combined;
-    }
-    if (!tokenValue) return null;
-    const parsed = JSON.parse(tokenValue);
-    const accessToken: string = parsed.access_token;
-    if (!accessToken) return null;
-    const payloadB64 = accessToken.split(".")[1];
-    const payload = JSON.parse(Buffer.from(payloadB64, "base64url").toString());
-    if (!payload.sub || payload.exp * 1000 < Date.now()) return null;
-    return { id: payload.sub, email: payload.email ?? "" };
-  } catch {
-    return null;
-  }
-}
+// getUserFromCookie importado desde @/lib/supabase/auth-helpers
 
 export async function Header() {
   // Primero intenta con el server client, si falla usa la cookie directamente

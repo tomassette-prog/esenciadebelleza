@@ -1,9 +1,9 @@
 ﻿import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { cookies } from "next/headers";
 import Image from "next/image";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getUserFromCookie } from "@/lib/supabase/auth-helpers";
 
 export const dynamic = "force-dynamic";
 import {
@@ -99,29 +99,7 @@ export default async function ProductoPage({ params, searchParams }: PageProps) 
   } catch { /* ignorar */ }
 
   if (!user) {
-    try {
-      const cookieStore = await cookies();
-      const projectRef = "yjanobsfzcwpusynvlun";
-      const cookieName = `sb-${projectRef}-auth-token`;
-      let tokenValue = cookieStore.get(cookieName)?.value;
-      if (!tokenValue) {
-        let combined = "";
-        for (let i = 0; i < 5; i++) {
-          const chunk = cookieStore.get(`${cookieName}.${i}`)?.value;
-          if (!chunk) break;
-          combined += chunk;
-        }
-        if (combined) tokenValue = combined;
-      }
-      if (tokenValue) {
-        const parsed = JSON.parse(tokenValue);
-        const payloadB64 = parsed.access_token.split(".")[1];
-        const payload = JSON.parse(Buffer.from(payloadB64, "base64url").toString());
-        if (payload.sub && payload.exp * 1000 > Date.now()) {
-          user = { id: payload.sub, email: payload.email ?? "" };
-        }
-      }
-    } catch { /* ignorar */ }
+    user = await getUserFromCookie();
   }
 
   // Comprobar si el usuario es profesional aprobado
