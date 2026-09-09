@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useCarrito } from "@/context/CarritoContext";
 import { calcularGastoEnvio, getZonaEnvio, getSuplementoContrareembolso } from "@/lib/envio";
 import { crearPedidoContrarembolso } from "@/actions/checkout";
+import { validarCupon } from "@/actions/cupones";
 import { POBLACIONES } from "@/lib/poblaciones";
 import PaypalSmartButtons from "@/components/checkout/PaypalSmartButtons";
 
@@ -21,6 +22,15 @@ interface DatosEnvio {
   provincia:     string;
   codigo_postal: string;
   notas:         string;
+}
+
+interface DatosFacturacion {
+  empresa:        string;
+  nif_cif:        string;
+  direccion:      string;
+  ciudad:         string;
+  provincia:      string;
+  codigo_postal:  string;
 }
 
 // Provincias donde SÍ enviamos (sin Canarias, Ceuta ni Melilla)
@@ -59,9 +69,49 @@ export function CheckoutCliente({
     notas:         "",
   });
 
+  const [facturacion, setFacturacion] = useState<DatosFacturacion>({
+    empresa:       "",
+    nif_cif:       "",
+    direccion:     "",
+    ciudad:        "",
+    provincia:     "Madrid",
+    codigo_postal: "",
+  });
+  const [facturacionIgualEnvio, setFacturacionIgualEnvio] = useState(true);
+
+  // Cupón de descuento
+  const [codigoCupon, setCodigoCupon] = useState("");
+  const [cuponAplicado, setCuponAplicado] = useState<{
+    id: string; codigo: string; descripcion: string | null;
+    tipo: "porcentaje" | "fijo"; valor: number; descuento: number;
+  } | null>(null);
+  const [validandoCupon, setValidandoCupon] = useState(false);
+  const [errorCupon, setErrorCupon] = useState<string | null>(null);
+
+  async function aplicarCupon() {
+    if (!codigoCupon.trim()) return;
+    setValidandoCupon(true);
+    setErrorCupon(null);
+    const res = await validarCupon(codigoCupon, totalPrecio);
+    setValidandoCupon(false);
+    if (res.valido && res.cupon) {
+      setCuponAplicado(res.cupon);
+    } else {
+      setErrorCupon(res.error ?? "Cupón no válido");
+      setCuponAplicado(null);
+    }
+  }
+
+  function quitarCupon() {
+    setCuponAplicado(null);
+    setCodigoCupon("");
+    setErrorCupon(null);
+  }
+
   const zona        = getZonaEnvio(datos.provincia, datos.ciudad);
   const gastoEnvio   = zona === "no_disponible" ? 0 : calcularGastoEnvio(totalPrecio, datos.provincia, datos.ciudad);
-  const totalFinal   = totalPrecio + gastoEnvio;
+  const descuentoCupon = cuponAplicado?.descuento ?? 0;
+  const totalFinal   = totalPrecio - descuentoCupon + gastoEnvio;
 
   const infoEnvio = (() => {
     if (zona === "ibiza")   return "Envío a Ibiza/Formentera: 12,00 €";
@@ -72,6 +122,10 @@ export function CheckoutCliente({
 
   function cambiar(campo: keyof DatosEnvio, valor: string) {
     setDatos((d) => ({ ...d, [campo]: valor }));
+  }
+
+  function cambiarFacturacion(campo: keyof DatosFacturacion, valor: string) {
+    setFacturacion((d) => ({ ...d, [campo]: valor }));
   }
 
   async function irAPaso2(e: React.FormEvent) {
@@ -96,10 +150,15 @@ export function CheckoutCliente({
     setCargandoStripe(true);
     setError(null);
     try {
+      const datosCompletos = {
+        ...datos,
+        facturacion: facturacionIgualEnvio ? null : facturacion,
+        cupon: cuponAplicado ? { id: cuponAplicado.id, codigo: cuponAplicado.codigo, descuento: cuponAplicado.descuento } : null,
+      };
       const res = await fetch("/api/stripe/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ lineas, datosEnvio: datos }),
+        body: JSON.stringify({ lineas, datosEnvio: datosCompletos }),
       });
       const data = await res.json();
       if (data.url) {
@@ -118,7 +177,12 @@ export function CheckoutCliente({
     setCargandoCR(true);
     setError(null);
     try {
-      const result = await crearPedidoContrarembolso(lineas, packs, datos);
+      const datosCompletos = {
+        ...datos,
+        facturacion: facturacionIgualEnvio ? null : facturacion,
+        cupon: cuponAplicado ? { id: cuponAplicado.id, codigo: cuponAplicado.codigo, descuento: cuponAplicado.descuento } : null,
+      };
+      const result = await crearPedidoContrarembolso(lineas, packs, datosCompletos);
       if (result.ok) {
         window.location.href = `/checkout/confirmacion?metodo=contrarembolso&pedido=${result.pedidoId}&resultado=ok`;
       } else {
@@ -312,6 +376,114 @@ export function CheckoutCliente({
               />
             </div>
 
+            {/* ── Datos de facturación ────────────────────────────────── */}
+            <div className="border-t border-neutral-100 pt-6 mt-6">
+              <h2
+                className="text-xl font-light text-neutral-900 mb-4"
+                style={{ fontFamily: "var(--font-cormorant)" }}
+              >
+                Datos de facturación
+              </h2>
+
+              <label className="flex items-center gap-3 mb-4 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={facturacionIgualEnvio}
+                  onChange={(e) => setFacturacionIgualEnvio(e.target.checked)}
+                  className="w-4 h-4 accent-neutral-900"
+                />
+                <span className="text-sm text-neutral-700">
+                  Los datos de facturación son iguales a los de envío
+                </span>
+              </label>
+
+              {!facturacionIgualEnvio && (
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-xs tracking-wider uppercase text-neutral-600 mb-1.5">
+                      Empresa / Razón social
+                    </label>
+                    <input
+                      type="text"
+                      value={facturacion.empresa}
+                      onChange={(e) => cambiarFacturacion("empresa", e.target.value)}
+                      placeholder="Nombre de la empresa"
+                      className="w-full border border-neutral-200 px-4 py-3 text-sm focus:outline-none focus:border-neutral-900 transition-colors"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs tracking-wider uppercase text-neutral-600 mb-1.5">
+                      NIF / CIF
+                    </label>
+                    <input
+                      type="text"
+                      value={facturacion.nif_cif}
+                      onChange={(e) => cambiarFacturacion("nif_cif", e.target.value)}
+                      placeholder="B12345678"
+                      className="w-full border border-neutral-200 px-4 py-3 text-sm focus:outline-none focus:border-neutral-900 transition-colors"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs tracking-wider uppercase text-neutral-600 mb-1.5">
+                      Dirección de facturación
+                    </label>
+                    <input
+                      type="text"
+                      value={facturacion.direccion}
+                      onChange={(e) => cambiarFacturacion("direccion", e.target.value)}
+                      placeholder="Calle, número, piso..."
+                      className="w-full border border-neutral-200 px-4 py-3 text-sm focus:outline-none focus:border-neutral-900 transition-colors"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs tracking-wider uppercase text-neutral-600 mb-1.5">
+                        Población
+                      </label>
+                      <input
+                        type="text"
+                        value={facturacion.ciudad}
+                        onChange={(e) => cambiarFacturacion("ciudad", e.target.value)}
+                        className="w-full border border-neutral-200 px-4 py-3 text-sm focus:outline-none focus:border-neutral-900 transition-colors"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs tracking-wider uppercase text-neutral-600 mb-1.5">
+                        Código postal
+                      </label>
+                      <input
+                        type="text"
+                        pattern="[0-9]{5}"
+                        maxLength={5}
+                        value={facturacion.codigo_postal}
+                        onChange={(e) => cambiarFacturacion("codigo_postal", e.target.value)}
+                        placeholder="28001"
+                        className="w-full border border-neutral-200 px-4 py-3 text-sm focus:outline-none focus:border-neutral-900 transition-colors"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs tracking-wider uppercase text-neutral-600 mb-1.5">
+                      Provincia
+                    </label>
+                    <select
+                      value={facturacion.provincia}
+                      onChange={(e) => cambiarFacturacion("provincia", e.target.value)}
+                      className="w-full border border-neutral-200 px-4 py-3 text-sm focus:outline-none focus:border-neutral-900 transition-colors bg-white"
+                    >
+                      {PROVINCIAS.map((p) => (
+                        <option key={p} value={p}>{p}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              )}
+            </div>
+
             {error && (
               <div className="p-3 bg-red-50 border border-red-200 text-red-700 text-sm">{error}</div>
             )}
@@ -343,6 +515,44 @@ export function CheckoutCliente({
               <p>{datos.email} · {datos.telefono}</p>
             </div>
 
+            {/* Cupón de descuento */}
+            <div className="mb-6">
+              <label className="block text-xs tracking-wider uppercase text-neutral-600 mb-1.5">
+                Cupón de descuento
+              </label>
+              {cuponAplicado ? (
+                <div className="flex items-center gap-3 p-3 bg-green-50 border border-green-200 text-green-800 text-sm">
+                  <span className="font-medium">{cuponAplicado.codigo}</span>
+                  <span>—</span>
+                  <span>
+                    {cuponAplicado.tipo === "porcentaje"
+                      ? `${cuponAplicado.valor}% de descuento`
+                      : `${cuponAplicado.valor.toFixed(2)} € de descuento`}
+                  </span>
+                  <span className="ml-auto font-medium">-{descuentoCupon.toFixed(2)} €</span>
+                  <button onClick={quitarCupon} className="text-red-500 hover:text-red-700 ml-2 text-xs">✕</button>
+                </div>
+              ) : (
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={codigoCupon}
+                    onChange={(e) => setCodigoCupon(e.target.value.toUpperCase())}
+                    placeholder="Introduce tu código"
+                    className="flex-1 border border-neutral-200 px-3 py-2.5 text-sm focus:outline-none focus:border-neutral-900 transition-colors"
+                  />
+                  <button
+                    onClick={aplicarCupon}
+                    disabled={validandoCupon || !codigoCupon.trim()}
+                    className="px-4 py-2.5 bg-neutral-900 text-white text-xs tracking-widest uppercase hover:bg-neutral-700 disabled:opacity-50 transition-colors"
+                  >
+                    {validandoCupon ? "..." : "Aplicar"}
+                  </button>
+                </div>
+              )}
+              {errorCupon && <p className="text-xs text-red-600 mt-1">{errorCupon}</p>}
+            </div>
+
             <h2
               className="text-xl font-light text-neutral-900 mb-6"
               style={{ fontFamily: "var(--font-cormorant)" }}
@@ -369,7 +579,7 @@ export function CheckoutCliente({
               </div>
               <div className="flex items-center gap-2">
                 <span className="text-lg font-light">
-                  {(totalPrecio + gastoEnvioConf || totalPrecio + gastoEnvio).toLocaleString("es-ES", { style: "currency", currency: "EUR" })}
+                  {totalFinal.toLocaleString("es-ES", { style: "currency", currency: "EUR" })}
                 </span>
                 <svg className="w-4 h-4 opacity-50 group-hover:opacity-100 transition-opacity" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
@@ -427,7 +637,10 @@ export function CheckoutCliente({
             {/* ── PayPal — alternativa de pago ── */}
             <PaypalSmartButtons
               lineas={lineas}
-              datosEnvio={datos}
+              datosEnvio={{
+                ...datos,
+                cupon: cuponAplicado ? { id: cuponAplicado.id, codigo: cuponAplicado.codigo, descuento: cuponAplicado.descuento } : null,
+              }}
               disabled={cargando}
             />
 

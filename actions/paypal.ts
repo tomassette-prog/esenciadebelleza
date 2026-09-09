@@ -30,6 +30,7 @@ export async function crearOrdenPaypal(
     email: string; nombre: string; apellidos: string; telefono: string;
     direccion: string; ciudad: string; provincia: string; codigo_postal: string;
     notas?: string;
+    cupon?: { id: string; codigo: string; descuento: number } | null;
   }
 ): Promise<{ orderId: string | null; gastoEnvio: number; error: string | null }> {
   if (!lineas.length) return { orderId: null, gastoEnvio: 0, error: "El carrito está vacío" };
@@ -54,7 +55,26 @@ export async function crearOrdenPaypal(
   const gastoEnvio     = calcularGastoEnvio(totalProductos, datosEnvio.provincia, datosEnvio.ciudad);
   if (gastoEnvio === -1) return { orderId: null, gastoEnvio: 0, error: "No realizamos envíos a esa provincia." };
 
-  const totalFinal = totalProductos + gastoEnvio;
+  // ── Validar cupón de descuento ──
+  const supabaseCupon = createAdminClient();
+  let descuentoCupon = 0;
+  let cuponId: string | null = null;
+  if (datosEnvio.cupon?.id && datosEnvio.cupon?.descuento > 0) {
+    const { data: cupon } = await supabaseCupon
+      .from("cupones")
+      .select("id, activo, usos_maximos, usos_actuales, fecha_expiracion, importe_minimo")
+      .eq("id", datosEnvio.cupon.id)
+      .single();
+    if (cupon && cupon.activo
+      && (!cupon.fecha_expiracion || new Date(cupon.fecha_expiracion) >= new Date())
+      && (cupon.usos_maximos === null || cupon.usos_actuales < cupon.usos_maximos)
+      && totalProductos >= cupon.importe_minimo) {
+      descuentoCupon = datosEnvio.cupon.descuento;
+      cuponId = cupon.id;
+    }
+  }
+
+  const totalFinal = totalProductos - descuentoCupon + gastoEnvio;
 
   try {
     const token = await getPaypalToken();
@@ -75,6 +95,7 @@ export async function crearOrdenPaypal(
               breakdown: {
                 item_total:    { currency_code: "EUR", value: totalProductos.toFixed(2) },
                 shipping:      { currency_code: "EUR", value: gastoEnvio.toFixed(2) },
+                ...(descuentoCupon > 0 ? { discount: { currency_code: "EUR", value: descuentoCupon.toFixed(2) } } : {}),
               },
             },
             items: lineas.map((l) => ({
@@ -121,6 +142,7 @@ export async function crearOrdenPaypal(
       usuario_id:       user?.id ?? null,
       estado:           "pendiente",
       subtotal:         totalProductos,
+      descuento:        descuentoCupon,
       gastos_envio:     gastoEnvio,
       total:            totalFinal,
       tipo_precio:      tipoPrecio,
@@ -128,6 +150,8 @@ export async function crearOrdenPaypal(
       stripe_payment_id: order.id,   // reutilizamos como payment_ref
       email_cliente:    datosEnvio.email,
       notas:            datosEnvio.notas ?? "",
+      cupon_id:         cuponId,
+      descuento_cupon:  descuentoCupon,
       direccion_envio: {
         nombre:        datosEnvio.nombre,
         apellidos:     datosEnvio.apellidos,
@@ -187,7 +211,7 @@ export async function capturarPagoPaypal(
         .from("pedidos")
         .update({ estado: "pagado" })
         .eq("stripe_payment_id", orderId)
-        .select("id, email_cliente, direccion_envio, gastos_envio, total, tipo_precio")
+        .select("id, email_cliente, direccion_envio, gastos_envio, total, tipo_precio, cupon_id, descuento_cupon, usuario_id")
         .single();
 
       if (pedido) {
@@ -208,6 +232,7 @@ export async function capturarPagoPaypal(
           apellidos:  dir?.apellidos ?? "",
           total:      pedido.total,
           gastoEnvio: pedido.gastos_envio,
+          descuento:  pedido.descuento_cupon ?? 0,
           metodoPago: "PayPal",
           tipoPrecio: pedido.tipo_precio,
           provincia:  dir?.provincia ?? "",
@@ -221,6 +246,12 @@ export async function capturarPagoPaypal(
         };
         await enviarNotificacionPedido(emailPayloadPP);
         await enviarConfirmacionCliente(emailPayloadPP);
+
+        // Registrar uso de cupón si aplica
+        if (pedido.cupon_id && pedido.descuento_cupon > 0) {
+          const { registrarUsoCupon } = await import("@/actions/cupones");
+          await registrarUsoCupon(pedido.cupon_id, pedido.id, pedido.usuario_id, pedido.descuento_cupon);
+        }
 
         // WooCommerce se lanza manualmente desde el panel de administración
       }

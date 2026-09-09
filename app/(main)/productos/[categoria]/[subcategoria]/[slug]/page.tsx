@@ -93,13 +93,15 @@ export default async function ProductoPage({ params, searchParams }: PageProps) 
 
   // Comprobar si el usuario es profesional aprobado
   let b2bAprobado = false;
+  let descuentoB2b = 0;
   if (user) {
     const { data: perfil } = await supabase
       .from("perfiles_usuario")
-      .select("b2b_aprobado, tipo_cliente")
+      .select("b2b_aprobado, tipo_cliente, descuento_b2b")
       .eq("id", user.id)
       .single();
     b2bAprobado = perfil?.tipo_cliente === "b2b" && perfil?.b2b_aprobado === true;
+    descuentoB2b = b2bAprobado ? (perfil?.descuento_b2b ?? 0) : 0;
   }
 
   const p = producto as ProductoCompleto;
@@ -219,6 +221,27 @@ export default async function ProductoPage({ params, searchParams }: PageProps) 
                     </svg>
                     Consultar precio por WhatsApp
                   </a>
+                ) : descuentoB2b > 0 ? (
+                  <>
+                    <div className="flex items-baseline gap-3">
+                      <span className="text-2xl font-medium text-neutral-900">
+                        {new Intl.NumberFormat("es-ES", {
+                          style: "currency",
+                          currency: "EUR",
+                        }).format(variacionActiva.precio_b2c * (1 - descuentoB2b / 100))}
+                      </span>
+                      <span className="text-sm text-neutral-400 line-through">
+                        {new Intl.NumberFormat("es-ES", {
+                          style: "currency",
+                          currency: "EUR",
+                        }).format(variacionActiva.precio_b2c)}
+                      </span>
+                      <span className="text-xs text-green-700 font-medium">-{descuentoB2b}%</span>
+                    </div>
+                    <span className="text-xs tracking-wider uppercase text-[#7A4A40]">
+                      Precio profesional
+                    </span>
+                  </>
                 ) : b2bAprobado && variacionActiva.precio_b2b && variacionActiva.precio_b2b > 0 ? (
                   <>
                     <div className="flex items-baseline gap-3">
@@ -283,7 +306,12 @@ export default async function ProductoPage({ params, searchParams }: PageProps) 
                 nombre={`${p.nombre}${variacionActiva.nombre_variacion !== "Único" ? ` — ${variacionActiva.nombre_variacion}` : ""}`}
                 nombreVariacion={variacionActiva.nombre_variacion}
                 imagenUrl={variacionActiva.imagen_url ?? p.imagen_principal_url ?? null}
-                precio={b2bAprobado && variacionActiva.precio_b2b && variacionActiva.precio_b2b > 0 ? variacionActiva.precio_b2b : variacionActiva.precio_b2c}
+                precio={descuentoB2b > 0
+                  ? variacionActiva.precio_b2c * (1 - descuentoB2b / 100)
+                  : b2bAprobado && variacionActiva.precio_b2b && variacionActiva.precio_b2b > 0
+                    ? variacionActiva.precio_b2b
+                    : variacionActiva.precio_b2c}
+                precioOriginal={descuentoB2b > 0 ? variacionActiva.precio_b2c : undefined}
                 sku={variacionActiva.sku}
               />
             ) : variacionActiva && variacionActiva.precio_b2c > 0 && variacionActiva.stock <= 0 ? (

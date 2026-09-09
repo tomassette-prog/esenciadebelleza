@@ -22,6 +22,8 @@ export interface PedidoNotificacion {
   apellidos:    string;
   total:        number;
   gastoEnvio:   number;
+  descuento?:   number;
+  codigoCupon?: string;
   metodoPago:   string;
   tipoPrecio:   string;
   provincia:    string;
@@ -74,6 +76,7 @@ export async function enviarNotificacionPedido(p: PedidoNotificacion) {
       </table>
 
       <p style="text-align:right;margin:4px 0"><strong>Envío:</strong> ${p.gastoEnvio > 0 ? `${p.gastoEnvio.toFixed(2)} €` : "Gratuito"}</p>
+      ${(p.descuento ?? 0) > 0 ? `<p style="text-align:right;margin:4px 0;color:#16a34a"><strong>Descuento${p.codigoCupon ? ` (${p.codigoCupon})` : ""}:</strong> −${p.descuento!.toFixed(2)} €</p>` : ""}
       <p style="text-align:right;margin:4px 0;font-size:18px"><strong>Total:</strong> ${p.total.toFixed(2)} €</p>
 
       <div style="margin-top:24px;text-align:center">
@@ -136,6 +139,7 @@ export async function enviarConfirmacionCliente(p: PedidoNotificacion) {
       </table>
 
       <p style="text-align:right;margin:4px 0"><strong>Envío:</strong> ${p.gastoEnvio > 0 ? `${p.gastoEnvio.toFixed(2)} €` : "Gratuito"}</p>
+      ${(p.descuento ?? 0) > 0 ? `<p style="text-align:right;margin:4px 0;color:#16a34a"><strong>Descuento${p.codigoCupon ? ` (${p.codigoCupon})` : ""}:</strong> −${p.descuento!.toFixed(2)} €</p>` : ""}
       <p style="text-align:right;margin:4px 0;font-size:18px"><strong>Total:</strong> ${p.total.toFixed(2)} €</p>
 
       <p style="margin-top:24px;font-size:13px;color:#888">Recibirás un email con el número de seguimiento cuando tu pedido sea enviado. Plazo estimado: 24–48 h laborables.</p>
@@ -155,5 +159,59 @@ export async function enviarConfirmacionCliente(p: PedidoNotificacion) {
     });
   } catch (err) {
     console.error("[Email] Error enviando confirmación al cliente:", err);
+  }
+}
+
+// ── Notificación de nuevo profesional registrado ─────────────────────────────
+export async function enviarNotificacionNuevoProfesional(p: {
+  email: string;
+  nombre: string;
+  empresa: string | null;
+  nif_cif: string | null;
+  telefono: string | null;
+}) {
+  if (!process.env.EMAIL_PASS) {
+    console.warn("[Email] EMAIL_PASS no configurado, saltando notificación");
+    return;
+  }
+
+  const html = `
+<!DOCTYPE html>
+<html lang="es">
+<head><meta charset="UTF-8"><title>Nuevo profesional registrado</title></head>
+<body style="font-family:sans-serif;color:#3D2018;background:#fff;margin:0;padding:0">
+  <div style="max-width:600px;margin:30px auto;border:1px solid #f0e8e6;border-radius:8px;overflow:hidden">
+    <div style="background:#C4857A;padding:20px 30px">
+      <h1 style="color:#fff;margin:0;font-size:20px">👩‍🎨 Nuevo profesional registrado</h1>
+    </div>
+    <div style="padding:24px 30px">
+      <p style="margin:0 0 16px">Se ha registrado un nuevo profesional y está pendiente de aprobación:</p>
+      <table style="width:100%;border-collapse:collapse;margin-bottom:16px">
+        <tbody>
+          <tr><td style="padding:6px 0;font-weight:bold">Nombre</td><td style="padding:6px 0">${p.nombre}</td></tr>
+          <tr><td style="padding:6px 0;font-weight:bold">Email</td><td style="padding:6px 0">${p.email}</td></tr>
+          ${p.empresa ? `<tr><td style="padding:6px 0;font-weight:bold">Empresa</td><td style="padding:6px 0">${p.empresa}</td></tr>` : ""}
+          ${p.nif_cif ? `<tr><td style="padding:6px 0;font-weight:bold">NIF/CIF</td><td style="padding:6px 0">${p.nif_cif}</td></tr>` : ""}
+          ${p.telefono ? `<tr><td style="padding:6px 0;font-weight:bold">Teléfono</td><td style="padding:6px 0">${p.telefono}</td></tr>` : ""}
+        </tbody>
+      </table>
+      <div style="margin-top:24px;text-align:center">
+        <a href="https://esenciadebelleza.es/admin/profesionales" style="background:#C4857A;color:#fff;padding:10px 22px;border-radius:6px;text-decoration:none;font-size:14px">Revisar en el panel</a>
+      </div>
+    </div>
+  </div>
+</body>
+</html>`;
+
+  try {
+    const transporter = createTransport();
+    await transporter.sendMail({
+      from:    `"Esencia de Belleza" <${FROM_EMAIL}>`,
+      to:      ADMIN_EMAIL,
+      subject: `👩‍🎨 Nuevo profesional pendiente — ${p.nombre}${p.empresa ? ` (${p.empresa})` : ""}`,
+      html,
+    });
+  } catch (err) {
+    console.error("[Email] Error enviando notificación de profesional:", err);
   }
 }

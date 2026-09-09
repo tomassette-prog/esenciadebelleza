@@ -348,6 +348,14 @@ export default function PostForm({ post }: Props) {
   const [resultadosManual, setResultadosManual] = useState<Record<string, ProductoSugerido[]>>({});
   const [buscandoManual, setBuscandoManual] = useState<Record<string, boolean>>({});
 
+  // Link picker (insertar enlace de producto en el editor)
+  const contenidoRef = useRef<HTMLTextAreaElement>(null);
+  const [linkPickerOpen, setLinkPickerOpen] = useState(false);
+  const [linkPickerSearch, setLinkPickerSearch] = useState("");
+  const [linkPickerResults, setLinkPickerResults] = useState<ProductoSugerido[]>([]);
+  const [linkPickerLoading, setLinkPickerLoading] = useState(false);
+  const [linkPickerCursorPos, setLinkPickerCursorPos] = useState<number | null>(null);
+
   async function buscarManual(enlaceId: string) {
     const query = busquedaManual[enlaceId]?.trim();
     if (!query || query.length < 2) return;
@@ -355,6 +363,63 @@ export default function PostForm({ post }: Props) {
     const resultados = await buscarProductosParaEnlace(query);
     setResultadosManual((prev) => ({ ...prev, [enlaceId]: resultados }));
     setBuscandoManual((prev) => ({ ...prev, [enlaceId]: false }));
+  }
+
+  // ── Link picker: insertar enlace de producto en el editor ─────────────────
+  function abrirLinkPicker() {
+    // Guardar posición del cursor antes de abrir el modal
+    if (contenidoRef.current) {
+      setLinkPickerCursorPos(contenidoRef.current.selectionStart);
+    }
+    setLinkPickerSearch("");
+    setLinkPickerResults([]);
+    setLinkPickerOpen(true);
+  }
+
+  async function buscarEnLinkPicker(query: string) {
+    if (!query || query.trim().length < 2) return;
+    setLinkPickerLoading(true);
+    const resultados = await buscarProductosParaEnlace(query);
+    setLinkPickerResults(resultados);
+    setLinkPickerLoading(false);
+  }
+
+  function insertarEnlaceProducto(producto: ProductoSugerido) {
+    const textarea = contenidoRef.current;
+    if (!textarea) return;
+
+    const pos = linkPickerCursorPos ?? contenidoHtml.length;
+    const antes = contenidoHtml.slice(0, pos);
+    const despues = contenidoHtml.slice(pos);
+    // Mismo formato que usa Gemini: [ENLACE_PRODUCTO: Nombre]
+    const marker = `[ENLACE_PRODUCTO: ${producto.nombre}]`;
+    const nuevoContenido = antes + marker + despues;
+
+    setContenidoHtml(nuevoContenido);
+    setLinkPickerOpen(false);
+
+    // Re-detectar enlaces como hace cargarJson para que aparezca el panel de asignación
+    setTimeout(() => {
+      const detectados = detectarEnlaces(nuevoContenido);
+      const enlacesActualizados: EnlaceProducto[] = detectados.map((e, i) => ({
+        ...e,
+        id: `link-${i}`,
+        urlCorrecta: e.urlActual,
+        sugerencias: [],
+        buscando: false,
+      }));
+      setEnlaces(enlacesActualizados);
+      setEnlacesAplicados(false);
+
+      // Buscar automáticamente cada producto en el catálogo
+      for (const enlace of enlacesActualizados) {
+        buscarEnlace(enlace.id, enlace.nombre);
+      }
+
+      textarea.focus();
+      const newPos = pos + marker.length;
+      textarea.setSelectionRange(newPos, newPos);
+    }, 50);
   }
 
   // Upload imagen
@@ -856,9 +921,18 @@ export default function PostForm({ post }: Props) {
             >
               {faqGenerado ? "✓ FAQ añadido" : "🤖 Generar FAQ"}
             </button>
+            <button
+              type="button"
+              onClick={abrirLinkPicker}
+              title="Insertar enlace a un producto de la tienda en la posición del cursor"
+              className="text-xs px-3 py-1 border border-[#C4857A]/50 text-[#7A4A40] hover:bg-[#C4857A]/10 hover:border-[#C4857A] transition-colors tracking-wider uppercase flex items-center gap-1.5"
+            >
+              🔗 Enlace producto
+            </button>
           </div>
         </div>
         <textarea
+          ref={contenidoRef}
           name="contenido_html"
           required
           rows={22}
@@ -1244,6 +1318,69 @@ export default function PostForm({ post }: Props) {
                   </p>
                 )}
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ═══ MODAL: INSERTAR ENLACE DE PRODUCTO ═══ */}
+      {linkPickerOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setLinkPickerOpen(false)}>
+          <div className="bg-white w-full max-w-lg max-h-[80vh] flex flex-col shadow-xl border border-neutral-200" onClick={(e) => e.stopPropagation()}>
+            {/* Header */}
+            <div className="flex items-center justify-between px-5 py-3 border-b border-neutral-200">
+              <p className="text-xs tracking-widest uppercase text-[#7A4A40] font-medium">🔗 Insertar enlace de producto</p>
+              <button type="button" onClick={() => setLinkPickerOpen(false)} className="text-neutral-400 hover:text-neutral-700 text-lg leading-none">&times;</button>
+            </div>
+
+            {/* Buscador */}
+            <div className="px-5 pt-4 pb-3 border-b border-neutral-100">
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  autoFocus
+                  value={linkPickerSearch}
+                  onChange={(e) => setLinkPickerSearch(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); buscarEnLinkPicker(linkPickerSearch); } }}
+                  className="flex-1 border border-neutral-200 px-3 py-2 text-sm focus:outline-none focus:border-[#C4857A] transition-colors"
+                  placeholder="Buscar producto por nombre, marca..."
+                />
+                <button
+                  type="button"
+                  onClick={() => buscarEnLinkPicker(linkPickerSearch)}
+                  disabled={linkPickerLoading || linkPickerSearch.trim().length < 2}
+                  className="px-4 py-2 bg-[#C4857A] text-white text-xs tracking-widest uppercase hover:bg-[#7A4A40] disabled:opacity-40 transition-colors shrink-0"
+                >
+                  {linkPickerLoading ? "..." : "Buscar"}
+                </button>
+              </div>
+            </div>
+
+            {/* Resultados */}
+            <div className="flex-1 overflow-y-auto px-5 py-3 space-y-1.5">
+              {linkPickerResults.length === 0 && !linkPickerLoading && linkPickerSearch.trim().length >= 2 && (
+                <p className="text-xs text-neutral-400 py-4 text-center">No se encontraron productos. Prueba con otras palabras.</p>
+              )}
+              {linkPickerResults.length === 0 && linkPickerSearch.trim().length < 2 && (
+                <p className="text-xs text-neutral-400 py-4 text-center">Escribe al menos 2 caracteres para buscar.</p>
+              )}
+              {linkPickerResults.map((p) => (
+                <button
+                  key={p.url}
+                  type="button"
+                  onClick={() => insertarEnlaceProducto(p)}
+                  className="w-full text-left px-4 py-3 border border-neutral-200 hover:border-[#C4857A] hover:bg-[#C4857A]/5 transition-colors rounded-sm"
+                >
+                  <p className="text-sm font-medium text-neutral-800">{p.nombre}</p>
+                  {p.marca && <p className="text-xs text-neutral-400 mt-0.5">{p.marca}</p>}
+                  <p className="text-xs text-neutral-400 font-mono mt-1">{p.url}</p>
+                </button>
+              ))}
+            </div>
+
+            {/* Footer */}
+            <div className="px-5 py-3 border-t border-neutral-100 bg-neutral-50">
+              <p className="text-xs text-neutral-400">Selecciona un producto para insertar el enlace en el contenido.</p>
             </div>
           </div>
         </div>

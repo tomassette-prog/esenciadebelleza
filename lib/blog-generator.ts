@@ -283,7 +283,6 @@ SOLO devuelve el JSON, sin texto adicional.`;
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Referer": "https://esenciadebelleza.es",
       },
       body: JSON.stringify({
         contents: [{ parts: [{ text: prompt }] }],

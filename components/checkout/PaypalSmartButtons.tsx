@@ -8,6 +8,7 @@ interface DatosEnvio {
   email: string; nombre: string; apellidos: string; telefono: string;
   direccion: string; ciudad: string; provincia: string; codigo_postal: string;
   notas?: string;
+  cupon?: { id: string; codigo: string; descuento: number } | null;
 }
 
 interface Props {

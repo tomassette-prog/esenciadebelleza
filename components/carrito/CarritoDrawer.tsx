@@ -150,11 +150,20 @@ export function CarritoDrawer() {
 
                       {/* Precio */}
                       <div className="flex items-center gap-3">
-                        <span className="text-sm font-medium tabular-nums">
-                          {(linea.precio * linea.cantidad).toLocaleString("es-ES", {
-                            style: "currency", currency: "EUR",
-                          })}
-                        </span>
+                        <div className="flex flex-col items-end">
+                          {linea.precio_original && linea.precio_original > linea.precio && (
+                            <span className="text-[10px] text-neutral-400 line-through">
+                              {(linea.precio_original * linea.cantidad).toLocaleString("es-ES", {
+                                style: "currency", currency: "EUR",
+                              })}
+                            </span>
+                          )}
+                          <span className="text-sm font-medium tabular-nums">
+                            {(linea.precio * linea.cantidad).toLocaleString("es-ES", {
+                              style: "currency", currency: "EUR",
+                            })}
+                          </span>
+                        </div>
                         <button
                           onClick={() => quitar(linea.variacion_id)}
                           className="text-neutral-300 hover:text-red-500 transition-colors"

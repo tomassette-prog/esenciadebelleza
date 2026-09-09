@@ -21,7 +21,26 @@ export async function POST(req: NextRequest) {
     if (gastoEnvio === -1) {
       return NextResponse.json({ error: "No realizamos envíos a esa provincia." }, { status: 400 });
     }
-    const totalFinal = totalProductos + gastoEnvio;
+
+    // ── Validar cupón de descuento (si se proporciona) ──
+    let descuentoCupon = 0;
+    let cuponId: string | null = null;
+    if (datosEnvio.cupon?.id && datosEnvio.cupon?.descuento > 0) {
+      const { data: cupon } = await supabase
+        .from("cupones")
+        .select("id, activo, usos_maximos, usos_actuales, fecha_expiracion, importe_minimo")
+        .eq("id", datosEnvio.cupon.id)
+        .single();
+      if (cupon && cupon.activo
+        && (!cupon.fecha_expiracion || new Date(cupon.fecha_expiracion) >= new Date())
+        && (cupon.usos_maximos === null || cupon.usos_actuales < cupon.usos_maximos)
+        && totalProductos >= cupon.importe_minimo) {
+        descuentoCupon = datosEnvio.cupon.descuento;
+        cuponId = cupon.id;
+      }
+    }
+
+    const totalFinal = totalProductos - descuentoCupon + gastoEnvio;
     const siteUrl    = process.env.NEXT_PUBLIC_SITE_URL ?? "https://esenciadebelleza.es";
 
     // Guardar pedido
@@ -29,17 +48,21 @@ export async function POST(req: NextRequest) {
       usuario_id:      user?.id ?? null,
       estado:          "pendiente",
       subtotal:        totalProductos,
+      descuento:       descuentoCupon,
       gastos_envio:    gastoEnvio,
       total:           totalFinal,
       tipo_precio:     "b2c",
       metodo_pago:     "stripe",
       email_cliente:   datosEnvio.email,
       notas:           datosEnvio.notas ?? "",
+      cupon_id:        cuponId,
+      descuento_cupon: descuentoCupon,
       direccion_envio: {
         nombre: datosEnvio.nombre, apellidos: datosEnvio.apellidos,
         telefono: datosEnvio.telefono, direccion: datosEnvio.direccion,
         ciudad: datosEnvio.ciudad, provincia: datosEnvio.provincia,
         codigo_postal: datosEnvio.codigo_postal,
+        ...(datosEnvio.facturacion ? { facturacion: datosEnvio.facturacion } : {}),
       },
     }).select("id").single();
 
@@ -72,6 +95,14 @@ export async function POST(req: NextRequest) {
           },
           quantity: l.cantidad,
         })),
+        ...(descuentoCupon > 0 ? [{
+          price_data: {
+            currency:     "eur",
+            product_data: { name: `Cupón ${datosEnvio.cupon.codigo}` },
+            unit_amount:  -Math.round(descuentoCupon * 100),
+          },
+          quantity: 1,
+        }] : []),
         ...(gastoEnvio > 0 ? [{
           price_data: {
             currency: "eur",
@@ -83,7 +114,7 @@ export async function POST(req: NextRequest) {
       ],
       success_url: `${siteUrl}/checkout/confirmacion?session_id={CHECKOUT_SESSION_ID}&resultado=ok`,
       cancel_url:  `${siteUrl}/checkout`,
-      metadata: { pedido_id: pedido?.id ?? "", nombre_cliente: `${datosEnvio.nombre} ${datosEnvio.apellidos}` },
+      metadata: { pedido_id: pedido?.id ?? "", nombre_cliente: `${datosEnvio.nombre} ${datosEnvio.apellidos}`, cupon_id: cuponId ?? "", descuento_cupon: String(descuentoCupon) },
     });
 
     if (pedido && session.id) {

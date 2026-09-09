@@ -8,6 +8,7 @@ import type { LineaCarrito, LineaPack } from "@/context/CarritoContext";
 
 import { calcularGastoEnvio, getSuplementoContrareembolso } from "@/lib/envio";
 import { enviarNotificacionPedido, enviarConfirmacionCliente } from "@/lib/email";
+import { registrarUsoCupon } from "@/actions/cupones";
 
 // ── Convertir packs a líneas de pedido (explota cada pack en sus componentes) ─
 function explotarPacks(packs: LineaPack[]): {
@@ -50,6 +51,7 @@ export async function iniciarPagoCeca(
     email: string; nombre: string; apellidos: string; telefono: string;
     direccion: string; ciudad: string; provincia: string; codigo_postal: string;
     notas?: string;
+    cupon?: { id: string; codigo: string; descuento: number } | null;
   }
 ): Promise<{
   gatewayUrl: string | null;
@@ -99,7 +101,25 @@ export async function iniciarPagoCeca(
     return { gatewayUrl: null, campos: null, gastoEnvio: 0, error: "Lo sentimos, no realizamos envíos a esa provincia." };
   }
 
-  const totalFinal = totalProductos + gastoEnvio;
+  // ── Validar cupón de descuento ──
+  let descuentoCupon = 0;
+  let cuponId: string | null = null;
+  if (datosEnvio.cupon?.id && datosEnvio.cupon?.descuento > 0) {
+    const { data: cupon } = await supabase
+      .from("cupones")
+      .select("id, activo, usos_maximos, usos_actuales, fecha_expiracion, importe_minimo")
+      .eq("id", datosEnvio.cupon.id)
+      .single();
+    if (cupon && cupon.activo
+      && (!cupon.fecha_expiracion || new Date(cupon.fecha_expiracion) >= new Date())
+      && (cupon.usos_maximos === null || cupon.usos_actuales < cupon.usos_maximos)
+      && totalProductos >= cupon.importe_minimo) {
+      descuentoCupon = datosEnvio.cupon.descuento;
+      cuponId = cupon.id;
+    }
+  }
+
+  const totalFinal = totalProductos - descuentoCupon + gastoEnvio;
 
   const numOper = generarNumOper();
 
@@ -110,6 +130,7 @@ export async function iniciarPagoCeca(
       usuario_id:       user?.id ?? null,
       estado:           "pendiente",
       subtotal:         totalProductos,
+      descuento:        descuentoCupon,
       gastos_envio:     gastoEnvio,
       total:            totalFinal,
       tipo_precio:      tipoPrecio,
@@ -117,6 +138,8 @@ export async function iniciarPagoCeca(
       stripe_payment_id: numOper,
       email_cliente:    datosEnvio.email,
       notas:            datosEnvio.notas ?? "",
+      cupon_id:         cuponId,
+      descuento_cupon:  descuentoCupon,
       direccion_envio:  {
         nombre:        datosEnvio.nombre,
         apellidos:     datosEnvio.apellidos,
@@ -187,7 +210,7 @@ export async function confirmarPedidoCeca(
 
   const { data: pedido } = await supabase
     .from("pedidos")
-    .select("id, email_cliente, direccion_envio, gastos_envio, total, tipo_precio, estado")
+    .select("id, email_cliente, direccion_envio, gastos_envio, total, tipo_precio, estado, cupon_id, descuento_cupon, usuario_id")
     .eq("stripe_payment_id", numOper)
     .single();
 
@@ -219,6 +242,7 @@ export async function confirmarPedidoCeca(
     apellidos:  dir.apellidos ?? "",
     total:      pedido.total  ?? 0,
     gastoEnvio: pedido.gastos_envio ?? 0,
+    descuento:  pedido.descuento_cupon ?? 0,
     metodoPago: "Cecabank",
     tipoPrecio: pedido.tipo_precio ?? "b2c",
     provincia:  dir.provincia ?? "",
@@ -233,6 +257,11 @@ export async function confirmarPedidoCeca(
   await enviarNotificacionPedido(emailPayload);
   await enviarConfirmacionCliente(emailPayload);
 
+  // Registrar uso de cupón si aplica
+  if (pedido.cupon_id && pedido.descuento_cupon > 0) {
+    await registrarUsoCupon(pedido.cupon_id, pedido.id, pedido.usuario_id, pedido.descuento_cupon);
+  }
+
   // WooCommerce se lanza manualmente desde el panel de administración
   return { ok: true, email: pedido.email_cliente, pedidoId: pedido.id };
 }
@@ -245,6 +274,7 @@ export async function iniciarPagoWooCommerce(
     email: string; nombre: string; apellidos: string; telefono: string;
     direccion: string; ciudad: string; provincia: string; codigo_postal: string;
     notas?: string;
+    cupon?: { id: string; codigo: string; descuento: number } | null;
   }
 ): Promise<{ pagoUrl: string | null; pedidoId: string | null; gastoEnvio: number; error: string | null }> {
   if (!lineas.length) return { pagoUrl: null, pedidoId: null, gastoEnvio: 0, error: "El carrito está vacío" };
@@ -280,7 +310,25 @@ export async function iniciarPagoWooCommerce(
   const gastoEnvio     = calcularGastoEnvio(totalProductos, datosEnvio.provincia, datosEnvio.ciudad);
   if (gastoEnvio === -1) return { pagoUrl: null, pedidoId: null, gastoEnvio: 0, error: "No realizamos envíos a esa provincia." };
 
-  const totalFinal = totalProductos + gastoEnvio;
+  // ── Validar cupón de descuento ──
+  let descuentoCupon = 0;
+  let cuponId: string | null = null;
+  if (datosEnvio.cupon?.id && datosEnvio.cupon?.descuento > 0) {
+    const { data: cupon } = await supabase
+      .from("cupones")
+      .select("id, activo, usos_maximos, usos_actuales, fecha_expiracion, importe_minimo")
+      .eq("id", datosEnvio.cupon.id)
+      .single();
+    if (cupon && cupon.activo
+      && (!cupon.fecha_expiracion || new Date(cupon.fecha_expiracion) >= new Date())
+      && (cupon.usos_maximos === null || cupon.usos_actuales < cupon.usos_maximos)
+      && totalProductos >= cupon.importe_minimo) {
+      descuentoCupon = datosEnvio.cupon.descuento;
+      cuponId = cupon.id;
+    }
+  }
+
+  const totalFinal = totalProductos - descuentoCupon + gastoEnvio;
 
   // 1. Guardar pedido pendiente en Supabase
   const { data: pedido, error: errPedido } = await supabase
@@ -289,12 +337,15 @@ export async function iniciarPagoWooCommerce(
       usuario_id:       user?.id ?? null,
       estado:           "pendiente",
       subtotal:         totalProductos,
+      descuento:        descuentoCupon,
       gastos_envio:     gastoEnvio,
       total:            totalFinal,
       tipo_precio:      tipoPrecio,
       metodo_pago:      "woocommerce",
       email_cliente:    datosEnvio.email,
       notas:            datosEnvio.notas ?? "",
+      cupon_id:         cuponId,
+      descuento_cupon:  descuentoCupon,
       direccion_envio:  {
         nombre: datosEnvio.nombre, apellidos: datosEnvio.apellidos,
         telefono: datosEnvio.telefono, direccion: datosEnvio.direccion,
@@ -486,6 +537,7 @@ export async function iniciarPagoStripe(
     email: string; nombre: string; apellidos: string; telefono: string;
     direccion: string; ciudad: string; provincia: string; codigo_postal: string;
     notas?: string;
+    cupon?: { id: string; codigo: string; descuento: number } | null;
   }
 ): Promise<{ url: string | null; error: string | null }> {
   if (!lineas.length && !packs.length) return { url: null, error: "El carrito está vacío" };
@@ -519,7 +571,25 @@ export async function iniciarPagoStripe(
   const gastoEnvio     = calcularGastoEnvio(totalProductos, datosEnvio.provincia, datosEnvio.ciudad);
   if (gastoEnvio === -1) return { url: null, error: "No realizamos envíos a esa provincia." };
 
-  const totalFinal = totalProductos + gastoEnvio;
+  // ── Validar cupón de descuento ──
+  let descuentoCupon = 0;
+  let cuponId: string | null = null;
+  if (datosEnvio.cupon?.id && datosEnvio.cupon?.descuento > 0) {
+    const { data: cupon } = await supabase
+      .from("cupones")
+      .select("id, activo, usos_maximos, usos_actuales, fecha_expiracion, importe_minimo")
+      .eq("id", datosEnvio.cupon.id)
+      .single();
+    if (cupon && cupon.activo
+      && (!cupon.fecha_expiracion || new Date(cupon.fecha_expiracion) >= new Date())
+      && (cupon.usos_maximos === null || cupon.usos_actuales < cupon.usos_maximos)
+      && totalProductos >= cupon.importe_minimo) {
+      descuentoCupon = datosEnvio.cupon.descuento;
+      cuponId = cupon.id;
+    }
+  }
+
+  const totalFinal = totalProductos - descuentoCupon + gastoEnvio;
   const siteUrl    = process.env.NEXT_PUBLIC_SITE_URL ?? "https://esenciadebelleza.es";
 
   // Detectar perfil B2B (igual que en Ceca/PayPal)
@@ -538,12 +608,15 @@ export async function iniciarPagoStripe(
     usuario_id:      user?.id ?? null,
     estado:          "pendiente",
     subtotal:        totalProductos,
+    descuento:       descuentoCupon,
     gastos_envio:    gastoEnvio,
     total:           totalFinal,
     tipo_precio:     tipoPrecioStripe,
     metodo_pago:     "stripe",
     email_cliente:   datosEnvio.email,
     notas:           datosEnvio.notas ?? "",
+    cupon_id:        cuponId,
+    descuento_cupon: descuentoCupon,
     direccion_envio: {
       nombre: datosEnvio.nombre, apellidos: datosEnvio.apellidos,
       telefono: datosEnvio.telefono, direccion: datosEnvio.direccion,
@@ -583,6 +656,14 @@ export async function iniciarPagoStripe(
         },
         quantity: l.cantidad,
       })),
+      ...(descuentoCupon > 0 ? [{
+        price_data: {
+          currency:     "eur",
+          product_data: { name: `Cupón ${datosEnvio.cupon?.codigo ?? ""}` },
+          unit_amount:  -Math.round(descuentoCupon * 100),
+        },
+        quantity: 1,
+      }] : []),
       ...(gastoEnvio > 0 ? [{
         price_data: {
           currency:     "eur",
@@ -597,6 +678,8 @@ export async function iniciarPagoStripe(
     metadata: {
       pedido_id:     pedido?.id ?? "",
       nombre_cliente: `${datosEnvio.nombre} ${datosEnvio.apellidos}`,
+      cupon_id:      cuponId ?? "",
+      descuento_cupon: String(descuentoCupon),
     },
   });
 
@@ -617,7 +700,7 @@ export async function confirmarPedidoStripe(
   // Obtener el pedido que corresponde a esta sesión
   const { data: pedido } = await supabase
     .from("pedidos")
-    .select("id, email_cliente, direccion_envio, gastos_envio, total, tipo_precio, estado")
+    .select("id, email_cliente, direccion_envio, gastos_envio, total, tipo_precio, estado, cupon_id, descuento_cupon, usuario_id")
     .eq("stripe_payment_id", sessionId)
     .single();
 
@@ -657,6 +740,7 @@ export async function confirmarPedidoStripe(
     apellidos:  dir.apellidos ?? "",
     total:      pedido.total,
     gastoEnvio: pedido.gastos_envio,
+    descuento:  pedido.descuento_cupon ?? 0,
     metodoPago: "Stripe",
     tipoPrecio: pedido.tipo_precio,
     provincia:  dir.provincia ?? "",
@@ -671,6 +755,11 @@ export async function confirmarPedidoStripe(
   await enviarNotificacionPedido(emailPayloadStripe);
   await enviarConfirmacionCliente(emailPayloadStripe);
 
+  // Registrar uso de cupón si aplica
+  if (pedido.cupon_id && pedido.descuento_cupon > 0) {
+    await registrarUsoCupon(pedido.cupon_id, pedido.id, pedido.usuario_id, pedido.descuento_cupon);
+  }
+
   // WooCommerce se lanza manualmente desde el panel de administración
   return { ok: true, email: pedido.email_cliente, pedidoId: pedido.id };
 }
@@ -683,6 +772,11 @@ export async function crearPedidoContrarembolso(
     email: string; nombre: string; apellidos: string; telefono: string;
     direccion: string; ciudad: string; provincia: string; codigo_postal: string;
     notas?: string;
+    facturacion?: {
+      empresa: string; nif_cif: string; direccion: string;
+      ciudad: string; provincia: string; codigo_postal: string;
+    } | null;
+    cupon?: { id: string; codigo: string; descuento: number } | null;
   }
 ): Promise<{ ok: boolean; pedidoId?: string; error?: string }> {
   if (!lineas.length && !packs.length) return { ok: false, error: "El carrito está vacío" };
@@ -708,7 +802,8 @@ export async function crearPedidoContrarembolso(
   if (gastoEnvioBase === -1) return { ok: false, error: "No realizamos envíos a esa provincia." };
 
   const gastoEnvio = gastoEnvioBase + getSuplementoContrareembolso(totalProductos);
-  const totalFinal = totalProductos + gastoEnvio;
+  const descuentoCupon = datosEnvio.cupon?.descuento ?? 0;
+  const totalFinal = totalProductos - descuentoCupon + gastoEnvio;
 
   // 1. Guardar pedido en Supabase
   const { data: pedido, error: errPedido } = await supabase
@@ -717,12 +812,15 @@ export async function crearPedidoContrarembolso(
       usuario_id:       user?.id ?? null,
       estado:           "pagado",
       subtotal:         totalProductos,
+      descuento:        descuentoCupon,
       gastos_envio:     gastoEnvio,
       total:            totalFinal,
       tipo_precio:      tipoPrecio,
       metodo_pago:      "contrarembolso",
       email_cliente:    datosEnvio.email,
       direccion_envio:  datosEnvio as unknown as Record<string, unknown>,
+      cupon_id:         datosEnvio.cupon?.id ?? null,
+      descuento_cupon:  descuentoCupon,
     })
     .select("id")
     .single();
@@ -759,7 +857,8 @@ export async function crearPedidoContrarembolso(
   const emailCR = {
     pedidoId: pedido.id, email: datosEnvio.email,
     nombre: datosEnvio.nombre, apellidos: datosEnvio.apellidos,
-    total: totalFinal, gastoEnvio, metodoPago: "Contra reembolso",
+    total: totalFinal, gastoEnvio, descuento: descuentoCupon,
+    metodoPago: "Contra reembolso",
     tipoPrecio, provincia: datosEnvio.provincia, ciudad: datosEnvio.ciudad,
     lineas: lineas.map((l) => ({
       nombre: l.nombre, nombre_variacion: l.nombre_variacion,
@@ -768,6 +867,11 @@ export async function crearPedidoContrarembolso(
   };
   await enviarNotificacionPedido(emailCR);
   await enviarConfirmacionCliente(emailCR);
+
+  // Registrar uso de cupón si aplica
+  if (datosEnvio.cupon?.id && descuentoCupon > 0) {
+    await registrarUsoCupon(datosEnvio.cupon.id, pedido.id, user?.id ?? null, descuentoCupon);
+  }
 
   return { ok: true, pedidoId: pedido.id };
 }

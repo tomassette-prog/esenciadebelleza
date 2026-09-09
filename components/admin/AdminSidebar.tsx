@@ -17,6 +17,7 @@ const NAV_SECTIONS = [
       { href: "/admin/carruseles", label: "Carruseles", icon: "🎠" },
       { href: "/admin/stock", label: "Stock", icon: "📊" },
       { href: "/admin/packs", label: "Packs", icon: "🎁" },
+      { href: "/admin/cupones", label: "Cupones", icon: "🏷️" },
       { href: "/admin/envios", label: "Envíos", icon: "🚚" },
     ],
   },

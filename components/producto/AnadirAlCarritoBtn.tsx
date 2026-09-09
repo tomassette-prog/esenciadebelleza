@@ -12,6 +12,7 @@ interface Props {
   nombreVariacion: string;
   imagenUrl: string | null;
   precio: number;
+  precioOriginal?: number;
   sku: string;
 }
 
@@ -25,6 +26,7 @@ export function AnadirAlCarritoBtn({
   nombreVariacion,
   imagenUrl,
   precio,
+  precioOriginal,
   sku,
 }: Props) {
   const { agregar } = useCarrito();
@@ -40,6 +42,7 @@ export function AnadirAlCarritoBtn({
       nombre_variacion: nombreVariacion,
       imagen_url: imagenUrl,
       precio,
+      precio_original: precioOriginal,
       sku,
     });
   }

@@ -21,6 +21,7 @@ export interface LineaCarrito {
   nombre_variacion: string;
   imagen_url:   string | null;
   precio:       number;       // precio vigente (b2c o b2b)
+  precio_original?: number;   // precio b2c antes de descuento (solo b2b)
   cantidad:     number;
   sku:          string;
 }

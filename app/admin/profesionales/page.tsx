@@ -15,7 +15,7 @@ export default async function AdminProfesionalesPage() {
   // Obtener todos los usuarios con tipo_cliente = b2b
   const { data: profesionales } = await supabase
     .from("perfiles_usuario")
-    .select("id, nombre_completo, empresa, nif_cif, telefono, b2b_aprobado, created_at")
+    .select("id, nombre_completo, empresa, nif_cif, telefono, b2b_aprobado, descuento_b2b, created_at")
     .eq("tipo_cliente", "b2b")
     .order("created_at", { ascending: false });
 
@@ -27,6 +27,7 @@ export default async function AdminProfesionalesPage() {
     nif_cif: string | null;
     telefono: string | null;
     b2b_aprobado: boolean;
+    descuento_b2b: number;
     created_at: string;
     email: string;
   }> = [];
@@ -71,6 +72,7 @@ export default async function AdminProfesionalesPage() {
                   <th className="text-left text-xs tracking-wider uppercase text-neutral-500 px-4 py-3 font-normal">NIF/CIF</th>
                   <th className="text-left text-xs tracking-wider uppercase text-neutral-500 px-4 py-3 font-normal">Teléfono</th>
                   <th className="text-left text-xs tracking-wider uppercase text-neutral-500 px-4 py-3 font-normal">Fecha</th>
+                  <th className="text-right text-xs tracking-wider uppercase text-neutral-500 px-4 py-3 font-normal">Descuento</th>
                   <th className="px-4 py-3" />
                 </tr>
               </thead>
@@ -86,7 +88,7 @@ export default async function AdminProfesionalesPage() {
                       {new Date(p.created_at).toLocaleDateString("es-ES")}
                     </td>
                     <td className="px-4 py-3">
-                      <ProfesionalAcciones userId={p.id} b2bAprobado={false} />
+                      <ProfesionalAcciones userId={p.id} b2bAprobado={false} descuentoB2b={p.descuento_b2b ?? 0} />
                     </td>
                   </tr>
                 ))}
@@ -117,6 +119,7 @@ export default async function AdminProfesionalesPage() {
                   <th className="text-left text-xs tracking-wider uppercase text-neutral-500 px-4 py-3 font-normal">Email</th>
                   <th className="text-left text-xs tracking-wider uppercase text-neutral-500 px-4 py-3 font-normal">Empresa</th>
                   <th className="text-left text-xs tracking-wider uppercase text-neutral-500 px-4 py-3 font-normal">NIF/CIF</th>
+                  <th className="text-right text-xs tracking-wider uppercase text-neutral-500 px-4 py-3 font-normal">Descuento</th>
                   <th className="px-4 py-3" />
                 </tr>
               </thead>
@@ -128,7 +131,7 @@ export default async function AdminProfesionalesPage() {
                     <td className="px-4 py-3 text-neutral-700 font-medium">{p.empresa ?? "—"}</td>
                     <td className="px-4 py-3 text-neutral-600">{p.nif_cif ?? "—"}</td>
                     <td className="px-4 py-3">
-                      <ProfesionalAcciones userId={p.id} b2bAprobado={true} />
+                      <ProfesionalAcciones userId={p.id} b2bAprobado={true} descuentoB2b={p.descuento_b2b ?? 0} />
                     </td>
                   </tr>
                 ))}
