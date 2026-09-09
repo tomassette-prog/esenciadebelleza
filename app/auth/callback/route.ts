@@ -1,4 +1,5 @@
 import { createServerClient } from "@supabase/ssr";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { cookies } from "next/headers";
 import { NextResponse, type NextRequest } from "next/server";
 
@@ -27,8 +28,30 @@ export async function GET(request: NextRequest) {
       }
     );
 
-    const { error } = await supabase.auth.exchangeCodeForSession(code);
-    if (!error) {
+    const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+    if (!error && data.user) {
+      // Fallback: crear perfil si no existe (puede fallar durante registro
+      // si el upsert fue antes de confirmar email)
+      const admin = createAdminClient();
+      const { data: existingProfile } = await admin
+        .from("perfiles_usuario")
+        .select("id")
+        .eq("id", data.user.id)
+        .single();
+
+      if (!existingProfile) {
+        const meta = data.user.user_metadata ?? {};
+        await admin.from("perfiles_usuario").upsert({
+          id: data.user.id,
+          nombre_completo: meta.nombre_completo ?? data.user.email ?? "",
+          tipo_cliente: meta.tipo_cliente === "b2b" ? "b2b" : "b2c",
+          empresa: meta.empresa ?? null,
+          nif_cif: meta.nif_cif ?? null,
+          telefono: meta.telefono ?? null,
+          b2b_aprobado: false,
+        });
+      }
+
       const forwardedHost = request.headers.get("x-forwarded-host");
       const isLocalEnv = process.env.NODE_ENV === "development";
 

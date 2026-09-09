@@ -86,7 +86,7 @@ export async function registro(
   // ya que el usuario aún no tiene sesión por la confirmación de email)
   if (data.user) {
     const admin = createAdminClient();
-    await admin.from("perfiles_usuario").upsert({
+    const { error: profileError } = await admin.from("perfiles_usuario").upsert({
       id: data.user.id,
       nombre_completo,
       tipo_cliente,
@@ -95,6 +95,10 @@ export async function registro(
       telefono,
       b2b_aprobado: false,
     });
+
+    if (profileError) {
+      console.error("[Registro] Error creando perfil:", profileError);
+    }
 
     // Notificar al admin si es un profesional B2B
     if (tipo_cliente === "b2b") {
