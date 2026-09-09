@@ -98,13 +98,17 @@ export async function registro(
 
     // Notificar al admin si es un profesional B2B
     if (tipo_cliente === "b2b") {
-      await enviarNotificacionNuevoProfesional({
-        email,
-        nombre: nombre_completo,
-        empresa,
-        nif_cif,
-        telefono,
-      });
+      try {
+        await enviarNotificacionNuevoProfesional({
+          email,
+          nombre: nombre_completo,
+          empresa,
+          nif_cif,
+          telefono,
+        });
+      } catch (e) {
+        console.error("[Registro] Error enviando notificación admin:", e);
+      }
     }
   }
 
