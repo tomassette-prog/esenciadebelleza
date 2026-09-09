@@ -100,7 +100,7 @@ export function NavMegaMenu({ navItems }: { navItems: NavItem[] }) {
             href="/profesionales"
             className="text-xs tracking-widest uppercase px-4 py-2 border border-neutral-900 text-neutral-900 hover:bg-neutral-900 hover:text-white transition-colors"
           >
-            Área Profesional
+            Profesionales
           </Link>
         </span>
       </nav>
@@ -372,7 +372,7 @@ export function NavMegaMenu({ navItems }: { navItems: NavItem[] }) {
                 className="flex items-center justify-center w-full py-3 text-xs tracking-widest uppercase border border-neutral-900 text-neutral-900 hover:bg-neutral-900 hover:text-white transition-colors"
                 onClick={() => setMobileOpen(false)}
               >
-                Área Profesional
+                Profesionales
               </Link>
             </div>
           </div>
