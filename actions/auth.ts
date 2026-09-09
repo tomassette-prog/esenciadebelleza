@@ -70,7 +70,7 @@ export async function registro(
     email,
     password,
     options: {
-      data: { nombre_completo, tipo_cliente },
+      data: { nombre_completo, tipo_cliente, empresa, nif_cif, telefono },
       emailRedirectTo: `${process.env.NEXT_PUBLIC_SITE_URL ?? "https://esenciadebelleza.es"}/auth/callback`,
     },
   });
