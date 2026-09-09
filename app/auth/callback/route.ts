@@ -48,6 +48,11 @@ export async function GET(request: NextRequest) {
           empresa: meta.empresa ?? null,
           nif_cif: meta.nif_cif ?? null,
           telefono: meta.telefono ?? null,
+          telefono_contacto: meta.telefono_contacto ?? null,
+          tipo_negocio: meta.tipo_negocio ?? null,
+          web_instagram: meta.web_instagram ?? null,
+          direccion_envio: meta.dir_calle ? { calle: meta.dir_calle, cp: meta.dir_cp, ciudad: meta.dir_ciudad, provincia: meta.dir_provincia } : null,
+          direccion_facturacion: meta.fac_calle ? { calle: meta.fac_calle, cp: meta.fac_cp, ciudad: meta.fac_ciudad, provincia: meta.fac_provincia } : null,
           b2b_aprobado: false,
         });
       }

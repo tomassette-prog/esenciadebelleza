@@ -49,28 +49,49 @@ export async function registro(
   const password       = formData.get("password") as string;
   const nombre_completo = (formData.get("nombre_completo") as string).trim();
   const tipo_cliente   = (formData.get("tipo_cliente") as string) === "b2b" ? "b2b" : "b2c";
+  const telefono       = (formData.get("telefono") as string | null)?.trim() || null;
+
+  // Campos B2B
   const empresa        = (formData.get("empresa") as string | null)?.trim() || null;
   const nif_cif        = (formData.get("nif_cif") as string | null)?.trim() || null;
-  const telefono       = (formData.get("telefono") as string | null)?.trim() || null;
+  const tipo_negocio   = (formData.get("tipo_negocio") as string | null)?.trim() || null;
+  const web_instagram  = (formData.get("web_instagram") as string | null)?.trim() || null;
+  const telefono_contacto = (formData.get("telefono_contacto") as string | null)?.trim() || null;
+
+  // Dirección de envío
+  const dir_calle    = (formData.get("dir_calle") as string | null)?.trim() || null;
+  const dir_cp       = (formData.get("dir_cp") as string | null)?.trim() || null;
+  const dir_ciudad   = (formData.get("dir_ciudad") as string | null)?.trim() || null;
+  const dir_provincia = (formData.get("dir_provincia") as string | null)?.trim() || null;
+
+  // Dirección de facturación (opcional)
+  const usarMismaDireccion = formData.get("usar_misma_direccion") === "on";
+  const fac_calle    = usarMismaDireccion ? dir_calle : (formData.get("fac_calle") as string | null)?.trim() || null;
+  const fac_cp       = usarMismaDireccion ? dir_cp : (formData.get("fac_cp") as string | null)?.trim() || null;
+  const fac_ciudad   = usarMismaDireccion ? dir_ciudad : (formData.get("fac_ciudad") as string | null)?.trim() || null;
+  const fac_provincia = usarMismaDireccion ? dir_provincia : (formData.get("fac_provincia") as string | null)?.trim() || null;
 
   if (password.length < 8) {
     return { error: "La contraseña debe tener al menos 8 caracteres." };
   }
 
-  if (tipo_cliente === "b2b" && !empresa) {
-    return { error: "El nombre de empresa es obligatorio para cuentas profesionales." };
-  }
-
-  // Validar NIF/CIF si se proporciona (opcional pero con formato correcto)
-  if (tipo_cliente === "b2b" && nif_cif && !validarNifCif(nif_cif)) {
-    return { error: "El NIF/CIF no tiene un formato válido. Ejemplos: 12345678Z, B12345678, X1234567L" };
+  if (tipo_cliente === "b2b") {
+    if (!empresa) return { error: "El nombre del negocio es obligatorio." };
+    if (!nif_cif) return { error: "El NIF/CIF es obligatorio para cuentas profesionales." };
+    if (!telefono_contacto) return { error: "El teléfono de contacto es obligatorio." };
+    if (!dir_calle || !dir_cp || !dir_ciudad || !dir_provincia) {
+      return { error: "La dirección de envío es obligatoria (calle, CP, ciudad y provincia)." };
+    }
+    if (!validarNifCif(nif_cif)) {
+      return { error: "El NIF/CIF no tiene un formato válido. Ejemplos: 12345678Z, B12345678, X1234567L" };
+    }
   }
 
   const { data, error } = await supabase.auth.signUp({
     email,
     password,
     options: {
-      data: { nombre_completo, tipo_cliente, empresa, nif_cif, telefono },
+      data: { nombre_completo, tipo_cliente, empresa, nif_cif, telefono, telefono_contacto, tipo_negocio, web_instagram, dir_calle, dir_cp, dir_ciudad, dir_provincia, fac_calle, fac_cp, fac_ciudad, fac_provincia },
       emailRedirectTo: `${process.env.NEXT_PUBLIC_SITE_URL ?? "https://esenciadebelleza.es"}/auth/callback`,
     },
   });
@@ -90,9 +111,14 @@ export async function registro(
       id: data.user.id,
       nombre_completo,
       tipo_cliente,
-      empresa: tipo_cliente === "b2b" ? empresa : null,
-      nif_cif:  tipo_cliente === "b2b" ? nif_cif  : null,
       telefono,
+      empresa:           tipo_cliente === "b2b" ? empresa : null,
+      nif_cif:           tipo_cliente === "b2b" ? nif_cif  : null,
+      tipo_negocio:      tipo_cliente === "b2b" ? tipo_negocio : null,
+      web_instagram:     tipo_cliente === "b2b" ? web_instagram : null,
+      telefono_contacto: tipo_cliente === "b2b" ? telefono_contacto : null,
+      direccion_envio:       tipo_cliente === "b2b" ? { calle: dir_calle, cp: dir_cp, ciudad: dir_ciudad, provincia: dir_provincia } : null,
+      direccion_facturacion: tipo_cliente === "b2b" && !usarMismaDireccion ? { calle: fac_calle, cp: fac_cp, ciudad: fac_ciudad, provincia: fac_provincia } : null,
       b2b_aprobado: false,
     });
 
@@ -109,6 +135,9 @@ export async function registro(
           empresa,
           nif_cif,
           telefono,
+          telefono_contacto,
+          tipo_negocio,
+          direccion_envio: { calle: dir_calle!, cp: dir_cp!, ciudad: dir_ciudad!, provincia: dir_provincia! },
         });
       } catch (e) {
         console.error("[Registro] Error enviando notificación admin:", e);

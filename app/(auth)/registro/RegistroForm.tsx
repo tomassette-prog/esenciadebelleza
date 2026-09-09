@@ -6,6 +6,15 @@ import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { registro } from "@/actions/auth";
 
+const TIPOS_NEGOCIO = [
+  { value: "salon",       label: "Salón de belleza" },
+  { value: "clinica",     label: "Clínica estética" },
+  { value: "barberia",    label: "Barbería" },
+  { value: "spa",         label: "Spa / Centro de bienestar" },
+  { value: "distribuidor", label: "Distribuidor" },
+  { value: "otro",        label: "Otro" },
+];
+
 function SubmitButton() {
   const { pending } = useFormStatus();
   return (
@@ -22,6 +31,7 @@ function SubmitButton() {
 export default function RegistroForm() {
   const [state, action] = useFormState(registro, null);
   const [tipo, setTipo] = useState<"b2c" | "b2b">("b2c");
+  const [usarMismaDireccion, setUsarMismaDireccion] = useState(true);
   const searchParams = useSearchParams();
   const paramSynced = useRef(false);
 
@@ -121,49 +131,224 @@ export default function RegistroForm() {
           />
         </div>
 
-        {/* Teléfono */}
-        <div>
-          <label htmlFor="telefono" className="block text-xs tracking-wider uppercase text-neutral-600 mb-1.5">
-            Teléfono <span className="text-neutral-400 normal-case">(opcional)</span>
-          </label>
-          <input
-            id="telefono"
-            name="telefono"
-            type="tel"
-            autoComplete="tel"
-            placeholder="+34 600 000 000"
-            className="w-full border border-neutral-200 px-4 py-3 text-sm placeholder:text-neutral-400 focus:outline-none focus:border-neutral-900 transition-colors"
-          />
-        </div>
+        {/* Teléfono (solo B2B como obligatorio) */}
+        {tipo === "b2b" && (
+          <div>
+            <label htmlFor="telefono_contacto" className="block text-xs tracking-wider uppercase text-neutral-600 mb-1.5">
+              Teléfono de contacto <span className="text-red-500">*</span>
+            </label>
+            <input
+              id="telefono_contacto"
+              name="telefono_contacto"
+              type="tel"
+              autoComplete="tel"
+              required
+              placeholder="+34 600 000 000"
+              className="w-full border border-neutral-200 px-4 py-3 text-sm placeholder:text-neutral-400 focus:outline-none focus:border-neutral-900 transition-colors"
+            />
+          </div>
+        )}
 
         {/* Campos B2B */}
         {tipo === "b2b" && (
           <>
+            <div className="border-t border-neutral-100 pt-4 mt-2">
+              <p className="text-xs tracking-wider uppercase text-neutral-600 mb-4 font-medium">Datos del negocio</p>
+            </div>
+
             <div>
               <label htmlFor="empresa" className="block text-xs tracking-wider uppercase text-neutral-600 mb-1.5">
-                Nombre del negocio / empresa <span className="text-red-500">*</span>
+                Nombre del negocio <span className="text-red-500">*</span>
               </label>
               <input
                 id="empresa"
                 name="empresa"
                 type="text"
-                required={tipo === "b2b"}
-                placeholder="Salón Bellezia SL"
+                required
+                placeholder="Salón Bella SL"
                 className="w-full border border-neutral-200 px-4 py-3 text-sm placeholder:text-neutral-400 focus:outline-none focus:border-neutral-900 transition-colors"
               />
             </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label htmlFor="nif_cif" className="block text-xs tracking-wider uppercase text-neutral-600 mb-1.5">
+                  NIF / CIF <span className="text-red-500">*</span>
+                </label>
+                <input
+                  id="nif_cif"
+                  name="nif_cif"
+                  type="text"
+                  required
+                  placeholder="B12345678"
+                  className="w-full border border-neutral-200 px-4 py-3 text-sm placeholder:text-neutral-400 focus:outline-none focus:border-neutral-900 transition-colors"
+                />
+              </div>
+              <div>
+                <label htmlFor="tipo_negocio" className="block text-xs tracking-wider uppercase text-neutral-600 mb-1.5">
+                  Tipo de negocio
+                </label>
+                <select
+                  id="tipo_negocio"
+                  name="tipo_negocio"
+                  className="w-full border border-neutral-200 px-4 py-3 text-sm focus:outline-none focus:border-neutral-900 transition-colors bg-white"
+                >
+                  <option value="">Seleccionar...</option>
+                  {TIPOS_NEGOCIO.map((tn) => (
+                    <option key={tn.value} value={tn.value}>{tn.label}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
             <div>
-              <label htmlFor="nif_cif" className="block text-xs tracking-wider uppercase text-neutral-600 mb-1.5">
-                NIF / CIF <span className="text-neutral-400 normal-case">(opcional)</span>
+              <label htmlFor="web_instagram" className="block text-xs tracking-wider uppercase text-neutral-600 mb-1.5">
+                Web / Instagram <span className="text-neutral-400 normal-case normal-case">(opcional)</span>
               </label>
               <input
-                id="nif_cif"
-                name="nif_cif"
+                id="web_instagram"
+                name="web_instagram"
                 type="text"
-                placeholder="B12345678"
+                placeholder="https://instagram.com/tu_salon"
                 className="w-full border border-neutral-200 px-4 py-3 text-sm placeholder:text-neutral-400 focus:outline-none focus:border-neutral-900 transition-colors"
               />
             </div>
+
+            {/* Dirección de envío */}
+            <div className="border-t border-neutral-100 pt-4 mt-2">
+              <p className="text-xs tracking-wider uppercase text-neutral-600 mb-4 font-medium">Dirección de envío</p>
+            </div>
+
+            <div>
+              <label htmlFor="dir_calle" className="block text-xs tracking-wider uppercase text-neutral-600 mb-1.5">
+                Calle y número <span className="text-red-500">*</span>
+              </label>
+              <input
+                id="dir_calle"
+                name="dir_calle"
+                type="text"
+                required
+                placeholder="Calle Mayor, 12, 3ºB"
+                className="w-full border border-neutral-200 px-4 py-3 text-sm placeholder:text-neutral-400 focus:outline-none focus:border-neutral-900 transition-colors"
+              />
+            </div>
+
+            <div className="grid grid-cols-3 gap-4">
+              <div>
+                <label htmlFor="dir_cp" className="block text-xs tracking-wider uppercase text-neutral-600 mb-1.5">
+                  CP <span className="text-red-500">*</span>
+                </label>
+                <input
+                  id="dir_cp"
+                  name="dir_cp"
+                  type="text"
+                  required
+                  placeholder="28001"
+                  className="w-full border border-neutral-200 px-4 py-3 text-sm placeholder:text-neutral-400 focus:outline-none focus:border-neutral-900 transition-colors"
+                />
+              </div>
+              <div>
+                <label htmlFor="dir_ciudad" className="block text-xs tracking-wider uppercase text-neutral-600 mb-1.5">
+                  Ciudad <span className="text-red-500">*</span>
+                </label>
+                <input
+                  id="dir_ciudad"
+                  name="dir_ciudad"
+                  type="text"
+                  required
+                  placeholder="Madrid"
+                  className="w-full border border-neutral-200 px-4 py-3 text-sm placeholder:text-neutral-400 focus:outline-none focus:border-neutral-900 transition-colors"
+                />
+              </div>
+              <div>
+                <label htmlFor="dir_provincia" className="block text-xs tracking-wider uppercase text-neutral-600 mb-1.5">
+                  Provincia <span className="text-red-500">*</span>
+                </label>
+                <input
+                  id="dir_provincia"
+                  name="dir_provincia"
+                  type="text"
+                  required
+                  placeholder="Madrid"
+                  className="w-full border border-neutral-200 px-4 py-3 text-sm placeholder:text-neutral-400 focus:outline-none focus:border-neutral-900 transition-colors"
+                />
+              </div>
+            </div>
+
+            {/* Dirección de facturación */}
+            <div className="border-t border-neutral-100 pt-4 mt-2">
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  name="usar_misma_direccion"
+                  checked={usarMismaDireccion}
+                  onChange={(e) => setUsarMismaDireccion(e.target.checked)}
+                  className="w-4 h-4 rounded border-neutral-300 text-neutral-900 focus:ring-neutral-900"
+                />
+                <span className="text-sm text-neutral-700">La dirección de facturación es la misma que la de envío</span>
+              </label>
+            </div>
+
+            {!usarMismaDireccion && (
+              <>
+                <p className="text-xs tracking-wider uppercase text-neutral-600 mb-2 font-medium">Dirección de facturación</p>
+                <div>
+                  <label htmlFor="fac_calle" className="block text-xs tracking-wider uppercase text-neutral-600 mb-1.5">
+                    Calle y número <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    id="fac_calle"
+                    name="fac_calle"
+                    type="text"
+                    required={!usarMismaDireccion}
+                    placeholder="Calle Fiscal, 5"
+                    className="w-full border border-neutral-200 px-4 py-3 text-sm placeholder:text-neutral-400 focus:outline-none focus:border-neutral-900 transition-colors"
+                  />
+                </div>
+                <div className="grid grid-cols-3 gap-4">
+                  <div>
+                    <label htmlFor="fac_cp" className="block text-xs tracking-wider uppercase text-neutral-600 mb-1.5">
+                      CP <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      id="fac_cp"
+                      name="fac_cp"
+                      type="text"
+                      required={!usarMismaDireccion}
+                      placeholder="28001"
+                      className="w-full border border-neutral-200 px-4 py-3 text-sm placeholder:text-neutral-400 focus:outline-none focus:border-neutral-900 transition-colors"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="fac_ciudad" className="block text-xs tracking-wider uppercase text-neutral-600 mb-1.5">
+                      Ciudad <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      id="fac_ciudad"
+                      name="fac_ciudad"
+                      type="text"
+                      required={!usarMismaDireccion}
+                      placeholder="Madrid"
+                      className="w-full border border-neutral-200 px-4 py-3 text-sm placeholder:text-neutral-400 focus:outline-none focus:border-neutral-900 transition-colors"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="fac_provincia" className="block text-xs tracking-wider uppercase text-neutral-600 mb-1.5">
+                      Provincia <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      id="fac_provincia"
+                      name="fac_provincia"
+                      type="text"
+                      required={!usarMismaDireccion}
+                      placeholder="Madrid"
+                      className="w-full border border-neutral-200 px-4 py-3 text-sm placeholder:text-neutral-400 focus:outline-none focus:border-neutral-900 transition-colors"
+                    />
+                  </div>
+                </div>
+              </>
+            )}
+
             <div className="p-3 bg-amber-50 border border-amber-200 text-amber-800 text-xs">
               Los precios profesionales se activarán tras verificación del negocio (en 24-48 h).
             </div>

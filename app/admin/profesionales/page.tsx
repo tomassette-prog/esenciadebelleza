@@ -15,7 +15,7 @@ export default async function AdminProfesionalesPage() {
   // Obtener todos los usuarios con tipo_cliente = b2b
   const { data: profesionales } = await supabase
     .from("perfiles_usuario")
-    .select("id, nombre_completo, empresa, nif_cif, telefono, b2b_aprobado, descuento_b2b, created_at")
+    .select("id, nombre_completo, empresa, nif_cif, telefono, telefono_contacto, tipo_negocio, direccion_envio, b2b_aprobado, descuento_b2b, created_at")
     .eq("tipo_cliente", "b2b")
     .order("created_at", { ascending: false });
 
@@ -26,6 +26,9 @@ export default async function AdminProfesionalesPage() {
     empresa: string | null;
     nif_cif: string | null;
     telefono: string | null;
+    telefono_contacto: string | null;
+    tipo_negocio: string | null;
+    direccion_envio: { calle: string; cp: string; ciudad: string; provincia: string } | null;
     b2b_aprobado: boolean;
     descuento_b2b: number;
     created_at: string;
@@ -70,7 +73,8 @@ export default async function AdminProfesionalesPage() {
                   <th className="text-left text-xs tracking-wider uppercase text-neutral-500 px-4 py-3 font-normal">Email</th>
                   <th className="text-left text-xs tracking-wider uppercase text-neutral-500 px-4 py-3 font-normal">Empresa</th>
                   <th className="text-left text-xs tracking-wider uppercase text-neutral-500 px-4 py-3 font-normal">NIF/CIF</th>
-                  <th className="text-left text-xs tracking-wider uppercase text-neutral-500 px-4 py-3 font-normal">Teléfono</th>
+                  <th className="text-left text-xs tracking-wider uppercase text-neutral-500 px-4 py-3 font-normal">Contacto</th>
+                  <th className="text-left text-xs tracking-wider uppercase text-neutral-500 px-4 py-3 font-normal">Dirección</th>
                   <th className="text-left text-xs tracking-wider uppercase text-neutral-500 px-4 py-3 font-normal">Fecha</th>
                   <th className="text-right text-xs tracking-wider uppercase text-neutral-500 px-4 py-3 font-normal">Descuento</th>
                   <th className="px-4 py-3" />
@@ -81,9 +85,19 @@ export default async function AdminProfesionalesPage() {
                   <tr key={p.id} className="hover:bg-amber-50/30 transition-colors">
                     <td className="px-4 py-3 text-neutral-900">{p.nombre_completo ?? "—"}</td>
                     <td className="px-4 py-3 text-neutral-600">{p.email}</td>
-                    <td className="px-4 py-3 text-neutral-700 font-medium">{p.empresa ?? "—"}</td>
+                    <td className="px-4 py-3 text-neutral-700 font-medium">
+                      {p.empresa ?? "—"}
+                      {p.tipo_negocio && <span className="block text-xs text-neutral-400">{p.tipo_negocio}</span>}
+                    </td>
                     <td className="px-4 py-3 text-neutral-600">{p.nif_cif ?? "—"}</td>
-                    <td className="px-4 py-3 text-neutral-600">{p.telefono ?? "—"}</td>
+                    <td className="px-4 py-3 text-neutral-600">
+                      {p.telefono_contacto ?? p.telefono ?? "—"}
+                    </td>
+                    <td className="px-4 py-3 text-neutral-500 text-xs">
+                      {p.direccion_envio
+                        ? `${p.direccion_envio.calle}, ${p.direccion_envio.cp} ${p.direccion_envio.ciudad}`
+                        : "—"}
+                    </td>
                     <td className="px-4 py-3 text-neutral-500 whitespace-nowrap">
                       {new Date(p.created_at).toLocaleDateString("es-ES")}
                     </td>

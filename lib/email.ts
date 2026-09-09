@@ -169,6 +169,9 @@ export async function enviarNotificacionNuevoProfesional(p: {
   empresa: string | null;
   nif_cif: string | null;
   telefono: string | null;
+  telefono_contacto: string | null;
+  tipo_negocio: string | null;
+  direccion_envio: { calle: string; cp: string; ciudad: string; provincia: string } | null;
 }) {
   if (!process.env.EMAIL_PASS) {
     console.warn("[Email] EMAIL_PASS no configurado, saltando notificación");
@@ -192,7 +195,10 @@ export async function enviarNotificacionNuevoProfesional(p: {
           <tr><td style="padding:6px 0;font-weight:bold">Email</td><td style="padding:6px 0">${p.email}</td></tr>
           ${p.empresa ? `<tr><td style="padding:6px 0;font-weight:bold">Empresa</td><td style="padding:6px 0">${p.empresa}</td></tr>` : ""}
           ${p.nif_cif ? `<tr><td style="padding:6px 0;font-weight:bold">NIF/CIF</td><td style="padding:6px 0">${p.nif_cif}</td></tr>` : ""}
-          ${p.telefono ? `<tr><td style="padding:6px 0;font-weight:bold">Teléfono</td><td style="padding:6px 0">${p.telefono}</td></tr>` : ""}
+          ${p.telefono_contacto ? `<tr><td style="padding:6px 0;font-weight:bold">Tel. contacto</td><td style="padding:6px 0">${p.telefono_contacto}</td></tr>` : ""}
+          ${p.telefono ? `<tr><td style="padding:6px 0;font-weight:bold">Tel. negocio</td><td style="padding:6px 0">${p.telefono}</td></tr>` : ""}
+          ${p.tipo_negocio ? `<tr><td style="padding:6px 0;font-weight:bold">Tipo</td><td style="padding:6px 0">${p.tipo_negocio}</td></tr>` : ""}
+          ${p.direccion_envio ? `<tr><td style="padding:6px 0;font-weight:bold">Dirección</td><td style="padding:6px 0">${p.direccion_envio.calle}, ${p.direccion_envio.cp} ${p.direccion_envio.ciudad} (${p.direccion_envio.provincia})</td></tr>` : ""}
         </tbody>
       </table>
       <div style="margin-top:24px;text-align:center">
