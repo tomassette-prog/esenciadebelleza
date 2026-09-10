@@ -1,6 +1,9 @@
 import nodemailer from "nodemailer";
 
-const ADMIN_EMAIL = "ziarresamot@gmail.com";
+const ADMIN_EMAILS = [
+  "ziarresamot@gmail.com",
+  "depeluqueriaproductos@gmail.com",
+];
 const FROM_EMAIL  = process.env.EMAIL_FROM ?? "pedidos@esenciadebelleza.es";
 
 function createTransport() {
@@ -91,7 +94,7 @@ export async function enviarNotificacionPedido(p: PedidoNotificacion) {
     const transporter = createTransport();
     await transporter.sendMail({
       from:    `"Esencia de Belleza" <${FROM_EMAIL}>`,
-      to:      ADMIN_EMAIL,
+      to:      ADMIN_EMAILS,
       subject: `🛍️ Nuevo pedido — ${p.nombre} ${p.apellidos} · ${p.total.toFixed(2)} €`,
       html,
     });
@@ -216,7 +219,7 @@ export async function enviarNotificacionNuevoProfesional(p: {
     const transporter = createTransport();
     await transporter.sendMail({
       from:    `"Esencia de Belleza" <${FROM_EMAIL}>`,
-      to:      ADMIN_EMAIL,
+      to:      ADMIN_EMAILS,
       subject: `👩‍🎨 Nuevo profesional pendiente — ${p.nombre}${p.empresa ? ` (${p.empresa})` : ""}`,
       html,
     });
