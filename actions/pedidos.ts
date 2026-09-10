@@ -180,11 +180,12 @@ export async function lanzarPedidoWoo(
       total:        pedido.gastos_envio.toFixed(2),
     }] : [],
     meta_data: [
-      { key: "_origen",             value: "esenciadebelleza.es" },
-      { key: "_eb_pedido_id",       value: pedido.id },
-      { key: "_eb_referencia_pago", value: refPago },
-      { key: "_eb_metodo_pago",     value: pedido.metodo_pago ?? "" },
-      { key: "_eb_total_cliente",   value: pedido.total.toFixed(2) },
+      { key: "_origen",               value: "esenciadebelleza.es" },
+      { key: "_eb_pedido_id",         value: pedido.id },
+      { key: "_eb_referencia_pago",   value: refPago },
+      { key: "_eb_metodo_pago",       value: pedido.metodo_pago ?? "" },
+      { key: "_eb_total_cliente",     value: pedido.total.toFixed(2) },
+      { key: "_new_order_email_sent", value: "true" }, // evitar email vacío de WooCommerce
     ],
   };
 
