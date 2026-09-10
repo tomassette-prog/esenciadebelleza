@@ -161,7 +161,7 @@ export default function DetallePedidoClient({ pedido }: { pedido: Pedido }) {
           <div>
             <p className="font-bold text-orange-900 text-lg">PEDIDO PENDIENTE DE PAGO POR BIZUM</p>
             <p className="text-orange-700 text-sm">
-              El cliente debe enviar <strong>{pedido.total.toFixed(2)} €</strong> por Bizum al <strong>622 004 408</strong>. Cambia el estado a "Pagado" cuando confirmes el cobro.
+              El cliente debe enviar <strong>{pedido.total.toFixed(2)} €</strong> por Bizum al <strong>622 004 408</strong>. Cambia el estado a &quot;Pagado&quot; cuando confirmes el cobro.
             </p>
           </div>
         </div>
