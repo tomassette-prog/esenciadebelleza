@@ -7,7 +7,6 @@ import { stripe } from "@/lib/stripe";
 import type { LineaCarrito, LineaPack } from "@/context/CarritoContext";
 
 import { calcularGastoEnvio, getSuplementoContrareembolso } from "@/lib/envio";
-import { enviarNotificacionPedido, enviarConfirmacionCliente } from "@/lib/email";
 import { registrarUsoCupon } from "@/actions/cupones";
 
 // ── Convertir packs a líneas de pedido (explota cada pack en sus componentes) ─
@@ -235,28 +234,6 @@ export async function confirmarPedidoCeca(
   const dir = pedido.direccion_envio as Record<string, string>;
 
   // Enviar notificación al admin y confirmación al cliente
-  const emailPayload = {
-    pedidoId:   pedido.id,
-    email:      pedido.email_cliente,
-    nombre:     dir.nombre    ?? "",
-    apellidos:  dir.apellidos ?? "",
-    total:      pedido.total  ?? 0,
-    gastoEnvio: pedido.gastos_envio ?? 0,
-    descuento:  pedido.descuento_cupon ?? 0,
-    metodoPago: "Cecabank",
-    tipoPrecio: pedido.tipo_precio ?? "b2c",
-    provincia:  dir.provincia ?? "",
-    ciudad:     dir.ciudad    ?? "",
-    lineas: (lineas ?? []).map((l) => ({
-      nombre:           l.nombre_producto ?? l.sku,
-      nombre_variacion: l.nombre_variacion,
-      cantidad:         l.cantidad,
-      precio:           l.precio_unitario,
-    })),
-  };
-  await enviarNotificacionPedido(emailPayload);
-  await enviarConfirmacionCliente(emailPayload);
-
   // Registrar uso de cupón si aplica
   if (pedido.cupon_id && pedido.descuento_cupon > 0) {
     await registrarUsoCupon(pedido.cupon_id, pedido.id, pedido.usuario_id, pedido.descuento_cupon);
@@ -733,28 +710,6 @@ export async function confirmarPedidoStripe(
   const dir = pedido.direccion_envio as Record<string, string>;
 
   // Enviar notificación al admin y confirmación al cliente
-  const emailPayloadStripe = {
-    pedidoId:   pedido.id,
-    email:      pedido.email_cliente,
-    nombre:     dir.nombre    ?? "",
-    apellidos:  dir.apellidos ?? "",
-    total:      pedido.total,
-    gastoEnvio: pedido.gastos_envio,
-    descuento:  pedido.descuento_cupon ?? 0,
-    metodoPago: "Stripe",
-    tipoPrecio: pedido.tipo_precio,
-    provincia:  dir.provincia ?? "",
-    ciudad:     dir.ciudad    ?? "",
-    lineas: (lineas ?? []).map((l) => ({
-      nombre:           l.nombre_producto,
-      nombre_variacion: l.nombre_variacion,
-      cantidad:         l.cantidad,
-      precio:           l.precio_unitario,
-    })),
-  };
-  await enviarNotificacionPedido(emailPayloadStripe);
-  await enviarConfirmacionCliente(emailPayloadStripe);
-
   // Registrar uso de cupón si aplica
   if (pedido.cupon_id && pedido.descuento_cupon > 0) {
     await registrarUsoCupon(pedido.cupon_id, pedido.id, pedido.usuario_id, pedido.descuento_cupon);
@@ -854,20 +809,6 @@ export async function crearPedidoContrarembolso(
   //    Esto sigue el mismo flujo que Stripe/Cecabank: pedido en Supabase → admin revisa → envía a depeluqueria
 
   // 4. Email al admin y confirmación al cliente
-  const emailCR = {
-    pedidoId: pedido.id, email: datosEnvio.email,
-    nombre: datosEnvio.nombre, apellidos: datosEnvio.apellidos,
-    total: totalFinal, gastoEnvio, descuento: descuentoCupon,
-    metodoPago: "Contra reembolso",
-    tipoPrecio, provincia: datosEnvio.provincia, ciudad: datosEnvio.ciudad,
-    lineas: lineas.map((l) => ({
-      nombre: l.nombre, nombre_variacion: l.nombre_variacion,
-      cantidad: l.cantidad, precio: l.precio,
-    })),
-  };
-  await enviarNotificacionPedido(emailCR);
-  await enviarConfirmacionCliente(emailCR);
-
   // Registrar uso de cupón si aplica
   if (datosEnvio.cupon?.id && descuentoCupon > 0) {
     await registrarUsoCupon(datosEnvio.cupon.id, pedido.id, user?.id ?? null, descuentoCupon);
@@ -962,20 +903,6 @@ export async function crearPedidoBizum(
   }
 
   // 3. Email al admin y confirmación al cliente
-  const emailBizum = {
-    pedidoId: pedido.id, email: datosEnvio.email,
-    nombre: datosEnvio.nombre, apellidos: datosEnvio.apellidos,
-    total: totalFinal, gastoEnvio, descuento: descuentoCupon,
-    metodoPago: "Bizum (622 004 408)",
-    tipoPrecio, provincia: datosEnvio.provincia, ciudad: datosEnvio.ciudad,
-    lineas: lineas.map((l) => ({
-      nombre: l.nombre, nombre_variacion: l.nombre_variacion,
-      cantidad: l.cantidad, precio: l.precio,
-    })),
-  };
-  await enviarNotificacionPedido(emailBizum);
-  await enviarConfirmacionCliente(emailBizum);
-
   // Registrar uso de cupón si aplica
   if (datosEnvio.cupon?.id && descuentoCupon > 0) {
     await registrarUsoCupon(datosEnvio.cupon.id, pedido.id, user?.id ?? null, descuentoCupon);

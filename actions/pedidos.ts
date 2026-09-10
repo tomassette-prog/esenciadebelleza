@@ -2,6 +2,7 @@
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { revalidatePath } from "next/cache";
+import { enviarNotificacionPedido, enviarConfirmacionCliente } from "@/lib/email";
 
 // ── Listar pedidos con métricas ──────────────────────────────────────────────
 export async function listarPedidos(pagina = 1, porPagina = 20) {
@@ -215,6 +216,34 @@ export async function lanzarPedidoWoo(
       woo_estado:     "enviado",
       woo_enviado_at: new Date().toISOString(),
     }).eq("id", id);
+
+    // Enviar email con el número de WooCommerce
+    const lineasEmail = (pedido.pedidos_lineas as Array<{
+      nombre_producto: string; nombre_variacion?: string;
+      cantidad: number; precio_unitario: number;
+    }>).map((l) => ({
+      nombre: l.nombre_producto,
+      nombre_variacion: l.nombre_variacion,
+      cantidad: l.cantidad,
+      precio: l.precio_unitario,
+    }));
+
+    const emailWoo = {
+      pedidoId:   `WB-${woo.id}`,
+      email:      pedido.email_cliente,
+      nombre:     dir.nombre    ?? "",
+      apellidos:  dir.apellidos ?? "",
+      total:      pedido.total  ?? 0,
+      gastoEnvio: pedido.gastos_envio ?? 0,
+      descuento:  pedido.descuento_cupon ?? 0,
+      metodoPago: `Pedido WooCommerce #${woo.id}`,
+      tipoPrecio: pedido.tipo_precio ?? "b2c",
+      provincia:  dir.provincia ?? "",
+      ciudad:     dir.ciudad    ?? "",
+      lineas:     lineasEmail,
+    };
+    await enviarNotificacionPedido(emailWoo);
+    await enviarConfirmacionCliente(emailWoo);
 
     revalidatePath("/admin/pedidos");
     revalidatePath(`/admin/pedidos/${id}`);
