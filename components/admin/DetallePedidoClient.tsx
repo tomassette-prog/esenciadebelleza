@@ -5,7 +5,7 @@ import { actualizarComision, actualizarEstadoPedido, lanzarPedidoWoo } from "@/a
 import { useRouter } from "next/navigation";
 
 const ESTADOS = [
-  "pendiente", "pagado", "preparando", "enviado", "entregado", "cancelado", "reembolsado",
+  "pendiente", "pendiente_bizum", "pagado", "preparando", "enviado", "entregado", "cancelado", "reembolsado",
 ];
 
 interface Linea {
@@ -151,6 +151,19 @@ export default function DetallePedidoClient({ pedido }: { pedido: Pedido }) {
       {msg && (
         <div className={`rounded-lg px-4 py-3 text-sm font-medium ${msg.type === "ok" ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"}`}>
           {msg.text}
+        </div>
+      )}
+
+      {/* Banner Bizum */}
+      {pedido.metodo_pago === "bizum" && pedido.estado === "pendiente_bizum" && (
+        <div className="bg-orange-50 border-2 border-orange-400 rounded-xl p-4 flex items-center gap-3">
+          <span className="text-2xl">📱</span>
+          <div>
+            <p className="font-bold text-orange-900 text-lg">PEDIDO PENDIENTE DE PAGO POR BIZUM</p>
+            <p className="text-orange-700 text-sm">
+              El cliente debe enviar <strong>{pedido.total.toFixed(2)} €</strong> por Bizum al <strong>622 004 408</strong>. Cambia el estado a "Pagado" cuando confirmes el cobro.
+            </p>
+          </div>
         </div>
       )}
 

@@ -3,8 +3,9 @@ import Link from "next/link";
 import { PedidosTable } from "./pedidos-table";
 
 const ESTADOS: Record<string, { label: string; color: string }> = {
-  pendiente:    { label: "Pendiente",    color: "bg-yellow-100 text-yellow-800" },
-  pagado:       { label: "Pagado",       color: "bg-green-100 text-green-800" },
+  pendiente:       { label: "Pendiente",       color: "bg-yellow-100 text-yellow-800" },
+  pendiente_bizum: { label: "Pendiente Bizum", color: "bg-orange-100 text-orange-800" },
+  pagado:          { label: "Pagado",          color: "bg-green-100 text-green-800" },
   preparando:   { label: "Preparando",   color: "bg-blue-100 text-blue-800" },
   enviado:      { label: "Enviado",      color: "bg-indigo-100 text-indigo-800" },
   entregado:    { label: "Entregado",    color: "bg-gray-100 text-gray-800" },

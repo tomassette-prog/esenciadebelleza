@@ -8,6 +8,7 @@ import type { LineaCarrito, LineaPack } from "@/context/CarritoContext";
 
 import { calcularGastoEnvio, getSuplementoContrareembolso } from "@/lib/envio";
 import { registrarUsoCupon } from "@/actions/cupones";
+import { enviarNotificacionPedido, enviarPendienteBizum } from "@/lib/email";
 
 // ── Convertir packs a líneas de pedido (explota cada pack en sus componentes) ─
 function explotarPacks(packs: LineaPack[]): {
@@ -902,11 +903,35 @@ export async function crearPedidoBizum(
     });
   }
 
-  // 3. Email al admin y confirmación al cliente
-  // Registrar uso de cupón si aplica
+  // 3. Emails — admin + cliente (aviso pendiente Bizum)
   if (datosEnvio.cupon?.id && descuentoCupon > 0) {
     await registrarUsoCupon(datosEnvio.cupon.id, pedido.id, user?.id ?? null, descuentoCupon);
   }
+
+  const lineasEmail = [
+    ...lineas.map((l) => ({
+      nombre: l.nombre, nombre_variacion: l.nombre_variacion,
+      cantidad: l.cantidad, precio: l.precio,
+    })),
+    ...lineasPedido.map((lp) => ({
+      nombre: lp.nombre, nombre_variacion: lp.nombre_variacion,
+      cantidad: lp.cantidad, precio: lp.precio_unitario,
+    })),
+  ];
+
+  const emailData = {
+    pedidoId: pedido.id, email: datosEnvio.email,
+    nombre: datosEnvio.nombre, apellidos: datosEnvio.apellidos,
+    total: totalFinal, gastoEnvio, descuento: descuentoCupon || undefined,
+    codigoCupon: datosEnvio.cupon?.codigo, metodoPago: "bizum",
+    tipoPrecio: tipoPrecio, provincia: datosEnvio.provincia,
+    ciudad: datosEnvio.ciudad, lineas: lineasEmail,
+  };
+
+  await Promise.all([
+    enviarNotificacionPedido(emailData),
+    enviarPendienteBizum(emailData),
+  ]);
 
   return { ok: true, pedidoId: pedido.id };
 }

@@ -62,6 +62,62 @@ export async function actualizarComision(
 // ── Actualizar estado del pedido ──────────────────────────────────────────────
 export async function actualizarEstadoPedido(id: string, estado: string) {
   const supabase = createAdminClient();
+
+  // Si cambia a "pagado" y era Bizum, enviar email de confirmación al cliente
+  if (estado === "pagado") {
+    const { data: pedidoActual } = await supabase
+      .from("pedidos")
+      .select("id, estado, metodo_pago, email_cliente, total, subtotal, gastos_envio, descuento_cupon, tipo_precio, direccion_envio, cupon_id")
+      .eq("id", id)
+      .single();
+
+    if (pedidoActual && pedidoActual.estado === "pendiente_bizum" && pedidoActual.metodo_pago === "bizum") {
+      const { data: lineas } = await supabase
+        .from("pedidos_lineas")
+        .select("nombre_producto, nombre_variacion, cantidad, precio_unitario")
+        .eq("pedido_id", id);
+
+      const dir = (pedidoActual.direccion_envio ?? {}) as Record<string, string>;
+
+      // Buscar código de cupón si existe
+      let codigoCupon: string | undefined;
+      if (pedidoActual.cupon_id) {
+        const { data: cupon } = await supabase
+          .from("cupones")
+          .select("codigo")
+          .eq("id", pedidoActual.cupon_id)
+          .single();
+        if (cupon) codigoCupon = cupon.codigo;
+      }
+
+      const emailData = {
+        pedidoId:   pedidoActual.id,
+        email:      pedidoActual.email_cliente,
+        nombre:     dir.nombre ?? "",
+        apellidos:  dir.apellidos ?? "",
+        total:      pedidoActual.total,
+        gastoEnvio: pedidoActual.gastos_envio,
+        descuento:  pedidoActual.descuento_cupon || undefined,
+        codigoCupon,
+        metodoPago: "bizum",
+        tipoPrecio: pedidoActual.tipo_precio ?? "b2c",
+        provincia:  dir.provincia ?? "",
+        ciudad:     dir.ciudad ?? "",
+        lineas:     (lineas ?? []).map((l) => ({
+          nombre: l.nombre_producto,
+          nombre_variacion: l.nombre_variacion ?? undefined,
+          cantidad: l.cantidad,
+          precio: l.precio_unitario,
+        })),
+      };
+
+      // Enviar confirmación al cliente (no await para no bloquear)
+      enviarConfirmacionCliente(emailData).catch((err) =>
+        console.error("[pedidos] Error enviando confirmación Bizum al cliente:", err)
+      );
+    }
+  }
+
   const { error } = await supabase
     .from("pedidos")
     .update({ estado })

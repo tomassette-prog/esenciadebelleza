@@ -35,6 +35,7 @@ export function ProductosNuevosClient({ initialProductos, clearedAt, initialErro
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState<{ nombre?: string; categoria?: string; subcategoria?: string }>({});
+  const [editSubcats, setEditSubcats] = useState<string[]>([]);
   const [marcas, setMarcas] = useState<Array<{ id: string; nombre: string }>>([]);
   const [showBulkMarca, setShowBulkMarca] = useState(false);
   const [showBulkCategoria, setShowBulkCategoria] = useState(false);
@@ -176,6 +177,7 @@ export function ProductosNuevosClient({ initialProductos, clearedAt, initialErro
   function startEditing(p: ProductoNuevo) {
     setEditingId(p.id);
     setEditDraft({ nombre: p.nombre, categoria: p.categoria, subcategoria: p.subcategoria ?? "" });
+    setEditSubcats(allPairs.filter(pair => pair.categoria === p.categoria).map(pair => pair.subcategoria));
   }
 
   function cancelEditing() { setEditingId(null); setEditDraft({}); }
@@ -302,8 +304,8 @@ export function ProductosNuevosClient({ initialProductos, clearedAt, initialErro
                   <td className="p-3"><input type="checkbox" checked={selected.has(p.id)} onChange={() => toggleSelect(p.id)} className="cursor-pointer accent-[#3D2018]" /></td>
                   <td className="p-3">{p.imagen_principal_url ? <img src={p.imagen_principal_url} alt="" className="w-10 h-10 object-cover rounded" /> : <div className="w-10 h-10 bg-neutral-100 rounded flex items-center justify-center text-neutral-300 text-xs">—</div>}</td>
                   <td className="p-3">{editingId === p.id ? <input value={editDraft.nombre ?? ""} onChange={e => setEditDraft(d => ({ ...d, nombre: e.target.value }))} className="w-full border border-neutral-300 px-2 py-1 text-sm" /> : <Link href={`/admin/productos/${p.id}`} className="text-neutral-900 hover:underline font-medium">{p.nombre}</Link>}</td>
-                  <td className="p-3">{editingId === p.id ? <input value={editDraft.categoria ?? ""} onChange={e => setEditDraft(d => ({ ...d, categoria: e.target.value }))} className="w-full border border-neutral-300 px-2 py-1 text-sm" /> : <span className={p.categoria === "otros" ? "text-red-500" : "text-neutral-600"}>{p.categoria}</span>}</td>
-                  <td className="p-3">{editingId === p.id ? <input value={editDraft.subcategoria ?? ""} onChange={e => setEditDraft(d => ({ ...d, subcategoria: e.target.value }))} className="w-full border border-neutral-300 px-2 py-1 text-sm" /> : <span className={p.subcategoria === "general" ? "text-red-500" : "text-neutral-600"}>{p.subcategoria || "—"}</span>}</td>
+                  <td className="p-3">{editingId === p.id ? <select value={editDraft.categoria ?? ""} onChange={e => { const cat = e.target.value; setEditDraft(d => ({ ...d, categoria: cat, subcategoria: "" })); setEditSubcats(allPairs.filter(pair => pair.categoria === cat).map(pair => pair.subcategoria)); }} className="w-full border border-neutral-300 px-2 py-1 text-sm bg-white"><option value="">Seleccionar…</option>{categorias.map(c => <option key={c} value={c}>{c}</option>)}</select> : <span className={p.categoria === "otros" ? "text-red-500" : "text-neutral-600"}>{p.categoria}</span>}</td>
+                  <td className="p-3">{editingId === p.id ? <select value={editDraft.subcategoria ?? ""} onChange={e => setEditDraft(d => ({ ...d, subcategoria: e.target.value }))} className="w-full border border-neutral-300 px-2 py-1 text-sm bg-white"><option value="">Seleccionar…</option>{editSubcats.map(s => <option key={s} value={s}>{s}</option>)}</select> : <span className={p.subcategoria === "general" ? "text-red-500" : "text-neutral-600"}>{p.subcategoria || "—"}</span>}</td>
                   <td className="p-3"><span className={p.marca_nombre ? "text-neutral-600" : "text-neutral-300"}>{p.marca_nombre || "—"}</span></td>
                   <td className="p-3 text-right">{p.precio_b2c != null && p.precio_b2c > 0 ? <span>{p.precio_b2c.toFixed(2)}€</span> : <span className="text-red-400">—</span>}</td>
                   <td className="p-3 text-center"><button onClick={() => toggleActivo(p.id, p.activo)} disabled={isPending} className={`inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full ${p.activo ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}><span className={`w-1.5 h-1.5 rounded-full ${p.activo ? "bg-green-500" : "bg-red-500"}`} />{p.activo ? "Activo" : "Inactivo"}</button></td>

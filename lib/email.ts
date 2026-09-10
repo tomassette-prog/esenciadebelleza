@@ -103,6 +103,78 @@ export async function enviarNotificacionPedido(p: PedidoNotificacion) {
   }
 }
 
+// ── Aviso de pedido pendiente de pago por Bizum ──────────────────────────────
+export async function enviarPendienteBizum(p: PedidoNotificacion) {
+  if (!process.env.EMAIL_PASS) return;
+
+  const lineasHtml = p.lineas
+    .map(
+      (l) =>
+        `<tr>
+          <td style="padding:6px 10px;border-bottom:1px solid #f0e8e6">${l.nombre}${l.nombre_variacion ? ` — ${l.nombre_variacion}` : ""}</td>
+          <td style="padding:6px 10px;border-bottom:1px solid #f0e8e6;text-align:center">${l.cantidad}</td>
+          <td style="padding:6px 10px;border-bottom:1px solid #f0e8e6;text-align:right">${(l.precio * l.cantidad).toFixed(2)} €</td>
+        </tr>`
+    )
+    .join("");
+
+  const html = `
+<!DOCTYPE html>
+<html lang="es">
+<head><meta charset="UTF-8"><title>Pedido pendiente de pago</title></head>
+<body style="font-family:sans-serif;color:#3D2018;background:#fff;margin:0;padding:0">
+  <div style="max-width:600px;margin:30px auto;border:1px solid #f0e8e6;border-radius:8px;overflow:hidden">
+    <div style="background:#C4857A;padding:20px 30px">
+      <h1 style="color:#fff;margin:0;font-size:20px">⏳ Tu pedido está pendiente de pago</h1>
+    </div>
+    <div style="padding:24px 30px">
+      <p style="margin:0 0 16px">Hola <strong>${p.nombre}</strong>, hemos recibido tu pedido correctamente. Para completarlo, solo falta que realices el pago por <strong>Bizum</strong>.</p>
+      <p style="margin:0 0 16px"><strong>Número de pedido:</strong> #${p.pedidoId.slice(0, 8).toUpperCase()}</p>
+
+      <div style="background:#fdf5f4;border:2px solid #C4857A;border-radius:8px;padding:20px;margin:0 0 20px;text-align:center">
+        <p style="margin:0 0 8px;font-size:15px;color:#3D2018"><strong>📱 Instrucciones de pago por Bizum</strong></p>
+        <p style="margin:0 0 6px;font-size:14px">Envía <strong style="font-size:18px">${p.total.toFixed(2)} €</strong> por Bizum al:</p>
+        <p style="margin:0 0 10px;font-size:22px;font-weight:bold;color:#C4857A">622 004 408</p>
+        <p style="margin:0;font-size:13px;color:#888">En el <strong>concepto</strong> indica tu número de pedido: <strong>#${p.pedidoId.slice(0, 8).toUpperCase()}</strong></p>
+      </div>
+
+      <table style="width:100%;border-collapse:collapse;margin-bottom:16px">
+        <thead>
+          <tr style="background:#fdf5f4">
+            <th style="padding:8px 10px;text-align:left;border-bottom:2px solid #C4857A">Producto</th>
+            <th style="padding:8px 10px;text-align:center;border-bottom:2px solid #C4857A">Uds.</th>
+            <th style="padding:8px 10px;text-align:right;border-bottom:2px solid #C4857A">Subtotal</th>
+          </tr>
+        </thead>
+        <tbody>${lineasHtml}</tbody>
+      </table>
+
+      <p style="text-align:right;margin:4px 0"><strong>Envío:</strong> ${p.gastoEnvio > 0 ? `${p.gastoEnvio.toFixed(2)} €` : "Gratuito"}</p>
+      ${(p.descuento ?? 0) > 0 ? `<p style="text-align:right;margin:4px 0;color:#16a34a"><strong>Descuento${p.codigoCupon ? ` (${p.codigoCupon})` : ""}:</strong> −${p.descuento!.toFixed(2)} €</p>` : ""}
+      <p style="text-align:right;margin:4px 0;font-size:18px"><strong>Total:</strong> ${p.total.toFixed(2)} €</p>
+
+      <div style="margin-top:24px;padding:16px 20px;background:#fdf5f4;border-radius:6px;text-align:center">
+        <p style="margin:0;font-size:13px;color:#888">Una vez confirmemos tu pago, recibirás un email de confirmación y prepararemos tu envío.</p>
+      </div>
+      <p style="margin-top:20px;font-size:13px;color:#888;text-align:center">Para cualquier consulta escríbenos a <a href="mailto:${FROM_EMAIL}" style="color:#C4857A">${FROM_EMAIL}</a> o llámanos al <strong>622 004 408</strong>.</p>
+    </div>
+  </div>
+</body>
+</html>`;
+
+  try {
+    const transporter = createTransport();
+    await transporter.sendMail({
+      from:    `"Esencia de Belleza" <${FROM_EMAIL}>`,
+      to:      p.email,
+      subject: `⏳ Pedido #${p.pedidoId.slice(0, 8).toUpperCase()} pendiente de pago por Bizum — Esencia de Belleza`,
+      html,
+    });
+  } catch (err) {
+    console.error("[Email] Error enviando aviso pendiente Bizum:", err);
+  }
+}
+
 export async function enviarConfirmacionCliente(p: PedidoNotificacion) {
   if (!process.env.EMAIL_PASS) return;
 
