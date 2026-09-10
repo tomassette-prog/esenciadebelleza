@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import Link from "next/link";
-import { eliminarPedidosPendientes } from "@/actions/pedidos";
+import { eliminarPedidos } from "@/actions/pedidos";
 
 interface Pedido {
   id: string;
@@ -37,7 +37,7 @@ export function PedidosTable({
   const [isPending, startTransition] = useTransition();
   const [mensaje, setMensaje] = useState<string | null>(null);
 
-  const pendientes = pedidos.filter((p) => p.estado === "pendiente");
+  const pendientes = pedidos.filter((p) => p.estado === "pendiente" || p.estado === "cancelado");
   const todosLosPendientesSeleccionados =
     pendientes.length > 0 && pendientes.every((p) => seleccionados.has(p.id));
 
@@ -61,18 +61,18 @@ export function PedidosTable({
   function eliminarSeleccionados() {
     const ids = Array.from(seleccionados).filter((id) => {
       const p = pedidos.find((ped) => ped.id === id);
-      return p?.estado === "pendiente";
+      return p?.estado === "pendiente" || p?.estado === "cancelado";
     });
 
     if (ids.length === 0) return;
 
     const confirmar = window.confirm(
-      `¿Eliminar ${ids.length} pedido${ids.length > 1 ? "s" : ""} pendiente${ids.length > 1 ? "s" : ""}? Esta acción no se puede deshacer.`
+      `¿Eliminar ${ids.length} pedido${ids.length > 1 ? "s" : ""}? Esta acción no se puede deshacer.`
     );
     if (!confirmar) return;
 
     startTransition(async () => {
-      const result = await eliminarPedidosPendientes(ids);
+      const result = await eliminarPedidos(ids);
       if (result.error) {
         setMensaje(`❌ Error: ${result.error}`);
       } else {
@@ -85,7 +85,7 @@ export function PedidosTable({
 
   const seleccionadosPendientes = Array.from(seleccionados).filter((id) => {
     const p = pedidos.find((ped) => ped.id === id);
-    return p?.estado === "pendiente";
+    return p?.estado === "pendiente" || p?.estado === "cancelado";
   }).length;
 
   return (
@@ -97,7 +97,7 @@ export function PedidosTable({
             <strong>{seleccionados.size}</strong> pedido{seleccionados.size > 1 ? "s" : ""} seleccionado{seleccionados.size > 1 ? "s" : ""}
             {seleccionadosPendientes < seleccionados.size && (
               <span className="text-rose-500 ml-2">
-                ({seleccionados.size - seleccionadosPendientes} no pendientes — solo se pueden eliminar pendientes)
+                ({seleccionados.size - seleccionadosPendientes} no eliminables — solo pendientes y cancelados)
               </span>
             )}
           </div>
@@ -114,7 +114,7 @@ export function PedidosTable({
                 disabled={isPending}
                 className="px-4 py-1.5 text-sm text-white bg-red-600 hover:bg-red-700 disabled:opacity-50 rounded-lg font-medium"
               >
-                {isPending ? "Eliminando…" : `Eliminar ${seleccionadosPendientes} pendiente${seleccionadosPendientes > 1 ? "s" : ""}`}
+                {isPending ? "Eliminando…" : `Eliminar ${seleccionadosPendientes} seleccionado${seleccionadosPendientes > 1 ? "s" : ""}`}
               </button>
             )}
           </div>
@@ -139,7 +139,7 @@ export function PedidosTable({
                   checked={todosLosPendientesSeleccionados}
                   onChange={seleccionarTodosPendientes}
                   disabled={pendientes.length === 0}
-                  title="Seleccionar todos los pendientes"
+                  title="Seleccionar todos los pendientes y cancelados"
                   className="rounded border-gray-300"
                 />
               </th>
@@ -165,7 +165,7 @@ export function PedidosTable({
               const e = estados[p.estado] ?? estados.pendiente;
               const w = wooEstados[p.woo_estado ?? "pendiente"] ?? wooEstados.pendiente;
               const dir = p.direccion_envio ?? {};
-              const isPendiente = p.estado === "pendiente";
+              const isPendiente = p.estado === "pendiente" || p.estado === "cancelado";
               return (
                 <tr
                   key={p.id}
@@ -177,7 +177,7 @@ export function PedidosTable({
                       checked={seleccionados.has(p.id)}
                       onChange={() => toggleSeleccion(p.id)}
                       disabled={!isPendiente}
-                      title={isPendiente ? "Seleccionar" : "Solo pedidos pendientes"}
+                      title={isPendiente ? "Seleccionar" : "Solo pedidos pendientes o cancelados"}
                       className="rounded border-gray-300 disabled:opacity-30"
                     />
                   </td>

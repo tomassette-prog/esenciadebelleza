@@ -312,24 +312,27 @@ export async function lanzarPedidoWoo(
   }
 }
 
-// ── Eliminar pedidos pendientes (sin pago) ───────────────────────────────────
-export async function eliminarPedidosPendientes(ids: string[]) {
+// ── Eliminar pedidos pendientes o cancelados ─────────────────────────────────
+export async function eliminarPedidos(ids: string[]) {
   if (!ids.length) return { eliminados: 0, error: null };
 
   const supabase = createAdminClient();
 
-  // Solo eliminar pedidos que sigan en estado pendiente
+  // Solo eliminar pedidos pendientes o cancelados (no tocar pagados/en preparación/etc.)
   const { data, error } = await supabase
     .from("pedidos")
     .delete()
     .in("id", ids)
-    .eq("estado", "pendiente")
+    .in("estado", ["pendiente", "cancelado"])
     .select("id");
 
   if (error) return { eliminados: 0, error: error.message };
   revalidatePath("/admin/pedidos");
   return { eliminados: data?.length ?? 0, error: null };
 }
+
+// Backward-compatible alias (deprecated)
+export const eliminarPedidosPendientes = eliminarPedidos;
 
 // ── Métricas globales de comisiones ──────────────────────────────────────────
 export async function obtenerMetricas() {
