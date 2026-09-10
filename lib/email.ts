@@ -124,7 +124,7 @@ export async function enviarConfirmacionCliente(p: PedidoNotificacion) {
       <h1 style="color:#fff;margin:0;font-size:20px">✅ Tu pedido está confirmado</h1>
     </div>
     <div style="padding:24px 30px">
-      <p style="margin:0 0 16px">Hola <strong>${p.nombre}</strong>, gracias por tu compra en <strong>Esencia de Belleza</strong>.</p>
+      <p style="margin:0 0 16px">Hola <strong>${p.nombre}</strong>, gracias por confiar en <strong>Esencia de Belleza</strong>. Tu pedido ya está confirmado y lo estamos preparando con mucho cuidado.</p>
       <p style="margin:0 0 16px"><strong>Número de pedido:</strong> #${p.pedidoId.slice(0, 8).toUpperCase()}</p>
 
       <table style="width:100%;border-collapse:collapse;margin-bottom:16px">
@@ -142,8 +142,11 @@ export async function enviarConfirmacionCliente(p: PedidoNotificacion) {
       ${(p.descuento ?? 0) > 0 ? `<p style="text-align:right;margin:4px 0;color:#16a34a"><strong>Descuento${p.codigoCupon ? ` (${p.codigoCupon})` : ""}:</strong> −${p.descuento!.toFixed(2)} €</p>` : ""}
       <p style="text-align:right;margin:4px 0;font-size:18px"><strong>Total:</strong> ${p.total.toFixed(2)} €</p>
 
-      <p style="margin-top:24px;font-size:13px;color:#888">Recibirás un email con el número de seguimiento cuando tu pedido sea enviado. Plazo estimado: 24–48 h laborables.</p>
-      <p style="font-size:13px;color:#888">Para cualquier consulta escríbenos a <a href="mailto:${FROM_EMAIL}" style="color:#C4857A">${FROM_EMAIL}</a>.</p>
+      <div style="margin-top:24px;padding:16px 20px;background:#fdf5f4;border-radius:6px;text-align:center">
+        <p style="margin:0 0 8px;font-size:15px;color:#3D2018"><strong>📦 Tu pedido llegará en 24–48 h laborables</strong></p>
+        <p style="margin:0;font-size:13px;color:#888">Te enviaremos un email con el número de seguimiento cuando salga de nuestro almacén.</p>
+      </div>
+      <p style="margin-top:20px;font-size:13px;color:#888;text-align:center">Para cualquier consulta escríbenos a <a href="mailto:${FROM_EMAIL}" style="color:#C4857A">${FROM_EMAIL}</a> o llámanos al <strong>622 004 408</strong>.</p>
     </div>
   </div>
 </body>
@@ -154,7 +157,7 @@ export async function enviarConfirmacionCliente(p: PedidoNotificacion) {
     await transporter.sendMail({
       from:    `"Esencia de Belleza" <${FROM_EMAIL}>`,
       to:      p.email,
-      subject: `✅ Pedido confirmado #${p.pedidoId.slice(0, 8).toUpperCase()} — Esencia de Belleza`,
+      subject: `✅ ¡Gracias por tu pedido! #${p.pedidoId.slice(0, 8).toUpperCase()} — Esencia de Belleza`,
       html,
     });
   } catch (err) {

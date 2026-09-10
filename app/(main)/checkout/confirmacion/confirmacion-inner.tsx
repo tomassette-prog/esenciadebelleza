@@ -40,7 +40,13 @@ export default function ConfirmacionInner() {
       setEstado("exito");
       return;
     }
-
+    // ── Flujo Bizum ─────────────────────────────────────────────────────────
+    if (metodo === "bizum" && pedidoId) {
+      vaciar();
+      setOrderData({ orderId: pedidoId, email: "" });
+      setEstado("exito");
+      return;
+    }
     // ── Flujo Stripe ────────────────────────────────────────────────────────
     if (sessionId) {
       confirmarPedidoStripe(sessionId).then(({ ok, email, pedidoId }) => {

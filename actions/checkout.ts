@@ -875,3 +875,111 @@ export async function crearPedidoContrarembolso(
 
   return { ok: true, pedidoId: pedido.id };
 }
+
+// ── Crear pedido por Bizum ────────────────────────────────────────────────────
+export async function crearPedidoBizum(
+  lineas: LineaCarrito[],
+  packs: LineaPack[],
+  datosEnvio: {
+    email: string; nombre: string; apellidos: string; telefono: string;
+    direccion: string; ciudad: string; provincia: string; codigo_postal: string;
+    notas?: string;
+    facturacion?: {
+      empresa: string; nif_cif: string; direccion: string;
+      ciudad: string; provincia: string; codigo_postal: string;
+    } | null;
+    cupon?: { id: string; codigo: string; descuento: number } | null;
+  }
+): Promise<{ ok: boolean; pedidoId?: string; error?: string }> {
+  if (!lineas.length && !packs.length) return { ok: false, error: "El carrito está vacío" };
+
+  const supabase   = createAdminClient();
+  const authClient = await createClient();
+  const { data: { user } } = await authClient.auth.getUser();
+
+  let tipoPrecio: "b2c" | "b2b" = "b2c";
+  if (user) {
+    const { data: perfil } = await authClient
+      .from("perfiles_usuario")
+      .select("b2b_aprobado, tipo_cliente")
+      .eq("id", user.id)
+      .single();
+    if (perfil?.tipo_cliente === "b2b" && perfil?.b2b_aprobado === true) tipoPrecio = "b2b";
+  }
+
+  const totalProductos = lineas.reduce((acc, l) => acc + l.precio * l.cantidad, 0)
+                       + packs.reduce((acc, p) => acc + p.precio * p.cantidad, 0);
+  const gastoEnvio = calcularGastoEnvio(totalProductos, datosEnvio.provincia, datosEnvio.ciudad);
+
+  if (gastoEnvio === -1) return { ok: false, error: "No realizamos envíos a esa provincia." };
+
+  const descuentoCupon = datosEnvio.cupon?.descuento ?? 0;
+  const totalFinal = totalProductos - descuentoCupon + gastoEnvio;
+
+  // 1. Guardar pedido en Supabase
+  const { data: pedido, error: errPedido } = await supabase
+    .from("pedidos")
+    .insert({
+      usuario_id:       user?.id ?? null,
+      estado:           "pendiente_bizum",
+      subtotal:         totalProductos,
+      descuento:        descuentoCupon,
+      gastos_envio:     gastoEnvio,
+      total:            totalFinal,
+      tipo_precio:      tipoPrecio,
+      metodo_pago:      "bizum",
+      email_cliente:    datosEnvio.email,
+      direccion_envio:  datosEnvio as unknown as Record<string, unknown>,
+      cupon_id:         datosEnvio.cupon?.id ?? null,
+      descuento_cupon:  descuentoCupon,
+    })
+    .select("id")
+    .single();
+
+  if (errPedido || !pedido) {
+    console.error("[bizum] Error:", errPedido);
+    return { ok: false, error: "No se pudo guardar el pedido." };
+  }
+
+  // 2. Guardar líneas
+  const { lineasPedido } = explotarPacks(packs);
+
+  for (const l of lineas) {
+    await supabase.from("pedidos_lineas").insert({
+      pedido_id: pedido.id, variacion_id: l.variacion_id, sku: l.sku,
+      nombre_producto: l.nombre, nombre_variacion: l.nombre_variacion,
+      cantidad: l.cantidad, precio_unitario: l.precio,
+      subtotal: l.precio * l.cantidad, imagen_url: l.imagen_url,
+    });
+  }
+  for (const lp of lineasPedido) {
+    await supabase.from("pedidos_lineas").insert({
+      pedido_id: pedido.id, variacion_id: lp.variacion_id, sku: lp.sku,
+      nombre_producto: lp.nombre, nombre_variacion: lp.nombre_variacion,
+      cantidad: lp.cantidad, precio_unitario: lp.precio_unitario,
+      subtotal: lp.subtotal, imagen_url: lp.imagen_url,
+    });
+  }
+
+  // 3. Email al admin y confirmación al cliente
+  const emailBizum = {
+    pedidoId: pedido.id, email: datosEnvio.email,
+    nombre: datosEnvio.nombre, apellidos: datosEnvio.apellidos,
+    total: totalFinal, gastoEnvio, descuento: descuentoCupon,
+    metodoPago: "Bizum (622 004 408)",
+    tipoPrecio, provincia: datosEnvio.provincia, ciudad: datosEnvio.ciudad,
+    lineas: lineas.map((l) => ({
+      nombre: l.nombre, nombre_variacion: l.nombre_variacion,
+      cantidad: l.cantidad, precio: l.precio,
+    })),
+  };
+  await enviarNotificacionPedido(emailBizum);
+  await enviarConfirmacionCliente(emailBizum);
+
+  // Registrar uso de cupón si aplica
+  if (datosEnvio.cupon?.id && descuentoCupon > 0) {
+    await registrarUsoCupon(datosEnvio.cupon.id, pedido.id, user?.id ?? null, descuentoCupon);
+  }
+
+  return { ok: true, pedidoId: pedido.id };
+}

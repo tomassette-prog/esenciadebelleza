@@ -5,7 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useCarrito } from "@/context/CarritoContext";
 import { calcularGastoEnvio, getZonaEnvio, getSuplementoContrareembolso } from "@/lib/envio";
-import { crearPedidoContrarembolso } from "@/actions/checkout";
+import { crearPedidoContrarembolso, crearPedidoBizum } from "@/actions/checkout";
 import { validarCupon } from "@/actions/cupones";
 import { POBLACIONES } from "@/lib/poblaciones";
 import PaypalSmartButtons from "@/components/checkout/PaypalSmartButtons";
@@ -55,6 +55,7 @@ export function CheckoutCliente({
   const [cargando, setCargando]       = useState(false);
   const [cargandoStripe, setCargandoStripe] = useState(false);
   const [cargandoCR, setCargandoCR]         = useState(false);
+  const [cargandoBizum, setCargandoBizum]   = useState(false);
   const [error, setError]                 = useState<string | null>(null);
 
   const [datos, setDatos] = useState<DatosEnvio>({
@@ -192,6 +193,28 @@ export function CheckoutCliente({
     } catch {
       setError("Error al procesar el pedido");
       setCargandoCR(false);
+    }
+  }
+
+  async function pagarConBizum() {
+    setCargandoBizum(true);
+    setError(null);
+    try {
+      const datosCompletos = {
+        ...datos,
+        facturacion: facturacionIgualEnvio ? null : facturacion,
+        cupon: cuponAplicado ? { id: cuponAplicado.id, codigo: cuponAplicado.codigo, descuento: cuponAplicado.descuento } : null,
+      };
+      const result = await crearPedidoBizum(lineas, packs, datosCompletos);
+      if (result.ok) {
+        window.location.href = `/checkout/confirmacion?metodo=bizum&pedido=${result.pedidoId}&resultado=ok`;
+      } else {
+        setError(result.error ?? "Error al crear el pedido");
+        setCargandoBizum(false);
+      }
+    } catch {
+      setError("Error al procesar el pedido");
+      setCargandoBizum(false);
     }
   }
 
@@ -672,6 +695,36 @@ export function CheckoutCliente({
               </button>
               <p className="text-[11px] text-neutral-400 mt-2 text-center">
                 Pagas en efectivo al repartidor cuando recibas tu pedido
+              </p>
+            </div>
+
+            {/* ── Bizum ── */}
+            <div className="mt-4 pt-4 border-t border-neutral-200">
+              <button
+                onClick={pagarConBizum}
+                disabled={cargandoBizum}
+                className="group w-full py-4 px-6 bg-white border-2 border-[#3D2018] text-neutral-900 text-sm tracking-wide hover:border-[#C4857A] disabled:opacity-50 transition-all flex items-center justify-between rounded-lg"
+              >
+                <div className="flex items-center gap-3">
+                  <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none">
+                    <rect width="24" height="24" rx="4" fill="#2D2D2D"/>
+                    <text x="12" y="16" textAnchor="middle" fill="white" fontSize="10" fontWeight="bold" fontFamily="sans-serif">B</text>
+                  </svg>
+                  <span className="font-medium">
+                    {cargandoBizum ? "Procesando…" : "Pagar con Bizum"}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-lg font-light">
+                    {(totalFinal).toLocaleString("es-ES", { style: "currency", currency: "EUR" })}
+                  </span>
+                  <svg className="w-4 h-4 opacity-50 group-hover:opacity-100 transition-opacity" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                </div>
+              </button>
+              <p className="text-[11px] text-neutral-400 mt-2 text-center">
+                Envía el total por Bizum al <strong className="text-neutral-600">622 004 408</strong> · Incluye tu número de pedido en el concepto
               </p>
             </div>
 
