@@ -469,6 +469,7 @@ export function ImportarPanel({ allPairs }: { allPairs: CategoriaPair[] }) {
       let totalOfertas = 0;
       let totalSinCambios = 0;
       let totalOk = 0;
+      let totalStock = 0;
       const allErrores: string[] = [];
       const allMarcasPendientes: string[] = [];
       while (true) {
@@ -477,6 +478,7 @@ export function ImportarPanel({ allPairs }: { allPairs: CategoriaPair[] }) {
         totalNuevos += res.nuevos;
         totalPrecios += res.preciosActualizados;
         totalOfertas += res.ofertasActualizadas;
+        totalStock += res.stockActualizados;
         totalSinCambios += res.sinCambios;
         totalOk += res.ok;
         allErrores.push(...res.errores);
@@ -488,6 +490,7 @@ export function ImportarPanel({ allPairs }: { allPairs: CategoriaPair[] }) {
       if (totalNuevos > 0) details.push(`${totalNuevos} productos nuevos creados`);
       if (totalPrecios > 0) details.push(`${totalPrecios} precios actualizados`);
       if (totalOfertas > 0) details.push(`${totalOfertas} ofertas actualizadas`);
+      if (totalStock > 0) details.push(`${totalStock} stocks actualizados`);
       if (totalSinCambios > 0) details.push(`${totalSinCambios} sin cambios`);
       if (allMarcasPendientes.length > 0) details.push(`Marcas pendientes: ${[...new Set(allMarcasPendientes)].join(", ")}`);
       if (allErrores.length > 0) setError(`${allErrores.length} errores: ${allErrores.slice(0, 3).join(", ")}`);

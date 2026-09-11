@@ -84,15 +84,18 @@ export async function POST(req: NextRequest) {
       // ── Pedido creado / actualizado ────────────────────────────────────────
       case "order.created":
       case "order.updated": {
-        // 1. Sincronizar stock (para ventas directas en WC)
-        await sincronizarStockPorPedido(supabase, payload);
-
-        // 2. Si el pedido viene de esenciadebelleza y fue pagado, marcar como pagado
+        // Detectar origen ANTES de descontar stock
         const origen = (payload.meta_data as { key: string; value: string }[] | undefined)
           ?.find((m) => m.key === "_origen_tienda")?.value;
         const esenciaPedidoId = (payload.meta_data as { key: string; value: string }[] | undefined)
           ?.find((m) => m.key === "_esencia_pedido_id")?.value;
         const wcStatus = payload.status as string;
+
+        // Solo descontar stock para ventas directas en WC (no de Esencia)
+        // Los pedidos de Esencia descuentan stock vía trigger en pedidos_lineas
+        if (origen !== "esenciadebelleza.es") {
+          await sincronizarStockPorPedido(supabase, payload);
+        }
 
         if (origen === "esenciadebelleza.es" && (wcStatus === "processing" || wcStatus === "completed")) {
           const pedidoId = esenciaPedidoId ?? null;

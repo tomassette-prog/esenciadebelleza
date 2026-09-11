@@ -512,6 +512,7 @@ export async function sincronizarTodo(page: number = 1): Promise<{
   nuevos: number;
   preciosActualizados: number;
   ofertasActualizadas: number;
+  stockActualizados: number;
   errores: string[];
   sinCambios: number;
   marcasPendientes: string[];
@@ -521,7 +522,7 @@ export async function sincronizarTodo(page: number = 1): Promise<{
   try {
     await verificarAdmin();
   } catch {
-    return { ok: 0, nuevos: 0, preciosActualizados: 0, ofertasActualizadas: 0, errores: ["No autorizado"], sinCambios: 0, marcasPendientes: [], hasMore: false, nextPage: page };
+    return { ok: 0, nuevos: 0, preciosActualizados: 0, ofertasActualizadas: 0, stockActualizados: 0, errores: ["No autorizado"], sinCambios: 0, marcasPendientes: [], hasMore: false, nextPage: page };
   }
 
   const supa = adminClient();
@@ -545,7 +546,7 @@ export async function sincronizarTodo(page: number = 1): Promise<{
   if (!Array.isArray(batch) || batch.length === 0) {
     await supa.from("config_tienda").upsert({ clave: "ultima_sync_wc", valor: now }, { onConflict: "clave" });
     try { await guardarSnapshot(); } catch {}
-    return { ok: 0, nuevos: 0, preciosActualizados: 0, ofertasActualizadas: 0, errores: [], sinCambios: 0, marcasPendientes: [], hasMore: false, nextPage: page };
+    return { ok: 0, nuevos: 0, preciosActualizados: 0, ofertasActualizadas: 0, stockActualizados: 0, errores: [], sinCambios: 0, marcasPendientes: [], hasMore: false, nextPage: page };
   }
 
   // 3. Cargar SOLO los productos de Supabase que coincidan con woo_ids o slugs de esta página
@@ -554,7 +555,7 @@ export async function sincronizarTodo(page: number = 1): Promise<{
 
   const supaWooMap = new Map<number, string>(); // woo_id -> slug
   const supaMap = new Map<string, any>();        // slug -> producto_padre row
-  const varsMap = new Map<string, { id: string; sku: string; precio_b2c: number }[]>();
+  const varsMap = new Map<string, { id: string; sku: string; precio_b2c: number; stock: number }[]>();
 
   // Buscar por woo_id
   const { data: byWooId } = await supa.from("productos_padre")
@@ -585,7 +586,7 @@ export async function sincronizarTodo(page: number = 1): Promise<{
   const foundPadreIds = [...supaMap.values()].map((p: any) => p.id);
   if (foundPadreIds.length > 0) {
     const { data: vars } = await supa.from("productos_variaciones")
-      .select("id, producto_padre_id, sku, precio_b2c, activa")
+      .select("id, producto_padre_id, sku, precio_b2c, stock, activa")
       .eq("activa", true)
       .in("producto_padre_id", foundPadreIds);
     if (vars) {
@@ -604,6 +605,7 @@ export async function sincronizarTodo(page: number = 1): Promise<{
 
   let preciosActualizados = 0;
   let ofertasActualizadas = 0;
+  let stockActualizados = 0;
   let nuevosCount = 0;
   let sinCambios = 0;
 
@@ -672,21 +674,30 @@ export async function sincronizarTodo(page: number = 1): Promise<{
       const ofertaActual = supaP.oferta ?? false;
       const precioCambiado = wooPrice > 0 && Math.abs(wooPrice - precioActual) > 0.01;
       const ofertaCambiada = isOferta !== ofertaActual;
+      const wooStock = wp.stock_quantity ?? 0;
+      const stockCambiado = wooStock !== (supaVar.stock ?? 0);
 
-      if (!precioCambiado && !ofertaCambiada) { sinCambios++; continue; }
+      if (!precioCambiado && !ofertaCambiada && !stockCambiado) { sinCambios++; continue; }
 
       const precioB2c = isOferta ? wooSalePrice : wooPrice;
       try {
-        await supa.from("productos_variaciones").update({
-          precio_b2c: precioB2c,
-          precio_b2b: Number((precioB2c * precioMultiplicador).toFixed(2)),
-          precio_comparar: isOferta ? wooPrice : null,
-        }).eq("id", supaVar.id);
+        const updateData: Record<string, unknown> = {};
+        if (precioCambiado || ofertaCambiada) {
+          updateData.precio_b2c = precioB2c;
+          updateData.precio_b2b = Number((precioB2c * precioMultiplicador).toFixed(2));
+          updateData.precio_comparar = isOferta ? wooPrice : null;
+        }
+        if (stockCambiado) {
+          updateData.stock = wooStock;
+          updateData.activa = wp.stock_status !== "outofstock";
+        }
+        await supa.from("productos_variaciones").update(updateData).eq("id", supaVar.id);
         if (precioCambiado) preciosActualizados++;
         if (ofertaCambiada) {
           await supa.from("productos_padre").update({ oferta: isOferta }).eq("id", supaP.id);
           ofertasActualizadas++;
         }
+        if (stockCambiado) stockActualizados++;
       } catch (e: any) { errores.push(`${wp.name}: ${e.message}`); }
     }
     }
@@ -701,10 +712,11 @@ export async function sincronizarTodo(page: number = 1): Promise<{
   }
 
   return {
-    ok: nuevosCount + preciosActualizados + ofertasActualizadas,
+    ok: nuevosCount + preciosActualizados + ofertasActualizadas + stockActualizados,
     nuevos: nuevosCount,
     preciosActualizados,
     ofertasActualizadas,
+    stockActualizados,
     errores: errores.slice(0, 20),
     sinCambios,
     marcasPendientes: [...new Set(marcasPendientes)],
