@@ -133,7 +133,7 @@ export function buildProductJsonLd(
     price: v.precio_b2c.toFixed(2),
     priceCurrency: "EUR",
     availability:
-      v.stock > 0
+      v.activa
         ? "https://schema.org/InStock"
         : "https://schema.org/OutOfStock",
     url: `${BASE_URL}/productos/${slugifyCategoria(producto.categoria)}/${slugifyCategoria(producto.subcategoria ?? "general")}/${producto.slug}?variacion=${encodeURIComponent(v.sku)}`,

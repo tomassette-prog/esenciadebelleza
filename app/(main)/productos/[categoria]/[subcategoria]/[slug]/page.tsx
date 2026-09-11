@@ -307,7 +307,7 @@ export default async function ProductoPage({ params, searchParams }: PageProps) 
             )}
 
             {/* CTA */}
-            {variacionActiva && variacionActiva.precio_b2c > 0 && variacionActiva.stock > 0 ? (
+            {variacionActiva && variacionActiva.precio_b2c > 0 ? (
               <AnadirAlCarritoBtn
                 variacionId={variacionActiva.id}
                 productoId={p.id}

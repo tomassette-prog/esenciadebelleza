@@ -76,6 +76,8 @@ export function ProductosTableClient({ productos, backUrl = "/admin/productos", 
                 const varsActivas = ((p.variaciones ?? []) as VarObj[]).filter((v) => v.activa);
                 const stockTotal = varsActivas.reduce((a, v) => a + (v.stock ?? 0), 0);
                 const precioMin = varsActivas.length > 0 ? Math.min(...varsActivas.map((v) => v.precio_b2c ?? 0)) : 0;
+                // 9999 = producto sin gestión de stock en WC (siempre disponible)
+                const stockDisplay = stockTotal >= 9999 ? "∞" : stockTotal > 0 ? `${stockTotal} uds` : "sin stock";
                 const urlPath = `/productos/${slugifyCategoria(p.categoria)}/${slugifyCategoria(p.subcategoria ?? "general")}/${p.slug}`;
                 const isSelected = selected.has(p.id);
 
@@ -113,7 +115,7 @@ export function ProductosTableClient({ productos, backUrl = "/admin/productos", 
                     <td className="px-4 py-3 text-center">
                       <div className="text-sm font-medium">{varsActivas.length}</div>
                       <div className="text-xs text-neutral-400">
-                        {stockTotal > 0 ? `${stockTotal} uds` : "sin stock"}
+                        {stockDisplay}
                         {precioMin > 0 && ` · ${precioMin.toFixed(2)}€`}
                       </div>
                     </td>
