@@ -73,17 +73,22 @@ export async function GET(req: NextRequest) {
   }
   const varsBySku = new Map(allVars.filter(v => v.sku).map(v => [v.sku as string, v]));
 
-  // â”€â”€ Cargar todos los productos_padre (woo_id â†’ id) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-  const allPadres: Array<{ id: string; woo_id: string | null }> = [];
+  // â€"â€" Cargar todos los productos_padre (woo_id → id + slug → id) â€"â€"â€"â€"â€"â€"â€"â€"â€"â€"â€"â€"â€"â€"â€"â€"â€"â€"â€"â€"â€"â€"â€"
+  const allPadres: Array<{ id: string; woo_id: string | null; slug: string }> = [];
   offset = 0;
   while (true) {
-    const { data } = await supa.from("productos_padre").select("id, woo_id").range(offset, offset + 999);
+    const { data } = await supa.from("productos_padre").select("id, woo_id, slug").range(offset, offset + 999);
     if (!data?.length) break;
     allPadres.push(...data);
     if (data.length < 1000) break;
     offset += 1000;
   }
   const padresByWooId = new Map(allPadres.filter(p => p.woo_id).map(p => [p.woo_id as string, p.id]));
+  // Fallback: slug → id para productos que aún no tienen woo_id
+  const padresBySlug = new Map(allPadres.map(p => [p.slug, p.id]));
+
+  // Backfill woo_id para productos que ya existen por slug pero no tienen woo_id
+  let backfilledWooIds = 0;
 
   // â”€â”€ Cargar marcas existentes (slug â†’ id) para lookup rÃ¡pido â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const { data: marcasData } = await supa.from("marcas").select("id, slug");
@@ -91,9 +96,13 @@ export async function GET(req: NextRequest) {
 
   // â”€â”€ IteraciÃ³n por pÃ¡ginas WooCommerce â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   // Load last sync timestamp for incremental processing
+  // Los domingos hacemos full sync para corregir cualquier desincronización
   const { data: lastSyncRow } = await supa.from("config_tienda").select("valor").eq("clave", "ultima_cron_sync").single();
   const lastSync = lastSyncRow?.valor ?? null;
-  const now = new Date().toISOString();
+  const now = new Date();
+  const isFullSyncDay = now.getDay() === 0; // domingo = full sync
+  const modifiedAfter = (!isFullSyncDay && lastSync) ? lastSync : null;
+  const nowISO = now.toISOString();
 
   let page = 1;
   const wooIdsVistos = new Set<string>();
@@ -104,7 +113,7 @@ export async function GET(req: NextRequest) {
   while (true) {
     let products: WooProduct[];
     try {
-      const modifiedParam = lastSync ? `&modified_after=${lastSync}` : "";
+      const modifiedParam = modifiedAfter ? `&modified_after=${modifiedAfter}` : "";
       products = await fetchWoo<WooProduct[]>(
         `/products?per_page=20&page=${page}&status=publish${modifiedParam}&_fields=id,type,sku,name,slug,status,regular_price,sale_price,price,stock_quantity,stock_status,images,categories,attributes,description,short_description,variations`
       );
@@ -182,7 +191,17 @@ export async function GET(req: NextRequest) {
     // â”€â”€ Sync de precios, stock y variaciones â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     for (const wp of products) {
       const wooId = String(wp.id);
-      const padreId = padresByWooId.get(wooId);
+      // Buscar padre: primero por woo_id, luego fallback por slug
+      let padreId = padresByWooId.get(wooId);
+      if (!padreId) {
+        padreId = padresBySlug.get(wp.slug);
+        if (padreId) {
+          // Backfill: el producto existe por slug pero le falta woo_id
+          await supa.from("productos_padre").update({ woo_id: wooId }).eq("id", padreId);
+          padresByWooId.set(wooId, padreId);
+          backfilledWooIds++;
+        }
+      }
       if (!padreId) { totalErrores++; continue; }
 
       const precioRegular = parseFloat(wp.regular_price || wp.price) || 0;
@@ -255,7 +274,7 @@ export async function GET(req: NextRequest) {
   }
 
   // Save sync timestamp for next incremental run
-  await supa.from("config_tienda").upsert({ clave: "ultima_cron_sync", valor: now }, { onConflict: "clave" });
+  await supa.from("config_tienda").upsert({ clave: "ultima_cron_sync", valor: nowISO }, { onConflict: "clave" });
 
   // â”€â”€ Desactivar productos que ya no existen en WooCommerce â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const wooIdsActivosEnSupa = allPadres
@@ -282,9 +301,11 @@ export async function GET(req: NextRequest) {
 
   const resumen = {
     ok: true,
+    syncType: modifiedAfter ? "incremental" : "full",
     actualizados: totalActualizados,
     creados: totalCreados,
     desactivados,
+    wooIdsBackfilled: backfilledWooIds,
     errores: totalErrores,
   };
   console.log("[cron/sync]", resumen);

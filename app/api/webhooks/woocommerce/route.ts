@@ -242,7 +242,7 @@ async function sincronizarProducto(
     // Producto variable → obtener variaciones via API WooCommerce
     try {
       const variaciones = await wooFetch<WooVariacion[]>(
-        `/products/${wc_id}/variations?per_page=100&status=publish`
+        `/products/${wc_id}/variations?per_page=100`
       );
 
       for (const v of variaciones) {
