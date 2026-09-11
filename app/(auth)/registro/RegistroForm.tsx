@@ -67,6 +67,17 @@ export default function RegistroForm() {
           </div>
         )}
 
+        {/* Confirmación de email pendiente */}
+        {state?.needsConfirmation && (
+          <div className="p-4 bg-blue-50 border border-blue-200 text-blue-800 text-sm space-y-2">
+            <p className="font-medium">✉️ Te hemos enviado un email de confirmación a <strong>{state.email}</strong>.</p>
+            <p>Revisa tu bandeja de entrada (y la carpeta de spam) y haz clic en el enlace para activar tu cuenta. Una vez confirmado, podrás iniciar sesión.</p>
+            <a href="/login" className="inline-block mt-2 px-4 py-2 bg-blue-700 text-white text-xs tracking-widest uppercase hover:bg-blue-800 transition-colors">
+              Ir a iniciar sesión
+            </a>
+          </div>
+        )}
+
         {/* Tipo de cliente */}
         <div>
           <p className="text-xs tracking-wider uppercase text-neutral-600 mb-2">Tipo de cuenta</p>

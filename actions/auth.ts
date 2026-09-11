@@ -40,9 +40,9 @@ export async function login(
 
 // ── Registro ──────────────────────────────────────────────────────────────────
 export async function registro(
-  _prevState: { error: string } | null,
+  _prevState: { error: string; needsConfirmation?: boolean; email?: string } | null,
   formData: FormData
-): Promise<{ error: string } | null> {
+): Promise<{ error: string; needsConfirmation?: boolean; email?: string } | null> {
   const supabase = await createClient();
 
   const email          = (formData.get("email") as string).trim().toLowerCase();
@@ -103,8 +103,50 @@ export async function registro(
     return { error: "Error al crear la cuenta. Inténtalo de nuevo." };
   }
 
-  // Crear perfil en perfiles_usuario (usar service_role para saltar RLS,
-  // ya que el usuario aún no tiene sesión por la confirmación de email)
+  // Si no hay sesión, Supabase requiere confirmación de email
+  if (!data.session && data.user) {
+    // Crear perfil igualmente (con service_role, no necesita sesión)
+    const admin = createAdminClient();
+    const { error: profileError } = await admin.from("perfiles_usuario").upsert({
+      id: data.user.id,
+      nombre_completo,
+      tipo_cliente,
+      telefono,
+      empresa:           tipo_cliente === "b2b" ? empresa : null,
+      nif_cif:           tipo_cliente === "b2b" ? nif_cif  : null,
+      tipo_negocio:      tipo_cliente === "b2b" ? tipo_negocio : null,
+      web_instagram:     tipo_cliente === "b2b" ? web_instagram : null,
+      telefono_contacto: tipo_cliente === "b2b" ? telefono_contacto : null,
+      direccion_envio:       tipo_cliente === "b2b" ? { calle: dir_calle, cp: dir_cp, ciudad: dir_ciudad, provincia: dir_provincia } : null,
+      direccion_facturacion: tipo_cliente === "b2b" && !usarMismaDireccion ? { calle: fac_calle, cp: fac_cp, ciudad: fac_ciudad, provincia: fac_provincia } : null,
+      b2b_aprobado: false,
+    });
+
+    if (profileError) {
+      console.error("[Registro] Error creando perfil:", profileError);
+    }
+
+    if (tipo_cliente === "b2b") {
+      try {
+        await enviarNotificacionNuevoProfesional({
+          email,
+          nombre: nombre_completo,
+          empresa,
+          nif_cif,
+          telefono,
+          telefono_contacto,
+          tipo_negocio,
+          direccion_envio: { calle: dir_calle!, cp: dir_cp!, ciudad: dir_ciudad!, provincia: dir_provincia! },
+        });
+      } catch (e) {
+        console.error("[Registro] Error enviando notificación admin:", e);
+      }
+    }
+
+    return { error: "", needsConfirmation: true, email };
+  }
+
+  // Crear perfil en perfiles_usuario (sesión activa, no necesita service_role)
   if (data.user) {
     const admin = createAdminClient();
     const { error: profileError } = await admin.from("perfiles_usuario").upsert({
@@ -126,7 +168,6 @@ export async function registro(
       console.error("[Registro] Error creando perfil:", profileError);
     }
 
-    // Notificar al admin si es un profesional B2B
     if (tipo_cliente === "b2b") {
       try {
         await enviarNotificacionNuevoProfesional({

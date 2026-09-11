@@ -29,7 +29,14 @@ export default function LoginPage({
     const { data, error: authError } = await supabase.auth.signInWithPassword({ email, password });
 
     if (authError) {
-      setError("Credenciales incorrectas. Verifica tu email y contraseña.");
+      const msg = authError.message?.toLowerCase() ?? "";
+      if (msg.includes("email not confirmed")) {
+        setError("Tu email aún no ha sido confirmado. Revisa tu bandeja de entrada (y spam) por un email de confirmación.");
+      } else if (msg.includes("too many")) {
+        setError("Demasiados intentos de inicio de sesión. Espera unos minutos e inténtalo de nuevo.");
+      } else {
+        setError("Credenciales incorrectas. Verifica tu email y contraseña.");
+      }
       setLoading(false);
       return;
     }
