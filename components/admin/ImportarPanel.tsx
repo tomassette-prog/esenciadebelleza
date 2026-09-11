@@ -661,6 +661,60 @@ export function ImportarPanel({ allPairs }: { allPairs: CategoriaPair[] }) {
         </div>
       )}
 
+      {/* ── Resumen de sincronización (Sincronizar todo) ── */}
+      {resumen && !smartResult && (
+        <div className="space-y-2">
+          <div className={`p-3 border text-sm ${resumen.ok > 0 ? "bg-green-50 border-green-200 text-green-700" : "bg-neutral-50 border-neutral-200 text-neutral-600"}`}>
+            {resumen.ok > 0 ? "✅" : "ℹ️"} {resumen.ok > 0 ? `${resumen.ok} productos actualizados` : "Sin cambios que aplicar"}.
+            {resumen.noEncontrados.length > 0 && (
+              <span className="ml-2 text-amber-700">{resumen.noEncontrados.length} no encontrados.</span>
+            )}
+          </div>
+          {resumen.details && resumen.details.length > 0 && (
+            <div className="p-3 bg-blue-50 border border-blue-200 text-blue-700 text-sm space-y-1">
+              {resumen.details.map((d, i) => (
+                <div key={i}>• {d}</div>
+              ))}
+            </div>
+          )}
+          {resumen.brandsCreated && resumen.brandsCreated.length > 0 && (
+            <div className="p-3 bg-blue-50 border border-blue-200 text-blue-700 text-sm">
+              🏷️ Marcas creadas: {resumen.brandsCreated.join(", ")}
+            </div>
+          )}
+          {resumen.noEncontrados.length > 0 && (
+            <details className="text-xs border border-amber-200 bg-amber-50">
+              <summary className="px-3 py-2 cursor-pointer text-amber-700 font-medium">
+                Ver slugs no encontrados ({resumen.noEncontrados.length})
+              </summary>
+              <div className="px-3 pb-3 pt-1 space-y-0.5 max-h-48 overflow-y-auto">
+                {resumen.noEncontrados.map(s => (
+                  <div key={s} className="font-mono text-amber-800">{s}</div>
+                ))}
+              </div>
+            </details>
+          )}
+        </div>
+      )}
+
+      {/* ── Progreso de sincronización ── */}
+      {(fase === "aplicando" || fase === "publicando") && progreso && (
+        <div className="p-3 bg-blue-50 border border-blue-200 text-blue-700 text-sm space-y-2">
+          <div className="flex justify-between">
+            <span>{fase === "publicando" ? "Publicando…" : "Sincronizando…"}</span>
+            <span>{progreso.ok} procesados{progreso.total > 0 ? ` / ${progreso.total}` : ""}</span>
+          </div>
+          {progreso.total > 0 && (
+            <div className="w-full bg-blue-100 h-1.5">
+              <div
+                className="bg-blue-500 h-1.5 transition-all"
+                style={{ width: `${Math.round((progreso.ok / progreso.total) * 100)}%` }}
+              />
+            </div>
+          )}
+        </div>
+      )}
+
       {/* ── FASE: LISTO (diff result) ── */}
       {(fase === "listo" || fase === "aplicando" || fase === "publicando") && iguales !== null && (
         <>
@@ -700,42 +754,6 @@ export function ImportarPanel({ allPairs }: { allPairs: CategoriaPair[] }) {
                   Cerrar y volver al inicio
                 </button>
               </div>
-            </div>
-          )}
-
-          {/* Classic resumen */}
-          {resumen && !smartResult && (
-            <div className="space-y-2">
-              <div className={`p-3 border text-sm ${resumen.ok > 0 ? "bg-green-50 border-green-200 text-green-700" : "bg-neutral-50 border-neutral-200 text-neutral-600"}`}>
-                {resumen.ok > 0 ? "✅" : "ℹ️"} {resumen.ok > 0 ? `${resumen.ok} productos actualizados` : "Sin cambios que aplicar"}.
-                {resumen.noEncontrados.length > 0 && (
-                  <span className="ml-2 text-amber-700">{resumen.noEncontrados.length} no encontrados.</span>
-                )}
-              </div>
-              {resumen.details && resumen.details.length > 0 && (
-                <div className="p-3 bg-blue-50 border border-blue-200 text-blue-700 text-sm space-y-1">
-                  {resumen.details.map((d, i) => (
-                    <div key={i}>• {d}</div>
-                  ))}
-                </div>
-              )}
-              {resumen.brandsCreated && resumen.brandsCreated.length > 0 && (
-                <div className="p-3 bg-blue-50 border border-blue-200 text-blue-700 text-sm">
-                  🏷️ Marcas creadas: {resumen.brandsCreated.join(", ")}
-                </div>
-              )}
-              {resumen.noEncontrados.length > 0 && (
-                <details className="text-xs border border-amber-200 bg-amber-50">
-                  <summary className="px-3 py-2 cursor-pointer text-amber-700 font-medium">
-                    Ver slugs no encontrados ({resumen.noEncontrados.length})
-                  </summary>
-                  <div className="px-3 pb-3 pt-1 space-y-0.5 max-h-48 overflow-y-auto">
-                    {resumen.noEncontrados.map(s => (
-                      <div key={s} className="font-mono text-amber-800">{s}</div>
-                    ))}
-                  </div>
-                </details>
-              )}
             </div>
           )}
 
@@ -866,22 +884,6 @@ export function ImportarPanel({ allPairs }: { allPairs: CategoriaPair[] }) {
               >
                 ⚡ Rápido ({seleccionados.size})
               </button>
-            </div>
-          )}
-
-          {/* Progress bar */}
-          {(fase === "aplicando" || fase === "publicando") && progreso && (
-            <div className="space-y-1.5">
-              <div className="flex justify-between text-xs text-neutral-500">
-                <span>{fase === "publicando" ? "Publicando…" : "Aplicando cambios…"}</span>
-                <span>{progreso.ok} / {progreso.total}</span>
-              </div>
-              <div className="w-full h-1.5 bg-neutral-200 rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-neutral-900 transition-all duration-300"
-                  style={{ width: `${Math.round((progreso.ok / progreso.total) * 100)}%` }}
-                />
-              </div>
             </div>
           )}
 
