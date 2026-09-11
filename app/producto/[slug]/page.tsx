@@ -4,9 +4,10 @@
  * Redirige 301 las URLs antiguas de WooCommerce:
  *   /producto/[slug]  →  /productos/[categoria]/[subcategoria]/[slug]
  *
- * Si el producto no existe, redirige a /productos
+ * Si el producto no existe, devuelve 404 (no redirect a búsqueda,
+ * para que Google desindexe la URL rota)
  */
-import { redirect } from "next/navigation";
+import { redirect, notFound } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { slugifyCategoria } from "@/lib/seo";
 
@@ -30,6 +31,6 @@ export default async function LegacyProductoPage({
     );
   }
 
-  // Fallback: redirigir a /productos con búsqueda
-  redirect(`/buscar?q=${encodeURIComponent(slug.replace(/-/g, " "))}`);
+  // Producto no existe → 404 real para que Google desindexe
+  notFound();
 }
