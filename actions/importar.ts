@@ -539,10 +539,10 @@ export async function sincronizarTodo(page: number = 1, forceFull: boolean = fal
   const now = new Date().toISOString();
 
   const url = lastSync && !forceFull
-    ? `/products?status=publish&per_page=50&page=${page}&modified_after=${lastSync}`
-    : `/products?status=publish&per_page=50&page=${page}`;
+    ? `/products?status=publish&per_page=20&page=${page}&modified_after=${lastSync}`
+    : `/products?status=publish&per_page=20&page=${page}`;
   const batch: any[] = await fetchWoo(url);
-  const hasMore = Array.isArray(batch) && batch.length === 50;
+  const hasMore = Array.isArray(batch) && batch.length === 20;
   if (!Array.isArray(batch) || batch.length === 0) {
     await supa.from("config_tienda").upsert({ clave: "ultima_sync_wc", valor: now }, { onConflict: "clave" });
     try { await guardarSnapshot(); } catch {}
