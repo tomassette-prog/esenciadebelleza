@@ -656,7 +656,7 @@ export async function sincronizarTodo(page: number = 1, forceFull: boolean = fal
           precio_b2c: precioB2c,
           precio_b2b: Number((precioB2c * precioMultiplicador).toFixed(2)),
           precio_comparar: isOferta ? wooPrice : null,
-          stock: wp.stock_quantity ?? 0,
+          stock: wp.manage_stock === false ? (wp.stock_status !== "outofstock" ? 9999 : 0) : (wp.stock_quantity ?? 0),
           activa: wp.stock_status !== "outofstock",
           imagen_url: wp.images?.[0]?.src ?? null,
         });
@@ -674,7 +674,8 @@ export async function sincronizarTodo(page: number = 1, forceFull: boolean = fal
       const ofertaActual = supaP.oferta ?? false;
       const precioCambiado = wooPrice > 0 && Math.abs(wooPrice - precioActual) > 0.01;
       const ofertaCambiada = isOferta !== ofertaActual;
-      const wooStock = wp.stock_quantity ?? 0;
+      // manage_stock=false + instock → stock alto (no limitar venta)
+      const wooStock = wp.manage_stock === false ? (wp.stock_status !== "outofstock" ? 9999 : 0) : (wp.stock_quantity ?? 0);
       const stockCambiado = wooStock !== (supaVar.stock ?? 0);
 
       if (!precioCambiado && !ofertaCambiada && !stockCambiado) { sinCambios++; continue; }
@@ -803,7 +804,7 @@ export async function aplicarCambios(
       id: number; name: string; slug: string; type: string; variations: number[];
       description: string; short_description: string; sku: string;
       price: string; regular_price: string; sale_price: string;
-      stock_quantity: number | null; stock_status: string;
+      stock_quantity: number | null; stock_status: string; manage_stock: boolean;
       images: { src: string }[];
       categories: { id: number; name: string }[];
       attributes: { name: string; options: string[] }[];
@@ -1065,7 +1066,7 @@ export async function aplicarCambios(
           precio_b2c: precioRegular,
           precio_b2b: parseFloat((precioRegular * precioMultiplicador).toFixed(2)),
           precio_comparar: precioVenta > 0 && precioVenta < precioRegular ? precioRegular : null,
-          stock: p.stock_quantity ?? 0,
+          stock: p.manage_stock === false ? (p.stock_status !== "outofstock" ? 9999 : 0) : (p.stock_quantity ?? 0),
           activa: p.stock_status !== "outofstock",
           imagen_url: p.images[0]?.src ?? null,
         });
@@ -1200,7 +1201,7 @@ export async function publicarAprobados(payload: ReviewPayload): Promise<SmartAp
       id: number; name: string; slug: string; type: string;
       description: string; short_description: string; sku: string;
       price: string; regular_price: string; sale_price: string;
-      stock_quantity: number | null; stock_status: string;
+      stock_quantity: number | null; stock_status: string; manage_stock: boolean;
       images: { src: string }[];
       categories: { id: number; name: string }[];
       attributes: { name: string; options: string[] }[];
@@ -1461,7 +1462,7 @@ export async function publicarAprobados(payload: ReviewPayload): Promise<SmartAp
             precio_b2c: precioRegular,
             precio_b2b: parseFloat((precioRegular * precioMultiplicador).toFixed(2)),
             precio_comparar: precioVenta > 0 && precioVenta < precioRegular ? precioRegular : null,
-            stock: p.stock_quantity ?? 0,
+            stock: p.manage_stock === false ? (p.stock_status !== "outofstock" ? 9999 : 0) : (p.stock_quantity ?? 0),
             activa: p.stock_status !== "outofstock",
             imagen_url: p.images[0]?.src ?? null,
           });
