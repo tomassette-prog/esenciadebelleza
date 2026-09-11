@@ -90,6 +90,11 @@ export async function GET(req: NextRequest) {
   const marcasBySlug = new Map((marcasData ?? []).map(m => [m.slug as string, m.id as string]));
 
   // â”€â”€ IteraciÃ³n por pÃ¡ginas WooCommerce â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // Load last sync timestamp for incremental processing
+  const { data: lastSyncRow } = await supa.from("config_tienda").select("valor").eq("clave", "ultima_cron_sync").single();
+  const lastSync = lastSyncRow?.valor ?? null;
+  const now = new Date().toISOString();
+
   let page = 1;
   const wooIdsVistos = new Set<string>();
   let totalActualizados = 0;
@@ -99,11 +104,12 @@ export async function GET(req: NextRequest) {
   while (true) {
     let products: WooProduct[];
     try {
+      const modifiedParam = lastSync ? `&modified_after=${lastSync}` : "";
       products = await fetchWoo<WooProduct[]>(
-        `/products?per_page=100&page=${page}&status=publish&_fields=id,type,sku,name,slug,status,regular_price,sale_price,price,stock_quantity,stock_status,images,categories,attributes,description,short_description,variations`
+        `/products?per_page=20&page=${page}&status=publish${modifiedParam}&_fields=id,type,sku,name,slug,status,regular_price,sale_price,price,stock_quantity,stock_status,images,categories,attributes,description,short_description,variations`
       );
     } catch (err) {
-      console.error(`[cron/sync] Error pÃ¡gina ${page}:`, err);
+      console.error(`[cron/sync] Error page ${page}:`, err);
       break;
     }
     if (!Array.isArray(products) || products.length === 0) break;
@@ -244,9 +250,12 @@ export async function GET(req: NextRequest) {
       if (!padresByWooId.has(wooId)) totalCreados++;
     }
 
-    if (products.length < 100) break;
+    if (products.length < 20) break;
     page++;
   }
+
+  // Save sync timestamp for next incremental run
+  await supa.from("config_tienda").upsert({ clave: "ultima_cron_sync", valor: now }, { onConflict: "clave" });
 
   // â”€â”€ Desactivar productos que ya no existen en WooCommerce â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const wooIdsActivosEnSupa = allPadres
