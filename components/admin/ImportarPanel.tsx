@@ -706,12 +706,19 @@ export function ImportarPanel({ allPairs }: { allPairs: CategoriaPair[] }) {
           {/* Classic resumen */}
           {resumen && !smartResult && (
             <div className="space-y-2">
-              <div className="p-3 bg-green-50 border border-green-200 text-green-700 text-sm">
-                ✅ {resumen.ok} productos actualizados.
+              <div className={`p-3 border text-sm ${resumen.ok > 0 ? "bg-green-50 border-green-200 text-green-700" : "bg-neutral-50 border-neutral-200 text-neutral-600"}`}>
+                {resumen.ok > 0 ? "✅" : "ℹ️"} {resumen.ok > 0 ? `${resumen.ok} productos actualizados` : "Sin cambios que aplicar"}.
                 {resumen.noEncontrados.length > 0 && (
                   <span className="ml-2 text-amber-700">{resumen.noEncontrados.length} no encontrados.</span>
                 )}
               </div>
+              {resumen.details && resumen.details.length > 0 && (
+                <div className="p-3 bg-blue-50 border border-blue-200 text-blue-700 text-sm space-y-1">
+                  {resumen.details.map((d, i) => (
+                    <div key={i}>• {d}</div>
+                  ))}
+                </div>
+              )}
               {resumen.brandsCreated && resumen.brandsCreated.length > 0 && (
                 <div className="p-3 bg-blue-50 border border-blue-200 text-blue-700 text-sm">
                   🏷️ Marcas creadas: {resumen.brandsCreated.join(", ")}
