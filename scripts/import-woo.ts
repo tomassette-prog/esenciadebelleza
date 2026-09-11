@@ -82,6 +82,7 @@ interface WooVariation {
   sale_price: string;
   stock_quantity: number | null;
   stock_status: string;
+  manage_stock: boolean;
   attributes: WooAttrVal[];   // ← cada atributo tiene "option" con el valor real
   image: WooImage | null;
   meta_data: WooMeta[];
@@ -383,7 +384,7 @@ async function main() {
           precio_b2c:       precioRegular,
           precio_b2b:       parseFloat((precioRegular * 0.75).toFixed(2)),
           precio_comparar:  precioVenta > 0 && precioVenta < precioRegular ? precioRegular : null,
-          stock:            p.stock_quantity ?? 0,
+          stock:            p.manage_stock ? (p.stock_quantity ?? 0) : (p.stock_status !== "outofstock" ? 9999 : 0),
           activa:           p.stock_status !== "outofstock",
           imagen_url:       p.images[0]?.src ?? null,
         }]);
@@ -463,7 +464,7 @@ async function main() {
             precio_b2c:        precioRegular,
             precio_b2b:        parseFloat((precioRegular * 0.75).toFixed(2)),
             precio_comparar:   precioVenta > 0 && precioVenta < precioRegular ? precioRegular : null,
-            stock:             v.stock_quantity ?? 0,
+            stock:             v.manage_stock ? (v.stock_quantity ?? 0) : (v.stock_status !== "outofstock" ? 9999 : 0),
             activa:            v.stock_status !== "outofstock",
             // Imagen propia de la variación; si no tiene, hereda la del padre
             imagen_url:        v.image?.src ?? p.images[0]?.src ?? null,

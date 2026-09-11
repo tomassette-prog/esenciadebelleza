@@ -232,7 +232,7 @@ async function sincronizarProducto(
         precio_b2b:        parseFloat((precioB2c * b2bMult).toFixed(2)),
         precio_comparar:   p.sale_price ? parseFloat(String(p.regular_price || "0")) : null,
         imagen_url:        (p.images as { src: string }[])?.[0]?.src ?? null,
-        stock:             Number(p.stock_quantity ?? 0),
+        stock:             p.manage_stock === false ? (p.status === "publish" ? 9999 : 0) : Number(p.stock_quantity ?? 0),
         activa:            p.status === "publish",
       },
       { onConflict: "sku" }
@@ -260,7 +260,7 @@ async function sincronizarProducto(
             precio_b2b:        parseFloat((precioB2C * b2bMult).toFixed(2)),
             precio_comparar:   v.sale_price ? parseFloat(v.regular_price || "0") : null,
             imagen_url:        v.image?.src ?? (p.images as { src: string }[])?.[0]?.src ?? null,
-            stock:             Number(v.stock_quantity ?? 0),
+            stock:             v.manage_stock === false ? (v.status === "publish" ? 9999 : 0) : Number(v.stock_quantity ?? 0),
             activa:            v.status === "publish",
           },
           { onConflict: "sku" }
@@ -306,6 +306,8 @@ interface WooVariacion {
   regular_price: string;
   sale_price: string;
   stock_quantity: number | null;
+  stock_status: string;
+  manage_stock: boolean;
   status: string;
   attributes: { name: string; option: string }[];
   image: { src: string } | null;
@@ -338,7 +340,8 @@ async function sincronizarStockPorPedido(
       .eq("sku", linea.sku)
       .single();
 
-    if (variacion) {
+    if (variacion && variacion.stock < 9999) {
+      // No descontar si stock=9999 (producto sin gestión de stock en WC)
       const nuevoStock = Math.max(0, (variacion.stock ?? 0) - linea.quantity);
       await supabase
         .from("productos_variaciones")

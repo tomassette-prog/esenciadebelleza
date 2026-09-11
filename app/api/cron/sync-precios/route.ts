@@ -29,7 +29,7 @@ interface WooProduct {
   id: number; type: string; sku: string; name: string; slug: string;
   status: string;
   regular_price: string; sale_price: string; price: string;
-  stock_quantity: number | null; stock_status: string;
+  stock_quantity: number | null; stock_status: string; manage_stock: boolean;
   images: { src: string }[];
   categories: { id: number; slug: string }[];
   attributes: { name: string; options: string[] }[];
@@ -40,7 +40,7 @@ interface WooProduct {
 interface WooVariation {
   id: number; sku: string; price: string;
   regular_price: string; sale_price: string;
-  stock_quantity: number | null; stock_status: string;
+  stock_quantity: number | null; stock_status: string; manage_stock: boolean;
   attributes: { name: string; option: string }[];
   image: { src: string } | null;
   status: string;
@@ -115,7 +115,7 @@ export async function GET(req: NextRequest) {
     try {
       const modifiedParam = modifiedAfter ? `&modified_after=${modifiedAfter}` : "";
       products = await fetchWoo<WooProduct[]>(
-        `/products?per_page=20&page=${page}&status=publish${modifiedParam}&_fields=id,type,sku,name,slug,status,regular_price,sale_price,price,stock_quantity,stock_status,images,categories,attributes,description,short_description,variations`
+        `/products?per_page=20&page=${page}&status=publish${modifiedParam}&_fields=id,type,sku,name,slug,status,regular_price,sale_price,price,stock_quantity,stock_status,manage_stock,images,categories,attributes,description,short_description,variations`
       );
     } catch (err) {
       console.error(`[cron/sync] Error page ${page}:`, err);
@@ -209,7 +209,8 @@ export async function GET(req: NextRequest) {
       const isOferta = precioVenta > 0 && precioVenta < precioRegular;
       const precioB2c = isOferta ? precioVenta : precioRegular;
       const precioB2b = parseFloat((precioB2c * b2bMult).toFixed(2));
-      const stock = wp.stock_quantity ?? 0;
+      // Si WC no gestiona stock (manage_stock=false) y dice instock → stock alto (no limitar venta)
+      const stock = wp.manage_stock ? (wp.stock_quantity ?? 0) : (wp.stock_status !== "outofstock" ? 9999 : 0);
       const activa = wp.stock_status !== "outofstock";
 
       if (wp.type === "simple") {
@@ -230,7 +231,7 @@ export async function GET(req: NextRequest) {
       } else if (wp.type === "variable" && wp.variations?.length) {
         try {
           const wcVars = await fetchWoo<WooVariation[]>(
-            `/products/${wp.id}/variations?per_page=100&_fields=id,sku,price,regular_price,sale_price,stock_quantity,stock_status,attributes,image,status`
+            `/products/${wp.id}/variations?per_page=100&_fields=id,sku,price,regular_price,sale_price,stock_quantity,stock_status,manage_stock,attributes,image,status`
           );
           const varUpserts = wcVars.map(wv => {
             const vReg = parseFloat(wv.regular_price || wv.price) || 0;
@@ -246,7 +247,7 @@ export async function GET(req: NextRequest) {
               precio_b2c: vB2c,
               precio_b2b: parseFloat((vB2c * b2bMult).toFixed(2)),
               precio_comparar: vOferta ? vReg : null,
-              stock: wv.stock_quantity ?? 0,
+              stock: wv.manage_stock ? (wv.stock_quantity ?? 0) : (wv.stock_status !== "outofstock" ? 9999 : 0),
               activa: wv.stock_status !== "outofstock",
               imagen_url: wv.image?.src ?? null,
             };
