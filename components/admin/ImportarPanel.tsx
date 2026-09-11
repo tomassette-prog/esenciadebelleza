@@ -474,7 +474,7 @@ export function ImportarPanel({ allPairs }: { allPairs: CategoriaPair[] }) {
       const allMarcasPendientes: string[] = [];
       while (true) {
         setProgreso({ ok: totalNuevos + totalPrecios, total: 0 });
-        const res = await sincronizarTodo(page);
+        const res = await sincronizarTodo(page, true);
         totalNuevos += res.nuevos;
         totalPrecios += res.preciosActualizados;
         totalOfertas += res.ofertasActualizadas;

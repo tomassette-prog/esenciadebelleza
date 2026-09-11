@@ -507,7 +507,7 @@ export async function calcularDiff(): Promise<{
 // Procesa UNA página de WC (100 productos) por invocación para no superar el timeout
 // de la función serverless (300s). El caller debe seguir llamando con `page` incremental
 // mientras `hasMore` sea true.
-export async function sincronizarTodo(page: number = 1): Promise<{
+export async function sincronizarTodo(page: number = 1, forceFull: boolean = false): Promise<{
   ok: number;
   nuevos: number;
   preciosActualizados: number;
@@ -538,7 +538,7 @@ export async function sincronizarTodo(page: number = 1): Promise<{
   const lastSync = lastSyncRow?.valor ?? null;
   const now = new Date().toISOString();
 
-  const url = lastSync
+  const url = lastSync && !forceFull
     ? `/products?status=publish&per_page=50&page=${page}&modified_after=${lastSync}`
     : `/products?status=publish&per_page=50&page=${page}`;
   const batch: any[] = await fetchWoo(url);
