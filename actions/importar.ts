@@ -702,12 +702,24 @@ export async function sincronizarTodo(page: number = 1, forceFull: boolean = fal
     }
     }
 
-  // Guardar timestamp y snapshot solo cuando no hay más páginas (última invocación)
-  if (!hasMore) {
+  // Guardar timestamp después de cada página para poder continuar si se interrumpe
+  // (solo en modo incremental — en forceFull no guardamos para que la próxima vez
+  // vuelva a empezar desde el principio y no se salte productos)
+  if (!forceFull) {
     await supa.from("config_tienda").upsert(
       { clave: "ultima_sync_wc", valor: now },
       { onConflict: "clave" }
     );
+  }
+
+  // Guardar snapshot solo en la última página
+  if (!hasMore) {
+    if (forceFull) {
+      await supa.from("config_tienda").upsert(
+        { clave: "ultima_sync_wc", valor: now },
+        { onConflict: "clave" }
+      );
+    }
     try { await guardarSnapshot(); } catch {}
   }
 
