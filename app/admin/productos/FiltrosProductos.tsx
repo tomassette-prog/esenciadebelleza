@@ -64,11 +64,13 @@ export function FiltrosProductos({
   };
 
   const handleCat = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    navigate({ cat: e.target.value, subcat: "" });
+    // Al cambiar categoría, limpiar búsqueda para evitar conflicto de filtros
+    navigate({ cat: e.target.value, subcat: "", q: "" });
   };
 
   const handleSelect = (key: string) => (e: React.ChangeEvent<HTMLSelectElement>) => {
-    navigate({ [key]: e.target.value });
+    // Al aplicar cualquier filtro, limpiar búsqueda
+    navigate({ [key]: e.target.value, q: "" });
   };
 
   const reset = () => navigate({ q: "", cat: "", subcat: "", marca: "", estado: "", flag: "", extra: "" });
