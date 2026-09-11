@@ -3,7 +3,6 @@ import { ImportarPanel } from "@/components/admin/ImportarPanel";
 import MerchantCenterUploadSimple from "@/components/admin/MerchantCenterUploadSimple";
 import { getAllCategoriaPairs } from "@/lib/category-suggester";
 import { SuspenseSyncTabs } from "./SyncTabsClient";
-import { PreciosSync } from "@/components/admin/PreciosSync";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -21,9 +20,6 @@ export default async function SincronizacionPage() {
       <SuspenseSyncTabs>
         <div data-tab="importar">
           <ImportarPanel allPairs={allPairs} />
-        </div>
-        <div data-tab="precios">
-          <PreciosSync />
         </div>
         <div data-tab="merchant">
           <MerchantCenterUploadSimple />
