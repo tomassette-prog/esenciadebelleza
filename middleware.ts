@@ -1,4 +1,3 @@
-import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
 // ─── Patrones de rutas legacy/maliciosas que deben bloquearse ────────────────
@@ -43,44 +42,33 @@ export async function middleware(request: NextRequest) {
     return new NextResponse(null, { status: 403 });
   }
 
-  // 3. Gestión de autenticación con Supabase SSR
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-  if (!supabaseUrl || !supabaseAnonKey) {
-    // Sin credenciales de Supabase: bloquear rutas protegidas
-    const isProtected = PROTECTED_ROUTES.some((r) => pathname.startsWith(r));
-    if (isProtected) {
-      return NextResponse.redirect(new URL("/login", request.url));
+  // 3. Verificar sesión leyendo cookie directamente (mismo enfoque que admin layout)
+  const response = NextResponse.next();
+  const PROJECT_REF = "yjanobsfzcwpusynvlun";
+  const cookieName = `sb-${PROJECT_REF}-auth-token`;
+  const allCookies = request.cookies.getAll();
+  let raw = "";
+  const mainCookie = allCookies.find(c => c.name === cookieName);
+  if (mainCookie) {
+    raw = mainCookie.value;
+  } else {
+    for (let i = 0; ; i++) {
+      const chunk = allCookies.find(c => c.name === `${cookieName}.${i}`);
+      if (!chunk) break;
+      raw += chunk.value;
     }
-    return NextResponse.next();
   }
 
-  let response = NextResponse.next({ request });
-
-  const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
-    cookies: {
-      getAll() {
-        return request.cookies.getAll();
-      },
-      setAll(cookiesToSet: { name: string; value: string; options?: Record<string, unknown> }[]) {
-        cookiesToSet.forEach(({ name, value }) =>
-          request.cookies.set(name, value)
-        );
-        response = NextResponse.next({ request });
-        cookiesToSet.forEach(({ name, value, options }) =>
-          response.cookies.set(name, value, options)
-        );
-      },
-    },
-  });
-
-  // Refrescar sesión (no bloquea la ejecución)
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-
-  const user = session?.user ?? null;
+  let user: { id: string; email: string } | null = null;
+  if (raw) {
+    try {
+      const decoded = raw.startsWith("%") ? decodeURIComponent(raw) : raw;
+      const parsed = JSON.parse(decoded);
+      const id = parsed?.user?.id;
+      const email = parsed?.user?.email;
+      if (id && email) user = { id, email };
+    } catch { /* cookie corrupta */ }
+  }
 
   // 4. Proteger rutas de cuenta
   const isProtected = PROTECTED_ROUTES.some((r) => pathname.startsWith(r));
