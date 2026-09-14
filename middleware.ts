@@ -46,16 +46,16 @@ export async function middleware(request: NextRequest) {
   const response = NextResponse.next();
   const PROJECT_REF = "yjanobsfzcwpusynvlun";
   const cookieName = `sb-${PROJECT_REF}-auth-token`;
-  const allCookies = request.cookies.getAll();
-  let raw = "";
-  const mainCookie = allCookies.find(c => c.name === cookieName);
-  if (mainCookie) {
-    raw = mainCookie.value;
-  } else {
-    for (let i = 0; ; i++) {
-      const chunk = allCookies.find(c => c.name === `${cookieName}.${i}`);
+  let raw = request.cookies.get(cookieName)?.value ?? "";
+
+  // Also try chunked cookies
+  if (!raw) {
+    let i = 0;
+    while (true) {
+      const chunk = request.cookies.get(`${cookieName}.${i}`)?.value;
       if (!chunk) break;
-      raw += chunk.value;
+      raw += chunk;
+      i++;
     }
   }
 
@@ -76,6 +76,11 @@ export async function middleware(request: NextRequest) {
     const loginUrl = new URL("/login", request.url);
     loginUrl.searchParams.set("redirectTo", pathname);
     return NextResponse.redirect(loginUrl);
+  }
+
+  // Debug header (remove after verifying)
+  if (isProtected) {
+    response.headers.set("x-debug-auth", user ? `ok:${user.email}` : `no-user:rawLen=${raw.length}`);
   }
 
   return response;
