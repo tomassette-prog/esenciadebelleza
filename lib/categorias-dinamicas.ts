@@ -1,6 +1,6 @@
 // ─── Funciones para construir NAV_ITEMS dinámicamente ──────────────────────────
 
-import { unstable_noStore as noStore } from "next/cache";
+import { unstable_cache } from "next/cache";
 import { createClient } from "@supabase/supabase-js";
 import type { NavItem, NavColumna, NavLink } from "@/lib/categorias";
 
@@ -87,30 +87,33 @@ export interface Subcategoria {
 
 /**
  * Obtiene todas las subcategorías activas desde la BD
+ * Cached 5 min — las subcategorías cambian raramente
  */
-export async function obtenerSubcategoriasDinamicas(): Promise<Subcategoria[]> {
-  noStore(); // Nunca cachear — siempre leer de BD
-  try {
-    const supa = createAnonClient();
-    const { data, error } = await supa
-      .from("subcategorias")
-      .select("*")
-      .eq("activa", true)
-      .order("orden", { ascending: true });
+export const obtenerSubcategoriasDinamicas = unstable_cache(
+  async (): Promise<Subcategoria[]> => {
+    try {
+      const supa = createAnonClient();
+      const { data, error } = await supa
+        .from("subcategorias")
+        .select("*")
+        .eq("activa", true)
+        .order("orden", { ascending: true });
 
-    if (error) {
-      console.error("Error al obtener subcategorías:", error.message);
+      if (error) {
+        console.error("Error al obtener subcategorías:", error.message);
+        return FALLBACK_SUBCATEGORIAS as Subcategoria[];
+      }
+
+      const result = (data || []) as Subcategoria[];
+      return result.length > 0 ? result : FALLBACK_SUBCATEGORIAS as Subcategoria[];
+    } catch (err) {
+      console.error("Error crítico al obtener subcategorías:", err);
       return FALLBACK_SUBCATEGORIAS as Subcategoria[];
     }
-
-    const result = (data || []) as Subcategoria[];
-    // Si la BD devuelve vacío, usar fallback para no romper la navbar
-    return result.length > 0 ? result : FALLBACK_SUBCATEGORIAS as Subcategoria[];
-  } catch (err) {
-    console.error("Error crítico al obtener subcategorías:", err);
-    return FALLBACK_SUBCATEGORIAS as Subcategoria[];
-  }
-}
+  },
+  ["subcategorias-dinamicas"],
+  { revalidate: 300 } // 5 minutos
+);
 
 /**
  * Obtiene una subcategoría específica por categoría y slug

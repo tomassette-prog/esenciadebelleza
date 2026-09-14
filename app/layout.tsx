@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Script from "next/script";
 import { Inter, Cormorant_Garamond } from "next/font/google";
 import { buildOrganizationJsonLd } from "@/lib/seo";
 import { CarritoProvider } from "@/context/CarritoContext";
@@ -78,23 +79,22 @@ export default function RootLayout({
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(orgJsonLd) }}
         />
-        {/* Google Analytics GA4 */}
-        <script async src="https://www.googletagmanager.com/gtag/js?id=G-XXBMMPXWVR" />
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `
-              window.dataLayer = window.dataLayer || [];
-              function gtag(){dataLayer.push(arguments);}
-              gtag('js', new Date());
-              gtag('config', 'G-XXBMMPXWVR');
-            `,
-          }}
-        />
       </head>
       <body className="bg-white text-neutral-900 antialiased font-sans">
         <CarritoProvider>
           {children}
         </CarritoProvider>
+        {/* Google Analytics GA4 — afterInteractive para no bloquear render */}
+        <Script
+          src="https://www.googletagmanager.com/gtag/js?id=G-XXBMMPXWVR"
+          strategy="afterInteractive"
+        />
+        <Script id="ga4-init" strategy="afterInteractive">{`
+          window.dataLayer = window.dataLayer || [];
+          function gtag(){dataLayer.push(arguments);}
+          gtag('js', new Date());
+          gtag('config', 'G-XXBMMPXWVR');
+        `}</Script>
       </body>
     </html>
   );

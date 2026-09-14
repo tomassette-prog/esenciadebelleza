@@ -25,116 +25,101 @@ export default async function HomePage() {
   const supabase = await createClient();
   const adminClient = createAdminClient();
 
-  // Packs destacados para la home
-  const packsDestacados = await getPacksDestacados();
+  const PRODUCT_SELECT = `id, nombre, slug, categoria, subcategoria, oferta,
+    imagen_principal_url, destacado, nuevo,
+    marca:marcas(nombre),
+    variaciones:productos_variaciones!inner(precio_b2c, precio_comparar, activa, stock)`;
 
-  // Posts destacados para la sección del blog en home
-  const { data: postsDestacados } = await adminClient
-    .from("posts")
-    .select("slug, titulo, resumen, imagen_url, published_at")
-    .eq("publicado", true)
-    .eq("destacado", true)
-    .order("published_at", { ascending: false })
-    .limit(10);
-
-  // Si no hay destacados, tomar los 10 más recientes
-  const { data: postsRecientes } = !postsDestacados?.length
-    ? await adminClient
-        .from("posts")
-        .select("slug, titulo, resumen, imagen_url, published_at")
-        .eq("publicado", true)
-        .order("published_at", { ascending: false })
-        .limit(10)
-    : { data: null };
-
-  const posts = postsDestacados?.length ? postsDestacados : (postsRecientes ?? []);
-
-  // Ofertas destacadas para el carrusel entre marcas
-  const { data: ofertasRaw } = await adminClient
-    .from("productos_padre")
-    .select(
-      `id, nombre, slug, categoria, subcategoria, oferta,
-       imagen_principal_url, destacado, nuevo,
-       marca:marcas(nombre),
-       variaciones:productos_variaciones!inner(precio_b2c, precio_comparar, activa, stock)`
-    )
-    .eq("activo", true)
-    .eq("oferta", true)
-    .eq("variaciones.activa", true)
-    .limit(12);
-
-  // Novedades / destacados para la home (solo con stock)
-  const { data: destacadosRaw } = await adminClient
-    .from("productos_padre")
-    .select(
-      `id, nombre, slug, categoria, subcategoria, oferta,
-       imagen_principal_url, destacado, nuevo,
-       marca:marcas(nombre),
-       variaciones:productos_variaciones!inner(precio_b2c, precio_comparar, activa, stock)`
-    )
-    .eq("activo", true)
-    .eq("destacado", true)
-    .eq("variaciones.activa", true)
-    .limit(12);
-
-  const { data: nuevosRaw } = await adminClient
-    .from("productos_padre")
-    .select(
-      `id, nombre, slug, categoria, subcategoria, oferta,
-       imagen_principal_url, destacado, nuevo,
-       marca:marcas(nombre),
-       variaciones:productos_variaciones!inner(precio_b2c, precio_comparar, activa, stock)`
-    )
-    .eq("activo", true)
-    .eq("nuevo", true)
-    .eq("variaciones.activa", true)
-    .limit(12);
-
-  // Fallback: cualquier producto activo con stock si no hay ninguno marcado
-  const necesitaFallback = !ofertasRaw?.length && !destacadosRaw?.length && !nuevosRaw?.length;
-  const { data: fallbackRaw } = necesitaFallback
-    ? await adminClient
-        .from("productos_padre")
-        .select(
-          `id, nombre, slug, categoria, subcategoria, oferta,
-           imagen_principal_url, destacado, nuevo,
-           marca:marcas(nombre),
-           variaciones:productos_variaciones!inner(precio_b2c, precio_comparar, activa, stock)`
+  // ── Todas las queries independientes en paralelo ────────────────────────────
+  const [
+    packsDestacados,
+    { data: postsDestacados },
+    { data: ofertasRaw },
+    { data: destacadosRaw },
+    { data: nuevosRaw },
+    { data: carruselesData },
+    { data: marcasRaw },
+    { data: todosRaw },
+  ] = await Promise.all([
+    getPacksDestacados(),
+    adminClient
+      .from("posts")
+      .select("slug, titulo, resumen, imagen_url, published_at")
+      .eq("publicado", true)
+      .eq("destacado", true)
+      .order("published_at", { ascending: false })
+      .limit(10),
+    adminClient
+      .from("productos_padre")
+      .select(PRODUCT_SELECT)
+      .eq("activo", true)
+      .eq("oferta", true)
+      .eq("variaciones.activa", true)
+      .limit(12),
+    adminClient
+      .from("productos_padre")
+      .select(PRODUCT_SELECT)
+      .eq("activo", true)
+      .eq("destacado", true)
+      .eq("variaciones.activa", true)
+      .limit(12),
+    adminClient
+      .from("productos_padre")
+      .select(PRODUCT_SELECT)
+      .eq("activo", true)
+      .eq("nuevo", true)
+      .eq("variaciones.activa", true)
+      .limit(12),
+    adminClient
+      .from("carruseles")
+      .select(`
+        id, nombre, subtitulo, orden,
+        productos:carrusel_productos(
+          orden,
+          producto:productos_padre(
+            id, nombre, slug, categoria, subcategoria, oferta,
+            imagen_principal_url, destacado, nuevo,
+            marca:marcas(nombre),
+            variaciones:productos_variaciones(precio_b2c, precio_comparar, activa, stock)
+          )
         )
-        .eq("activo", true)
-        .eq("variaciones.activa", true)
-        .limit(12)
-    : { data: null };
+      `)
+      .eq("activo", true)
+      .order("orden"),
+    supabase
+      .from("marcas")
+      .select("id, nombre, slug, logo_url")
+      .eq("activa", true)
+      .not("logo_url", "is", null)
+      .order("nombre"),
+    supabase.rpc("get_category_counts"),
+  ]);
 
-  // Carruseles personalizados de la home
-  const { data: carruselesData } = await adminClient
-    .from("carruseles")
-    .select(`
-      id, nombre, subtitulo, orden,
-      productos:carrusel_productos(
-        orden,
-        producto:productos_padre(
-          id, nombre, slug, categoria, subcategoria, oferta,
-          imagen_principal_url, destacado, nuevo,
-          marca:marcas(nombre),
-          variaciones:productos_variaciones(precio_b2c, precio_comparar, activa, stock)
-        )
-      )
-    `)
-    .eq("activo", true)
-    .order("orden");
+  // Posts: fallback a recientes si no hay destacados
+  let posts = postsDestacados ?? [];
+  if (!posts.length) {
+    const { data: postsRecientes } = await adminClient
+      .from("posts")
+      .select("slug, titulo, resumen, imagen_url, published_at")
+      .eq("publicado", true)
+      .order("published_at", { ascending: false })
+      .limit(10);
+    posts = postsRecientes ?? [];
+  }
 
-  // Marcas con logo para el carrusel
-  const { data: marcasRaw } = await supabase
-    .from("marcas")
-    .select("id, nombre, slug, logo_url")
-    .eq("activa", true)
-    .not("logo_url", "is", null)
-    .order("nombre");
+  // Fallback productos si no hay ofertas/destacados/nuevos
+  let fallbackRaw: typeof ofertasRaw = null;
+  if (!ofertasRaw?.length && !destacadosRaw?.length && !nuevosRaw?.length) {
+    const { data } = await adminClient
+      .from("productos_padre")
+      .select(PRODUCT_SELECT)
+      .eq("activo", true)
+      .eq("variaciones.activa", true)
+      .limit(12);
+    fallbackRaw = data;
+  }
+
   const marcasConLogo = marcasRaw ?? [];
-
-  // Conteo real de categorías usando función SQL (COUNT DISTINCT, sin límite de filas)
-  const { data: todosRaw } = await supabase.rpc("get_category_counts");
 
   const categorias = (todosRaw ?? []).map((row: { categoria: string; total: number }) => ({
     slug: slugifyCategoria(row.categoria),
