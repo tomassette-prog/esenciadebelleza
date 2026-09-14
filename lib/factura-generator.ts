@@ -357,14 +357,14 @@ export function pedidoAFactura(pedido: {
     numero,
     fecha: pedido.created_at,
     empresa: {
-      nombre: "Esencia de Belleza",
+      nombre: "Sandra Navarro Torres",
       nif: "ESXXXXXXXXX", // ← CAMBIAR POR EL NIF REAL
-      direccion: "C/ Ejemplo, 123", // ← CAMBIAR POR DIRECCIÓN REAL
-      cp: "03001",
-      ciudad: "Alicante",
-      provincia: "Alicante",
+      direccion: "C/ Torrente, 2",
+      cp: "46470",
+      ciudad: "Catarroja",
+      provincia: "Valencia",
       telefono: "622 004 408",
-      email: "pedidos@esenciadebelleza.es",
+      email: "info@esenciadebelleza.es",
       web: "esenciadebelleza.es",
     },
     cliente: {
