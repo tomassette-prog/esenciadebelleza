@@ -68,15 +68,19 @@ export default async function PedidoDetallePage({
   }>;
 
   return (
-    <main className="container-main py-12">
+    <div>
       {/* Breadcrumb */}
-      <nav className="text-xs text-neutral-400 mb-8">
+      <nav className="text-xs text-neutral-400 mb-6">
         <Link href="/cuenta" className="hover:text-neutral-700 transition-colors">
           Mi cuenta
         </Link>
         <span className="mx-2">/</span>
+        <Link href="/cuenta/pedidos" className="hover:text-neutral-700 transition-colors">
+          Pedidos
+        </Link>
+        <span className="mx-2">/</span>
         <span className="text-neutral-600">
-          Pedido #{pedido.id.slice(0, 8).toUpperCase()}
+          #{pedido.id.slice(0, 8).toUpperCase()}
         </span>
       </nav>
 
@@ -282,6 +286,6 @@ export default async function PedidoDetallePage({
           </Link>
         </div>
       </div>
-    </main>
+    </div>
   );
 }

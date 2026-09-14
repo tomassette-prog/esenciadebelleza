@@ -33,17 +33,14 @@ export default async function FacturasPage() {
   }
 
   return (
-    <main className="container-main py-12">
+    <div>
       <div className="mb-8">
-        <a href="/cuenta" className="text-xs text-neutral-400 hover:text-neutral-700 transition-colors">
-          ← Volver a mi cuenta
-        </a>
-        <h1
-          className="text-3xl font-light text-neutral-900 mt-4"
+        <h2
+          className="text-2xl font-light text-neutral-900"
           style={{ fontFamily: "var(--font-cormorant)" }}
         >
           Mis Facturas
-        </h1>
+        </h2>
         <p className="text-sm text-neutral-500 mt-1">
           Descarga tus facturas emitidas por Esencia de Belleza.
         </p>
@@ -112,6 +109,6 @@ export default async function FacturasPage() {
           </table>
         </div>
       )}
-    </main>
+    </div>
   );
 }
