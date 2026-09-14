@@ -334,6 +334,15 @@ export default function DetallePedidoClient({ pedido }: { pedido: Pedido }) {
             {saving ? "Guardando…" : "Guardar cambios"}
           </button>
 
+          <a
+            href={`/api/facturas/${pedido.id}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2 rounded-lg text-sm font-medium inline-flex items-center gap-1"
+          >
+            🧾 Ver factura
+          </a>
+
           {!pedido.woo_order_id ? (
             <button
               onClick={() => setShowModal(true)}

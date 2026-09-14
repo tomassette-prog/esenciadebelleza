@@ -20,19 +20,50 @@ export async function generateMetadata({ searchParams }: PageProps): Promise<Met
 }
 
 const PAGE_SIZE = 24;
+const SUGGESTIONS_LIMIT = 8;
 
 type CatCount = { categoria: string; subcategoria: string | null; count: number };
 
-type SupabaseQuery = ReturnType<ReturnType<typeof import("@supabase/supabase-js").createClient>["from"]>;
-
-function buildSearchQuery(
-  baseQuery: SupabaseQuery,
-  words: string[]
-) {
-  if (words.length === 0) return baseQuery;
-  const orClause = words.map((w) => `nombre.ilike.%${w}%`).join(",");
-  return baseQuery.or(orClause);
+/** Extrae datos plano del resultado de Supabase a ProductoCatalogo */
+function mapProductos(data: unknown[]): ProductoCatalogo[] {
+  return (data as Array<{
+    id: string; nombre: string; slug: string; categoria: string; subcategoria: string | null;
+    imagen_principal_url: string | null; destacado: boolean; nuevo: boolean; oferta: boolean | null;
+    marca: { nombre: string } | null;
+    variaciones: Array<{ precio_b2c: number; precio_comparar: number | null; activa: boolean; stock: number }>;
+  }>).map((p) => {
+    const variacionesActivas = (p.variaciones ?? []).filter((v) => v.activa);
+    const precioDesde = variacionesActivas.length > 0
+      ? Math.min(...variacionesActivas.map((v) => v.precio_b2c))
+      : 0;
+    const precioCompararDesde = variacionesActivas
+      .map((v) => v.precio_comparar)
+      .filter((pc): pc is number => pc != null && pc > 0);
+    return {
+      id: p.id,
+      nombre: p.nombre,
+      slug: p.slug,
+      categoria: p.categoria,
+      subcategoria: p.subcategoria,
+      imagen_principal_url: p.imagen_principal_url,
+      destacado: p.destacado,
+      nuevo: p.nuevo,
+      marca_nombre: p.marca?.nombre ?? null,
+      precio_desde: precioDesde,
+      precio_comparar_desde: precioCompararDesde.length > 0 ? Math.min(...precioCompararDesde) : null,
+      oferta: p.oferta ?? false,
+      total_variaciones: variacionesActivas.length,
+    };
+  });
 }
+
+/** Columnas comunes para las queries de producto */
+const PRODUCT_SELECT = `
+  id, nombre, slug, categoria, subcategoria, oferta,
+  imagen_principal_url, destacado, nuevo,
+  marca:marcas(nombre),
+  variaciones:productos_variaciones(precio_b2c, precio_comparar, activa, stock)
+`;
 
 export default async function BuscarPage({ searchParams }: PageProps) {
   const { q = "", cat = "", subcat = "", pagina = "1" } = await searchParams;
@@ -44,22 +75,63 @@ export default async function BuscarPage({ searchParams }: PageProps) {
     ? query.split(/\s+/).filter((w) => w.length >= 2)
     : [];
 
-  let productos: ProductoCatalogo[] = [];
+  let exactProductos: ProductoCatalogo[] = [];
+  let suggestProductos: ProductoCatalogo[] = [];
   let total = 0;
   let catCounts: CatCount[] = [];
 
   if (words.length > 0) {
     const supabase = createAdminClient();
 
-    // Query para distribución de categorías (sin paginación, solo cat+subcat)
+    // ── 1. EXACTOS (AND): todas las palabras deben aparecer en el nombre ──
+    let exactBase = supabase
+      .from("productos_padre")
+      .select(PRODUCT_SELECT, { count: "exact" })
+      .eq("activo", true);
+    // AND: cada palabra debe aparecer en el nombre
+    for (const w of words) {
+      exactBase = exactBase.ilike("nombre", `%${w}%`) as typeof exactBase;
+    }
+    if (cat) exactBase = exactBase.eq("categoria", cat);
+    if (subcat) exactBase = exactBase.eq("subcategoria", subcat);
+    exactBase = exactBase.order("nombre").range(from, from + PAGE_SIZE - 1);
+
+    const { data: exactData, count: exactCount } = await exactBase;
+    total = exactCount ?? 0;
+    exactProductos = mapProductos(exactData ?? []);
+
+    // IDs de los exactos para excluir de sugerencias
+    const exactIds = new Set(exactProductos.map((p) => p.id));
+
+    // ── 2. SUGERENCIAS (OR): alguna de las palabras, excluyendo exactos ──
+    if (words.length > 1) {
+      let suggestBase = supabase
+        .from("productos_padre")
+        .select(PRODUCT_SELECT)
+        .eq("activo", true);
+
+      const orClause = words.map((w) => `nombre.ilike.%${w}%`).join(",");
+      suggestBase = suggestBase.or(orClause) as typeof suggestBase;
+      if (cat) suggestBase = suggestBase.eq("categoria", cat);
+      if (subcat) suggestBase = suggestBase.eq("subcategoria", subcat);
+      suggestBase = suggestBase.order("nombre").range(0, SUGGESTIONS_LIMIT + exactIds.size - 1);
+
+      const { data: suggestData } = await suggestBase;
+      suggestProductos = mapProductos(suggestData ?? [])
+        .filter((p) => !exactIds.has(p.id))
+        .slice(0, SUGGESTIONS_LIMIT);
+    }
+
+    // ── 3. Distribución de categorías (sobre resultados exactos) ──
     let catQuery = supabase
       .from("productos_padre")
       .select("categoria, subcategoria")
       .eq("activo", true);
-    catQuery = buildSearchQuery(catQuery, words);
+    for (const w of words) {
+      catQuery = catQuery.ilike("nombre", `%${w}%`) as typeof catQuery;
+    }
     const { data: catData } = await catQuery;
 
-    // Contar por categoria + subcategoria
     const countMap = new Map<string, number>();
     for (const p of (catData ?? []) as { categoria: string; subcategoria: string | null }[]) {
       const key = `${p.categoria}|||${p.subcategoria ?? ""}`;
@@ -71,56 +143,10 @@ export default async function BuscarPage({ searchParams }: PageProps) {
         return { categoria, subcategoria: subcategoriaRaw || null, count };
       })
       .sort((a, b) => b.count - a.count);
-
-    // Query principal con filtros de cat/subcat + paginación
-    let mainQuery = supabase
-      .from("productos_padre")
-      .select(
-        `id, nombre, slug, categoria, subcategoria, oferta,
-         imagen_principal_url, destacado, nuevo,
-         marca:marcas(nombre),
-         variaciones:productos_variaciones(precio_b2c, precio_comparar, activa, stock)`,
-        { count: "exact" }
-      )
-      .eq("activo", true);
-
-    mainQuery = buildSearchQuery(mainQuery, words);
-    if (cat) mainQuery = mainQuery.eq("categoria", cat);
-    if (subcat) mainQuery = mainQuery.eq("subcategoria", subcat);
-    mainQuery = mainQuery.order("nombre").range(from, from + PAGE_SIZE - 1);
-
-    const { data, count } = await mainQuery;
-    total = count ?? 0;
-
-    productos = (data ?? []).map((p) => {
-      const variacionesActivas = (p.variaciones ?? []).filter((v: { activa: boolean }) => v.activa);
-      const precioDesde = variacionesActivas.length > 0
-        ? Math.min(...variacionesActivas.map((v: { precio_b2c: number }) => v.precio_b2c))
-        : 0;
-      const precioCompararDesde = variacionesActivas
-        .map((v: { precio_comparar: number | null }) => v.precio_comparar)
-        .filter((pc): pc is number => pc != null && pc > 0);
-      return {
-        id: p.id,
-        nombre: p.nombre,
-        slug: p.slug,
-        categoria: p.categoria,
-        subcategoria: p.subcategoria,
-        imagen_principal_url: p.imagen_principal_url,
-        destacado: p.destacado,
-        nuevo: p.nuevo,
-        marca_nombre: (p.marca as unknown as { nombre: string } | null)?.nombre ?? null,
-        precio_desde: precioDesde,
-        precio_comparar_desde: precioCompararDesde.length > 0 ? Math.min(...precioCompararDesde) : null,
-        oferta: p.oferta ?? false,
-        total_variaciones: variacionesActivas.length,
-      };
-    });
   }
 
   const totalPaginas = Math.ceil(total / PAGE_SIZE);
 
-  // Categorías únicas para los filtros laterales
   const categorias = [...new Set(catCounts.map((c) => c.categoria))];
   const subcategorias = cat
     ? catCounts.filter((c) => c.categoria === cat && c.subcategoria)
@@ -176,7 +202,7 @@ export default async function BuscarPage({ searchParams }: PageProps) {
       )}
 
       {/* Sin resultados */}
-      {words.length > 0 && productos.length === 0 && (
+      {words.length > 0 && exactProductos.length === 0 && suggestProductos.length === 0 && (
         <div className="text-center py-16">
           <p className="text-neutral-500 text-sm mb-2">
             No hemos encontrado resultados para <strong>&quot;{query}&quot;</strong>.
@@ -189,7 +215,7 @@ export default async function BuscarPage({ searchParams }: PageProps) {
       )}
 
       {/* Resultados */}
-      {productos.length > 0 && (
+      {exactProductos.length + suggestProductos.length > 0 && (
         <div className="flex gap-8 items-start">
           {/* Sidebar filtros */}
           {categorias.length > 1 && (
@@ -253,7 +279,7 @@ export default async function BuscarPage({ searchParams }: PageProps) {
             {/* Filtros mobile + header */}
             <div className="flex flex-wrap items-center gap-2 mb-6">
               <p className="text-sm text-neutral-500 mr-auto">
-                <span className="font-medium text-neutral-900">{total}</span> resultado{total !== 1 ? "s" : ""} para{" "}
+                <span className="font-medium text-neutral-900">{total}</span> resultado{total !== 1 ? "s" : ""} exacto{total !== 1 ? "s" : ""} para{" "}
                 <span className="font-medium">&quot;{query}&quot;</span>
                 {cat && <span className="text-neutral-400"> · {cat}{subcat ? ` / ${subcat}` : ""}</span>}
               </p>
@@ -295,8 +321,9 @@ export default async function BuscarPage({ searchParams }: PageProps) {
               )}
             </div>
 
+            {/* Grid de resultados exactos */}
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 gap-6 lg:gap-8">
-              {productos.map((p, i) => (
+              {exactProductos.map((p, i) => (
                 <ProductoCard key={p.id} producto={p} priority={i < 4} />
               ))}
             </div>
@@ -321,6 +348,21 @@ export default async function BuscarPage({ searchParams }: PageProps) {
                 {page < totalPaginas && (
                   <a href={paginaUrl(page + 1)} className="w-9 h-9 flex items-center justify-center text-sm border border-neutral-200 hover:border-neutral-900 transition-colors">→</a>
                 )}
+              </div>
+            )}
+
+            {/* Sugerencias: "Quizá te interese" */}
+            {suggestProductos.length > 0 && (
+              <div className="mt-16 pt-10 border-t border-neutral-200">
+                <h2 className="text-lg font-semibold text-neutral-800 mb-1">Quizá te interese</h2>
+                <p className="text-sm text-neutral-400 mb-6">
+                  Productos que coinciden con alguna de tus palabras de búsqueda
+                </p>
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 gap-6 lg:gap-8">
+                  {suggestProductos.map((p) => (
+                    <ProductoCard key={p.id} producto={p} />
+                  ))}
+                </div>
               </div>
             )}
           </div>

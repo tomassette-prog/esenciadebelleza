@@ -58,7 +58,7 @@ export default async function DatosPage() {
                 </label>
                 <input
                   type="email"
-                  value={user.email ?? ""}
+                  value={session?.email ?? ""}
                   disabled
                   className="w-full border border-neutral-100 bg-neutral-50 px-3 py-2.5 text-sm text-neutral-400"
                 />

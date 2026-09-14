@@ -54,7 +54,7 @@ export default async function DireccionesPage({
         </div>
       )}
 
-      <form action={actualizarDirecciones} className="space-y-6">
+      <form action={actualizarDirecciones as unknown as (formData: FormData) => void} className="space-y-6">
         {/* Dirección de envío */}
         <div className="bg-white border border-neutral-100 p-6">
           <h3 className="text-xs tracking-widest uppercase text-neutral-500 mb-5">

@@ -210,8 +210,10 @@ export async function GET(req: NextRequest) {
       const precioB2c = isOferta ? precioVenta : precioRegular;
       const precioB2b = parseFloat((precioB2c * b2bMult).toFixed(2));
       // Si WC no gestiona stock (manage_stock=false) y dice instock → stock alto (no limitar venta)
-      const stock = wp.manage_stock ? (wp.stock_quantity ?? 0) : (wp.stock_status !== "outofstock" ? 9999 : 0);
-      const activa = wp.stock_status !== "outofstock";
+      // onbackorder NO cuenta como stock disponible (mismo tratamiento que outofstock)
+      const isInStock = wp.stock_status === "instock";
+      const stock = wp.manage_stock ? (wp.stock_quantity ?? 0) : (isInStock ? 9999 : 0);
+      const activa = isInStock;
 
       if (wp.type === "simple") {
         const sku = wp.sku || wp.slug;
@@ -247,8 +249,8 @@ export async function GET(req: NextRequest) {
               precio_b2c: vB2c,
               precio_b2b: parseFloat((vB2c * b2bMult).toFixed(2)),
               precio_comparar: vOferta ? vReg : null,
-              stock: wv.manage_stock ? (wv.stock_quantity ?? 0) : (wv.stock_status !== "outofstock" ? 9999 : 0),
-              activa: wv.stock_status !== "outofstock",
+              stock: wv.manage_stock ? (wv.stock_quantity ?? 0) : (wv.stock_status === "instock" ? 9999 : 0),
+              activa: wv.stock_status === "instock",
               imagen_url: wv.image?.src ?? null,
             };
           });

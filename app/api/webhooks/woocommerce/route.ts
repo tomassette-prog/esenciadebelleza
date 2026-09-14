@@ -232,8 +232,8 @@ async function sincronizarProducto(
         precio_b2b:        parseFloat((precioB2c * b2bMult).toFixed(2)),
         precio_comparar:   p.sale_price ? parseFloat(String(p.regular_price || "0")) : null,
         imagen_url:        (p.images as { src: string }[])?.[0]?.src ?? null,
-        stock:             p.manage_stock === false ? (p.status === "publish" ? 9999 : 0) : Number(p.stock_quantity ?? 0),
-        activa:            p.status === "publish",
+        stock:             p.manage_stock === false ? (p.stock_status === "instock" ? 9999 : 0) : Number(p.stock_quantity ?? 0),
+        activa:            p.stock_status === "instock",
       },
       { onConflict: "sku" }
     );
@@ -260,8 +260,8 @@ async function sincronizarProducto(
             precio_b2b:        parseFloat((precioB2C * b2bMult).toFixed(2)),
             precio_comparar:   v.sale_price ? parseFloat(v.regular_price || "0") : null,
             imagen_url:        v.image?.src ?? (p.images as { src: string }[])?.[0]?.src ?? null,
-            stock:             v.manage_stock === false ? (v.status === "publish" ? 9999 : 0) : Number(v.stock_quantity ?? 0),
-            activa:            v.status === "publish",
+            stock:             v.manage_stock === false ? (v.stock_status === "instock" ? 9999 : 0) : Number(v.stock_quantity ?? 0),
+            activa:            v.stock_status === "instock",
           },
           { onConflict: "sku" }
         );
