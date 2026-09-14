@@ -7,7 +7,7 @@ import type { ProductoCatalogo } from "@/types/producto";
 export const dynamic = "force-dynamic";
 
 interface PageProps {
-  searchParams: Promise<{ q?: string; cat?: string; subcat?: string; pagina?: string }>;
+  searchParams: Promise<{ q?: string; cat?: string; subcat?: string; marca?: string; pagina?: string }>;
 }
 
 export async function generateMetadata({ searchParams }: PageProps): Promise<Metadata> {
@@ -23,6 +23,7 @@ const PAGE_SIZE = 24;
 const SUGGESTIONS_LIMIT = 8;
 
 type CatCount = { categoria: string; subcategoria: string | null; count: number };
+type MarcaCount = { marca: string; nombre: string; count: number };
 
 /** Extrae datos plano del resultado de Supabase a ProductoCatalogo */
 function mapProductos(data: unknown[]): ProductoCatalogo[] {
@@ -66,7 +67,7 @@ const PRODUCT_SELECT = `
 `;
 
 export default async function BuscarPage({ searchParams }: PageProps) {
-  const { q = "", cat = "", subcat = "", pagina = "1" } = await searchParams;
+  const { q = "", cat = "", subcat = "", marca = "", pagina = "1" } = await searchParams;
   const query = q.trim();
   const page  = Math.max(1, parseInt(pagina, 10));
   const from  = (page - 1) * PAGE_SIZE;
@@ -79,6 +80,7 @@ export default async function BuscarPage({ searchParams }: PageProps) {
   let suggestProductos: ProductoCatalogo[] = [];
   let total = 0;
   let catCounts: CatCount[] = [];
+  let marcaCounts: MarcaCount[] = [];
 
   if (words.length > 0) {
     const supabase = createAdminClient();
@@ -94,6 +96,7 @@ export default async function BuscarPage({ searchParams }: PageProps) {
     }
     if (cat) exactBase = exactBase.eq("categoria", cat);
     if (subcat) exactBase = exactBase.eq("subcategoria", subcat);
+    if (marca) exactBase = exactBase.eq("marca_id", marca);
     exactBase = exactBase.order("nombre").range(from, from + PAGE_SIZE - 1);
 
     const { data: exactData, count: exactCount } = await exactBase;
@@ -114,6 +117,7 @@ export default async function BuscarPage({ searchParams }: PageProps) {
       suggestBase = suggestBase.or(orClause) as typeof suggestBase;
       if (cat) suggestBase = suggestBase.eq("categoria", cat);
       if (subcat) suggestBase = suggestBase.eq("subcategoria", subcat);
+      if (marca) suggestBase = suggestBase.eq("marca_id", marca);
       suggestBase = suggestBase.order("nombre").range(0, SUGGESTIONS_LIMIT + exactIds.size - 1);
 
       const { data: suggestData } = await suggestBase;
@@ -143,6 +147,34 @@ export default async function BuscarPage({ searchParams }: PageProps) {
         return { categoria, subcategoria: subcategoriaRaw || null, count };
       })
       .sort((a, b) => b.count - a.count);
+
+    // ── 4. Distribución de marcas (sobre resultados exactos) ──
+    let marcaQuery = supabase
+      .from("productos_padre")
+      .select("marca_id, marcas(nombre)")
+      .eq("activo", true)
+      .not("marca_id", "is", null);
+    for (const w of words) {
+      marcaQuery = marcaQuery.ilike("nombre", `%${w}%`) as typeof marcaQuery;
+    }
+    if (cat) marcaQuery = marcaQuery.eq("categoria", cat);
+    if (subcat) marcaQuery = marcaQuery.eq("subcategoria", subcat);
+    const { data: marcaData } = await marcaQuery;
+
+    const marcaCountMap = new Map<string, { nombre: string; count: number }>();
+    for (const p of (marcaData ?? []) as { marca_id: string; marcas: { nombre: string }[] | null }[]) {
+      if (!p.marca_id || !p.marcas?.[0]) continue;
+      const nombreMarca = p.marcas[0].nombre;
+      const existing = marcaCountMap.get(p.marca_id);
+      if (existing) {
+        existing.count++;
+      } else {
+        marcaCountMap.set(p.marca_id, { nombre: nombreMarca, count: 1 });
+      }
+    }
+    marcaCounts = [...marcaCountMap.entries()]
+      .map(([id, { nombre, count }]) => ({ marca: id, nombre, count }))
+      .sort((a, b) => b.count - a.count);
   }
 
   const totalPaginas = Math.ceil(total / PAGE_SIZE);
@@ -156,6 +188,7 @@ export default async function BuscarPage({ searchParams }: PageProps) {
     const params = new URLSearchParams({ q: query, pagina: String(p) });
     if (cat) params.set("cat", cat);
     if (subcat) params.set("subcat", subcat);
+    if (marca) params.set("marca", marca);
     return `/buscar?${params.toString()}`;
   }
 
@@ -163,6 +196,15 @@ export default async function BuscarPage({ searchParams }: PageProps) {
     const params = new URLSearchParams({ q: query });
     if (newCat) params.set("cat", newCat);
     if (newSubcat) params.set("subcat", newSubcat);
+    if (marca) params.set("marca", marca);
+    return `/buscar?${params.toString()}`;
+  }
+
+  function marcaUrl(marcaId: string) {
+    const params = new URLSearchParams({ q: query });
+    if (cat) params.set("cat", cat);
+    if (subcat) params.set("subcat", subcat);
+    if (marcaId) params.set("marca", marcaId);
     return `/buscar?${params.toString()}`;
   }
 
@@ -272,6 +314,32 @@ export default async function BuscarPage({ searchParams }: PageProps) {
                   </ul>
                 </div>
               )}
+
+              {marcaCounts.length > 1 && (
+                <div>
+                  <p className="text-xs font-medium uppercase tracking-widest text-neutral-500 mb-3">Marca</p>
+                  <ul className="space-y-1">
+                    <li>
+                      <a
+                        href={marcaUrl("")}
+                        className={`text-sm transition-colors block py-0.5 ${!marca ? "font-semibold text-neutral-900" : "text-neutral-500 hover:text-neutral-900"}`}
+                      >
+                        Todas
+                      </a>
+                    </li>
+                    {marcaCounts.slice(0, 10).map((m) => (
+                      <li key={m.marca}>
+                        <a
+                          href={marcaUrl(m.marca)}
+                          className={`text-sm transition-colors block py-0.5 ${marca === m.marca ? "font-semibold text-neutral-900" : "text-neutral-500 hover:text-neutral-900"}`}
+                        >
+                          {m.nombre} <span className="text-neutral-400 text-xs">({m.count})</span>
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </aside>
           )}
 
@@ -315,6 +383,27 @@ export default async function BuscarPage({ searchParams }: PageProps) {
                       className={`px-3 py-1 text-xs border capitalize transition-colors ${subcat === s ? "border-[#C4857A] bg-[#C4857A] text-white" : "border-neutral-200 text-neutral-600 hover:border-neutral-500"}`}
                     >
                       {s}
+                    </a>
+                  ))}
+                </div>
+              )}
+
+              {/* Chips mobile marcas */}
+              {marcaCounts.length > 1 && (
+                <div className="flex flex-wrap gap-1.5 lg:hidden w-full">
+                  <a
+                    href={marcaUrl("")}
+                    className={`px-3 py-1 text-xs border transition-colors ${!marca ? "border-neutral-900 bg-neutral-900 text-white" : "border-neutral-200 text-neutral-600 hover:border-neutral-500"}`}
+                  >
+                    Todas marcas
+                  </a>
+                  {marcaCounts.slice(0, 8).map((m) => (
+                    <a
+                      key={m.marca}
+                      href={marcaUrl(m.marca)}
+                      className={`px-3 py-1 text-xs border transition-colors ${marca === m.marca ? "border-[#C4857A] bg-[#C4857A] text-white" : "border-neutral-200 text-neutral-600 hover:border-neutral-500"}`}
+                    >
+                      {m.nombre} <span className="text-neutral-400">({m.count})</span>
                     </a>
                   ))}
                 </div>
