@@ -1,7 +1,8 @@
-import { redirect, notFound } from "next/navigation";
+import { notFound } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getSessionFromCookie } from "@/lib/supabase/session-helper";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
@@ -34,10 +35,7 @@ export default async function PedidoDetallePage({
 }: {
   params: { id: string };
 }) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-
-  if (!user) redirect("/login?redirectTo=/cuenta");
+  const session = await getSessionFromCookie();
 
   // Buscar pedido — por usuario_id O por email (invitado)
   const adminClient = createAdminClient();
@@ -49,7 +47,7 @@ export default async function PedidoDetallePage({
       pedidos_lineas ( id, nombre_producto, nombre_variacion, sku, cantidad, precio_unitario, subtotal )
     `)
     .eq("id", params.id)
-    .or(`usuario_id.eq.${user.id},email_cliente.eq.${user.email}`)
+    .or(`usuario_id.eq.${session?.id},email_cliente.eq.${session?.email}`)
     .single();
 
   if (!pedido) notFound();

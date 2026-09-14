@@ -1,6 +1,6 @@
-import { redirect } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
+import { getSessionFromCookie } from "@/lib/supabase/session-helper";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
@@ -20,22 +20,20 @@ const ESTADO_LABEL: Record<string, { label: string; color: string }> = {
 };
 
 export default async function PedidosPage() {
+  const session = await getSessionFromCookie();
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-
-  if (!user) redirect("/login?redirectTo=/cuenta/pedidos");
 
   const { data: pedidosPropios } = await supabase
     .from("pedidos")
     .select("id, estado, total, created_at, metodo_pago")
-    .eq("usuario_id", user.id)
+    .eq("usuario_id", session?.id)
     .order("created_at", { ascending: false })
     .limit(50);
 
   const { data: pedidosEmail } = await supabase
     .from("pedidos")
     .select("id, estado, total, created_at, metodo_pago")
-    .eq("email_cliente", user.email!)
+    .eq("email_cliente", session?.email)
     .is("usuario_id", null)
     .order("created_at", { ascending: false })
     .limit(50);

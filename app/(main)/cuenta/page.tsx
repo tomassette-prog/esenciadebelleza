@@ -1,6 +1,6 @@
-﻿import { redirect } from "next/navigation";
-import Link from "next/link";
+﻿import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
+import { getSessionFromCookie } from "@/lib/supabase/session-helper";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
@@ -13,30 +13,28 @@ export default async function CuentaPage({
 }: {
   searchParams: { bienvenido?: string; password_actualizado?: string };
 }) {
+  const session = await getSessionFromCookie();
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-
-  if (!user) redirect("/login?redirectTo=/cuenta");
 
   // Perfil
   const { data: perfil } = await supabase
     .from("perfiles_usuario")
     .select("*")
-    .eq("id", user.id)
+    .eq("id", session?.id)
     .single();
 
   // Pedidos recientes (últimos 5)
   const { data: pedidosPropios } = await supabase
     .from("pedidos")
     .select("id, estado, total, created_at, metodo_pago")
-    .eq("usuario_id", user.id)
+    .eq("usuario_id", session?.id)
     .order("created_at", { ascending: false })
     .limit(5);
 
   const { data: pedidosEmail } = await supabase
     .from("pedidos")
     .select("id, estado, total, created_at, metodo_pago")
-    .eq("email_cliente", user.email!)
+    .eq("email_cliente", session?.email)
     .is("usuario_id", null)
     .order("created_at", { ascending: false })
     .limit(5);
@@ -49,7 +47,7 @@ export default async function CuentaPage({
   const { count: totalPedidos } = await supabase
     .from("pedidos")
     .select("id", { count: "exact", head: true })
-    .or(`usuario_id.eq.${user.id},email_cliente.eq.${user.email}`);
+    .or(`usuario_id.eq.${session?.id},email_cliente.eq.${session?.email}`);
 
   // Total gastado
   const todosPedidos = [...(pedidosPropios ?? []), ...(pedidosEmail ?? [])];

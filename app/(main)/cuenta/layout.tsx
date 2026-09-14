@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { getSessionFromCookie } from "@/lib/supabase/session-helper";
 import { CuentaSidebar } from "@/components/layout/CuentaSidebar";
 import { logout } from "@/actions/auth";
 import type { ReactNode } from "react";
@@ -9,18 +10,17 @@ export default async function CuentaLayout({
 }: {
   children: ReactNode;
 }) {
+  const sessionUser = await getSessionFromCookie();
+  if (!sessionUser) redirect("/login?redirectTo=/cuenta");
+
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-
-  if (!user) redirect("/login?redirectTo=/cuenta");
-
   const { data: perfil } = await supabase
     .from("perfiles_usuario")
     .select("nombre_completo, tipo_cliente, b2b_aprobado")
-    .eq("id", user.id)
+    .eq("id", sessionUser.id)
     .single();
 
-  const displayName = perfil?.nombre_completo?.split(" ")[0] ?? user.email?.split("@")[0] ?? "Mi cuenta";
+  const displayName = perfil?.nombre_completo?.split(" ")[0] ?? sessionUser.email?.split("@")[0] ?? "Mi cuenta";
   const esProfesional = perfil?.tipo_cliente === "b2b";
   const b2bAprobado = perfil?.b2b_aprobado === true;
 
@@ -62,7 +62,7 @@ export default async function CuentaLayout({
       <div className="flex flex-col lg:flex-row gap-8">
         <CuentaSidebar
           userName={displayName}
-          userEmail={user.email ?? ""}
+          userEmail={sessionUser.email}
         />
         <div className="flex-1 min-w-0">{children}</div>
       </div>

@@ -1,5 +1,5 @@
-import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { getSessionFromCookie } from "@/lib/supabase/session-helper";
 import { actualizarDirecciones } from "@/actions/direcciones";
 import type { Metadata } from "next";
 
@@ -26,15 +26,13 @@ export default async function DireccionesPage({
 }: {
   searchParams?: { guardado?: string };
 }) {
+  const session = await getSessionFromCookie();
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-
-  if (!user) redirect("/login?redirectTo=/cuenta/direcciones");
 
   const { data: perfil } = await supabase
     .from("perfiles_usuario")
     .select("direccion_envio, direccion_facturacion")
-    .eq("id", user.id)
+    .eq("id", session?.id)
     .single();
 
   const envio = (perfil?.direccion_envio ?? {}) as Direccion;
