@@ -66,7 +66,9 @@ export function ProductoCard({ producto, priority = false }: Props) {
           <span className={`text-sm font-medium ${producto.oferta ? "text-red-600" : "text-neutral-900"}`}>
             {producto.precio_desde > 0
               ? formatPrice(producto.precio_desde)
-              : "Consultar precio"}
+              : producto.total_variaciones === 0
+                ? "Consultar disponibilidad"
+                : "Consultar precio"}
           </span>
           {producto.precio_comparar_desde && producto.precio_comparar_desde > producto.precio_desde && (
             <span className="text-[10px] text-red-600 font-medium">
