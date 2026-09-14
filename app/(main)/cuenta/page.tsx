@@ -248,9 +248,13 @@ export default async function CuentaPage({
                 {pedidos.map((pedido) => {
                   const estado = ESTADO_LABEL[pedido.estado] ?? { label: pedido.estado, color: "text-neutral-600 bg-neutral-100" };
                   return (
-                    <div key={pedido.id} className="py-4 flex items-center justify-between gap-4">
+                    <Link
+                      key={pedido.id}
+                      href={`/cuenta/pedidos/${pedido.id}`}
+                      className="py-4 flex items-center justify-between gap-4 hover:bg-neutral-50 -mx-3 px-3 transition-colors group"
+                    >
                       <div>
-                        <p className="text-sm font-medium text-neutral-900">
+                        <p className="text-sm font-medium text-neutral-900 group-hover:text-[#C4857A] transition-colors">
                           #{pedido.id.slice(0, 8).toUpperCase()}
                         </p>
                         <p className="text-xs text-neutral-400 mt-0.5">
@@ -266,8 +270,11 @@ export default async function CuentaPage({
                         <span className="text-sm font-medium text-neutral-900 tabular-nums">
                           {Number(pedido.total).toLocaleString("es-ES", { style: "currency", currency: "EUR" })}
                         </span>
+                        <svg className="w-4 h-4 text-neutral-300 group-hover:text-neutral-500 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+                        </svg>
                       </div>
-                    </div>
+                    </Link>
                   );
                 })}
               </div>

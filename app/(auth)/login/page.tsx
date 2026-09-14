@@ -45,7 +45,7 @@ export default function LoginPage({
       ? redirectTo
       : ADMIN_EMAILS.includes(data.user?.email ?? "")
         ? "/admin/productos"
-        : "/";
+        : "/cuenta";
 
     window.location.href = destino;
   }
