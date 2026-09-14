@@ -5,6 +5,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getSessionFromCookie } from "@/lib/supabase/session-helper";
 import type { Metadata } from "next";
 
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
   title: "Detalle de pedido",
   robots: { index: false, follow: false },

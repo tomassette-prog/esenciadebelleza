@@ -3,6 +3,8 @@ import { getSessionFromCookie } from "@/lib/supabase/session-helper";
 import { actualizarDirecciones } from "@/actions/direcciones";
 import type { Metadata } from "next";
 
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
   title: "Mis Direcciones",
   robots: { index: false, follow: false },

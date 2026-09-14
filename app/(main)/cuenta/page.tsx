@@ -3,6 +3,8 @@ import { createClient } from "@/lib/supabase/server";
 import { getSessionFromCookie } from "@/lib/supabase/session-helper";
 import type { Metadata } from "next";
 
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
   title: "Mi Cuenta",
   robots: { index: false, follow: false },

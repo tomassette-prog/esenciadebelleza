@@ -4,6 +4,8 @@ import { getSessionFromCookie } from "@/lib/supabase/session-helper";
 import { listarMisFacturas } from "@/actions/facturas";
 import type { Metadata } from "next";
 
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
   title: "Mis Facturas | Esencia de Belleza",
   robots: { index: false, follow: false },

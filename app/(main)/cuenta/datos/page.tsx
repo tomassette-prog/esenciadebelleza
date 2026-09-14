@@ -4,6 +4,8 @@ import { getSessionFromCookie } from "@/lib/supabase/session-helper";
 import { actualizarPerfil } from "@/actions/auth";
 import type { Metadata } from "next";
 
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
   title: "Mis Datos",
   robots: { index: false, follow: false },
