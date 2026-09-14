@@ -127,6 +127,7 @@ export default async function ProductoPage({ params, searchParams }: PageProps) 
   const varsActivas = p.variaciones.filter((v) => v.activa && v.precio_b2c > 0);
 
   // Variación activa por query param o primera disponible con precio válido
+  // Último fallback: variación inactiva con precio (para mostrar WhatsApp en productos sin stock)
   const variacionActiva =
     (tono
       ? varsActivas.find(
@@ -135,6 +136,7 @@ export default async function ProductoPage({ params, searchParams }: PageProps) 
       : null)
     ?? varsActivas.sort((a, b) => b.precio_b2c - a.precio_b2c)[0]
     ?? p.variaciones.find((v) => v.activa)
+    ?? p.variaciones.find((v) => v.precio_b2c > 0)
     ?? null;
 
   // URL canónica siempre apunta al padre — evita duplicate content
