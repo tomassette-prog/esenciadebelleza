@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { createAdminClient } from "@/lib/supabase/admin";
 import ProfesionalAcciones from "@/components/admin/ProfesionalAcciones";
 import FacturasProfesional from "@/components/admin/FacturasProfesional";
+import GenerarFactura from "@/components/admin/GenerarFactura";
 import { listarFacturasProfesional } from "@/actions/facturas";
 
 export const dynamic = "force-dynamic";
@@ -155,17 +156,23 @@ export default async function AdminProfesionalesPage() {
             </table>
           </div>
 
-          {/* Facturas por profesional */}
+          {/* Facturas y generar factura por profesional */}
           {await Promise.all(
             aprobados.map(async (p) => {
               const facturas = await listarFacturasProfesional(p.id);
+              const nombre = p.empresa ?? p.nombre_completo ?? p.email;
               return (
-                <FacturasProfesional
-                  key={`facturas-${p.id}`}
-                  profesionalId={p.id}
-                  profesionalNombre={p.empresa ?? p.nombre_completo ?? p.email}
-                  facturasIniciales={facturas}
-                />
+                <div key={`facturas-${p.id}`}>
+                  <GenerarFactura
+                    profesionalId={p.id}
+                    profesionalNombre={nombre}
+                  />
+                  <FacturasProfesional
+                    profesionalId={p.id}
+                    profesionalNombre={nombre}
+                    facturasIniciales={facturas}
+                  />
+                </div>
               );
             })
           )}
