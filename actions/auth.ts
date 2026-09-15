@@ -198,6 +198,34 @@ export async function logout() {
   redirect("/");
 }
 
+// ── Reenviar email de confirmación ────────────────────────────────────────────
+export async function resendConfirmationEmail(
+  email: string
+): Promise<{ error: string; success: boolean }> {
+  const supabase = await createClient();
+
+  const siteUrl =
+    process.env.NEXT_PUBLIC_SITE_URL ?? "https://esenciadebelleza.es";
+
+  const { error } = await supabase.auth.resend({
+    type: "signup",
+    email: email.trim().toLowerCase(),
+    options: {
+      emailRedirectTo: `${siteUrl}/auth/callback`,
+    },
+  });
+
+  if (error) {
+    // "User already confirmed" no es un error real — significa que ya puede entrar
+    if (error.message?.toLowerCase().includes("already confirmed")) {
+      return { error: "", success: true };
+    }
+    return { error: "No se pudo enviar el email. Inténtalo de nuevo.", success: false };
+  }
+
+  return { error: "", success: true };
+}
+
 // ── Recuperar contraseña ──────────────────────────────────────────────────────
 export async function recuperarPassword(
   _prevState: { error: string; success: boolean } | null,

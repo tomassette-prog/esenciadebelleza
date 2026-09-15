@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
+import { resendConfirmationEmail } from "@/actions/auth";
 
 export default function LoginPage({
   searchParams,
@@ -11,28 +12,60 @@ export default function LoginPage({
 }) {
   const [verPassword, setVerPassword] = useState(false);
   const [error, setError] = useState("");
+  const [emailNotConfirmed, setEmailNotConfirmed] = useState(false);
+  const [lastEmail, setLastEmail] = useState("");
+  const [resendLoading, setResendLoading] = useState(false);
+  const [resendSent, setResendSent] = useState(false);
   const [loading, setLoading] = useState(false);
   const redirectTo = searchParams.redirectTo ?? searchParams.redirect ?? "/";
 
   const ADMIN_EMAILS = ["ziarresamot@gmail.com"];
 
+  function isEmailNotConfirmed(err: { message?: string; code?: string }) {
+    const msg = (err.message ?? "").toLowerCase();
+    const code = (err.code ?? "").toLowerCase();
+    return (
+      msg.includes("email not confirmed") ||
+      msg.includes("not confirmed") ||
+      msg.includes("confirm your email") ||
+      code === "email_not_confirmed"
+    );
+  }
+
+  async function handleResend() {
+    if (!lastEmail) return;
+    setResendLoading(true);
+    setResendSent(false);
+    const result = await resendConfirmationEmail(lastEmail);
+    setResendLoading(false);
+    if (result.success) {
+      setResendSent(true);
+    } else if (result.error) {
+      setError(result.error);
+    }
+  }
+
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError("");
+    setEmailNotConfirmed(false);
+    setResendSent(false);
     setLoading(true);
 
     const form = e.currentTarget;
     const email = (form.elements.namedItem("email") as HTMLInputElement).value.trim().toLowerCase();
     const password = (form.elements.namedItem("password") as HTMLInputElement).value;
 
+    setLastEmail(email);
+
     const supabase = createClient();
     const { data, error: authError } = await supabase.auth.signInWithPassword({ email, password });
 
     if (authError) {
-      const msg = authError.message?.toLowerCase() ?? "";
-      if (msg.includes("email not confirmed")) {
-        setError("Tu email aún no ha sido confirmado. Revisa tu bandeja de entrada (y spam) por un email de confirmación.");
-      } else if (msg.includes("too many")) {
+      if (isEmailNotConfirmed(authError)) {
+        setEmailNotConfirmed(true);
+        setError("");
+      } else if ((authError.message ?? "").toLowerCase().includes("too many")) {
         setError("Demasiados intentos de inicio de sesión. Espera unos minutos e inténtalo de nuevo.");
       } else {
         setError("Credenciales incorrectas. Verifica tu email y contraseña.");
@@ -74,10 +107,34 @@ export default function LoginPage({
 
       {/* Formulario */}
       <form onSubmit={handleSubmit} className="space-y-4 bg-white border border-neutral-100 p-8">
-        {/* Error */}
-        {(error || searchParams?.error === "credenciales") && (
+        {/* Error genérico */}
+        {(error || searchParams?.error === "credenciales") && !emailNotConfirmed && (
           <div className="p-3 bg-red-50 border border-red-200 text-red-700 text-sm">
             {error || "Credenciales incorrectas. Verifica tu email y contraseña."}
+          </div>
+        )}
+
+        {/* Email no confirmado */}
+        {emailNotConfirmed && (
+          <div className="p-4 bg-amber-50 border border-amber-200 text-amber-800 text-sm space-y-3">
+            <p>
+              Tu email aún no ha sido confirmado. Revisa tu bandeja de entrada
+              (y la carpeta de spam) por un email de confirmación.
+            </p>
+            {resendSent ? (
+              <p className="text-green-700 font-medium">
+                ✓ Email de confirmación reenviado. Revisa tu bandeja de entrada.
+              </p>
+            ) : (
+              <button
+                type="button"
+                onClick={handleResend}
+                disabled={resendLoading}
+                className="text-xs tracking-wider uppercase font-medium underline underline-offset-2 hover:text-amber-900 disabled:opacity-50 transition-colors"
+              >
+                {resendLoading ? "Enviando..." : "Reenviar email de confirmación"}
+              </button>
+            )}
           </div>
         )}
 
