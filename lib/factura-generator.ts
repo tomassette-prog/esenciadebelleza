@@ -301,6 +301,13 @@ export function generarHtmlFactura(datos: DatosFactura): string {
     </p>
   </div>
 
+  <!-- Protección de datos -->
+  <div style="margin-top:16px;padding-top:16px;border-top:1px solid #e8e0dc">
+    <p style="font-size:10px;color:#bbb;line-height:1.5">
+      ESENCIA DE BELLEZA, con el domicilio arriba indicado, de acuerdo con lo establecido en el Reglamento General de Protección de Datos de la Unión Europea (GDPR) le informa que los datos personales que nos ha facilitado serán incorporados a un fichero automatizado y alojados en un servidor seguro titularidad de esta empresa a fin de contactar con Vd. para formalizar la compra, el envío, facturación, y remitirle información comercial de nuestros productos y servicios. En ningún caso serán cedidos a terceros, y podrá ejercitar sus derechos de acceso, rectificación, limitación, supresión, portabilidad y oposición a su tratamiento comunicándolo a la dirección postal arriba indicada o por e-mail a nuestra dirección: info@esenciadebelleza.es
+    </p>
+  </div>
+
 </body>
 </html>`;
 }
@@ -358,8 +365,8 @@ export function pedidoAFactura(pedido: {
     fecha: pedido.created_at,
     empresa: {
       nombre: "Sandra Navarro Torres",
-      nif: "ESXXXXXXXXX", // ← CAMBIAR POR EL NIF REAL
-      direccion: "C/ Torrente, 2",
+      nif: "44871676X",
+      direccion: "C/ Torero Antonio Carpio, 13-12",
       cp: "46470",
       ciudad: "Catarroja",
       provincia: "Valencia",

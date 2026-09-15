@@ -14,8 +14,8 @@ export async function GET() {
 
     empresa: {
       nombre: "Sandra Navarro Torres",
-      nif: "ESXXXXXXXXX", // ← CAMBIAR POR EL NIF REAL
-      direccion: "C/ Torrente, 2",
+      nif: "44871676X",
+      direccion: "C/ Torero Antonio Carpio, 13-12",
       cp: "46470",
       ciudad: "Catarroja",
       provincia: "Valencia",
