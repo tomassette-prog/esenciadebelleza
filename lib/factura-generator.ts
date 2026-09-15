@@ -162,26 +162,13 @@ export function generarHtmlFactura(datos: DatosFactura): string {
   <!-- Cabecera -->
   <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:40px">
     <div>
-      <!-- Logo inline (mismo que header) -->
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
-        <svg viewBox="0 0 48 48" width="40" height="40" fill="none" aria-hidden="true" style="flex-shrink:0">
-          <circle cx="24" cy="24" r="22" stroke="#3D5A5C" stroke-width="1.8" fill="none" opacity="0.9"/>
-          <path d="M24 8 C17 10,11 16,10 24 C9 32,14 39,20 42" stroke="#C4857A" stroke-width="2.2" stroke-linecap="round" fill="none" opacity="0.85"/>
-          <path d="M24 8 C31 10,37 16,38 24 C39 32,34 39,28 42" stroke="#C4857A" stroke-width="2.2" stroke-linecap="round" fill="none" opacity="0.85"/>
-          <ellipse cx="8" cy="20" rx="5" ry="2.5" fill="#3D5A5C" opacity="0.8" transform="rotate(-30 8 20)"/>
-          <ellipse cx="40" cy="20" rx="5" ry="2.5" fill="#3D5A5C" opacity="0.8" transform="rotate(30 40 20)"/>
-          <ellipse cx="13" cy="10" rx="4" ry="2" fill="#3D5A5C" opacity="0.7" transform="rotate(-50 13 10)"/>
-          <ellipse cx="35" cy="10" rx="4" ry="2" fill="#3D5A5C" opacity="0.7" transform="rotate(50 35 10)"/>
-          <path d="M24 14 C21 19,17 23,17 27 C17 31,20 34,24 34 C28 34,31 31,31 27 C31 23,27 19,24 14Z" fill="#C4857A" fill-opacity="0.25" stroke="#C4857A" stroke-width="1.2"/>
-          <path d="M22 19 C20 22,19 25,19.5 27" stroke="white" stroke-width="1.2" stroke-linecap="round" opacity="0.6"/>
-        </svg>
-        <span style="display:flex;align-items:baseline;line-height:1">
-          <span style="font-family:'Cormorant Garamond',Georgia,serif;font-size:26px;font-weight:300;color:#C4857A;letter-spacing:0.02em">esencia</span>
-          <span style="font-family:'Cormorant Garamond',Georgia,serif;font-size:26px;font-weight:700;font-style:italic;color:#8B4A3F">de</span>
-          <span style="font-family:'Cormorant Garamond',Georgia,serif;font-size:26px;font-weight:300;color:#C4857A;letter-spacing:0.02em">belleza.es</span>
-        </span>
+      <!-- Encabezado tipografiado (mismo estilo que header) -->
+      <div style="display:flex;align-items:baseline;line-height:1;margin-bottom:4px">
+        <span style="font-family:'Cormorant Garamond',Georgia,serif;font-size:28px;font-weight:300;color:#C4857A;letter-spacing:0.02em">esencia</span>
+        <span style="font-family:'Cormorant Garamond',Georgia,serif;font-size:28px;font-weight:700;font-style:italic;color:#8B4A3F">de</span>
+        <span style="font-family:'Cormorant Garamond',Georgia,serif;font-size:28px;font-weight:300;color:#C4857A;letter-spacing:0.02em">belleza.es</span>
       </div>
-      <p style="font-size:12px;color:#888;letter-spacing:2px;text-transform:uppercase;font-family:'Raleway','Helvetica Neue',Arial,sans-serif;padding-left:48px">
+      <p style="font-size:11px;color:#C4857A;letter-spacing:2px;text-transform:uppercase;font-family:'Raleway','Helvetica Neue',Arial,sans-serif;font-weight:300;opacity:0.9">
         Peluquería · Estética · Perfumería
       </p>
     </div>
