@@ -1,6 +1,9 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 
+const PROJECT_REF = "yjanobsfzcwpusynvlun";
+const AUTH_COOKIE = `sb-${PROJECT_REF}-auth-token`;
+
 // Cliente para uso en Server Components, Route Handlers y Server Actions
 export async function createClient() {
   const cookieStore = await cookies();
@@ -11,7 +14,29 @@ export async function createClient() {
     {
       cookies: {
         getAll() {
-          return cookieStore.getAll();
+          const all = cookieStore.getAll();
+
+          // Reensamblar cookies fragmentadas de Supabase (.0, .1, .2...)
+          const chunked = new Map<string, string[]>();
+          for (const c of all) {
+            const match = c.name.match(/^(.+\.(auth-token))\.(\d+)$/);
+            if (match) {
+              const base = match[1];
+              const idx = parseInt(match[3], 10);
+              if (!chunked.has(base)) chunked.set(base, []);
+              chunked.get(base)![idx] = c.value;
+            }
+          }
+
+          // Reemplazar cookies chunked por una sola cookie reensamblada
+          const result = all.filter(c => !/\.auth-token\.\d+$/.test(c.name));
+          for (const [base, chunks] of chunked) {
+            const assembled = chunks.join("");
+            const decoded = assembled.startsWith("%") ? decodeURIComponent(assembled) : assembled;
+            result.push({ name: base, value: decoded });
+          }
+
+          return result;
         },
         setAll(cookiesToSet: { name: string; value: string; options?: Record<string, unknown> }[]) {
           try {
