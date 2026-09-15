@@ -371,14 +371,18 @@ export default function FacturasAdmin() {
                       <div className="flex items-center justify-end gap-2">
                         {/* Descargar */}
                         {f.url && (
-                          <a
-                            href={f.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
+                          <button
+                            onClick={async () => {
+                              const resp = await fetch(f.url!);
+                              const html = await resp.text();
+                              const blob = new Blob([html], { type: "text/html" });
+                              const blobUrl = URL.createObjectURL(blob);
+                              window.open(blobUrl, "_blank");
+                            }}
                             className="text-xs px-3 py-1.5 border border-neutral-200 rounded hover:bg-neutral-100 transition-colors"
                           >
-                            Descargar
-                          </a>
+                            Ver
+                          </button>
                         )}
                         {/* Enviar por email */}
                         <button
