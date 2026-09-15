@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getSessionFromCookie } from "@/lib/supabase/session-helper";
 import { generarNumOper, generarCamposCeca } from "@/lib/cecabank";
 import { stripe } from "@/lib/stripe";
 import type { LineaCarrito, LineaPack } from "@/context/CarritoContext";
@@ -62,8 +63,7 @@ export async function iniciarPagoCeca(
   if (!lineas.length && !packs.length) return { gatewayUrl: null, campos: null, gastoEnvio: 0, error: "El carrito está vacío" };
 
   const supabase   = createAdminClient();
-  const authClient = await createClient();
-  const { data: { user } } = await authClient.auth.getUser();
+  const sessionUser = await getSessionFromCookie();
 
   // ── Validar precios contra la base de datos ──
   const variacionIds = lineas.map((l) => l.variacion_id).filter(Boolean);
@@ -82,11 +82,11 @@ export async function iniciarPagoCeca(
 
   // Detectar si el usuario es profesional B2B aprobado
   let tipoPrecio: "b2c" | "b2b" = "b2c";
-  if (user) {
+  if (sessionUser) {
     const { data: perfil } = await authClient
       .from("perfiles_usuario")
       .select("b2b_aprobado, tipo_cliente")
-      .eq("id", user.id)
+      .eq("id", sessionUser?.id)
       .single();
     if (perfil?.tipo_cliente === "b2b" && perfil?.b2b_aprobado === true) {
       tipoPrecio = "b2b";
@@ -127,7 +127,7 @@ export async function iniciarPagoCeca(
   const { data: pedido, error: errPedido } = await supabase
     .from("pedidos")
     .insert({
-      usuario_id:       user?.id ?? null,
+      usuario_id:       sessionUser?.id ?? null,
       estado:           "pendiente",
       subtotal:         totalProductos,
       descuento:        descuentoCupon,
@@ -258,8 +258,7 @@ export async function iniciarPagoWooCommerce(
   if (!lineas.length) return { pagoUrl: null, pedidoId: null, gastoEnvio: 0, error: "El carrito está vacío" };
 
   const supabase   = createAdminClient();
-  const authClient = await createClient();
-  const { data: { user } } = await authClient.auth.getUser();
+  const sessionUser = await getSessionFromCookie();
 
   // ── Validar precios contra la base de datos ──
   const variacionIds = lineas.map((l) => l.variacion_id).filter(Boolean);
@@ -277,10 +276,10 @@ export async function iniciarPagoWooCommerce(
   }
 
   let tipoPrecio: "b2c" | "b2b" = "b2c";
-  if (user) {
+  if (sessionUser) {
     const { data: perfil } = await authClient
       .from("perfiles_usuario")
-      .select("b2b_aprobado, tipo_cliente").eq("id", user.id).single();
+      .select("b2b_aprobado, tipo_cliente").eq("id", sessionUser?.id).single();
     if (perfil?.tipo_cliente === "b2b" && perfil?.b2b_aprobado === true) tipoPrecio = "b2b";
   }
 
@@ -312,7 +311,7 @@ export async function iniciarPagoWooCommerce(
   const { data: pedido, error: errPedido } = await supabase
     .from("pedidos")
     .insert({
-      usuario_id:       user?.id ?? null,
+      usuario_id:       sessionUser?.id ?? null,
       estado:           "pendiente",
       subtotal:         totalProductos,
       descuento:        descuentoCupon,
@@ -521,8 +520,7 @@ export async function iniciarPagoStripe(
   if (!lineas.length && !packs.length) return { url: null, error: "El carrito está vacío" };
 
   const supabase   = createAdminClient();
-  const authClient = await createClient();
-  const { data: { user } } = await authClient.auth.getUser();
+  const sessionUser = await getSessionFromCookie();
 
   // ── Validar precios contra la base de datos (anti-precio-incorrecto) ──
   const variacionIds = lineas.map((l) => l.variacion_id).filter(Boolean);
@@ -572,18 +570,18 @@ export async function iniciarPagoStripe(
 
   // Detectar perfil B2B (igual que en Ceca/PayPal)
   let tipoPrecioStripe: "b2c" | "b2b" = "b2c";
-  if (user) {
+  if (sessionUser) {
     const { data: perfil } = await authClient
       .from("perfiles_usuario")
       .select("b2b_aprobado, tipo_cliente")
-      .eq("id", user.id)
+      .eq("id", sessionUser?.id)
       .single();
     if (perfil?.tipo_cliente === "b2b" && perfil?.b2b_aprobado === true) tipoPrecioStripe = "b2b";
   }
 
   // Guardar pedido pendiente
   const { data: pedido } = await supabase.from("pedidos").insert({
-    usuario_id:      user?.id ?? null,
+    usuario_id:      sessionUser?.id ?? null,
     estado:          "pendiente",
     subtotal:        totalProductos,
     descuento:       descuentoCupon,
@@ -738,15 +736,14 @@ export async function crearPedidoContrarembolso(
   if (!lineas.length && !packs.length) return { ok: false, error: "El carrito está vacío" };
 
   const supabase   = createAdminClient();
-  const authClient = await createClient();
-  const { data: { user } } = await authClient.auth.getUser();
+  const sessionUser = await getSessionFromCookie();
 
   let tipoPrecio: "b2c" | "b2b" = "b2c";
-  if (user) {
+  if (sessionUser) {
     const { data: perfil } = await authClient
       .from("perfiles_usuario")
       .select("b2b_aprobado, tipo_cliente")
-      .eq("id", user.id)
+      .eq("id", sessionUser?.id)
       .single();
     if (perfil?.tipo_cliente === "b2b" && perfil?.b2b_aprobado === true) tipoPrecio = "b2b";
   }
@@ -765,7 +762,7 @@ export async function crearPedidoContrarembolso(
   const { data: pedido, error: errPedido } = await supabase
     .from("pedidos")
     .insert({
-      usuario_id:       user?.id ?? null,
+      usuario_id:       sessionUser?.id ?? null,
       estado:           "pagado",
       subtotal:         totalProductos,
       descuento:        descuentoCupon,
@@ -812,7 +809,7 @@ export async function crearPedidoContrarembolso(
   // 4. Email al admin y confirmación al cliente
   // Registrar uso de cupón si aplica
   if (datosEnvio.cupon?.id && descuentoCupon > 0) {
-    await registrarUsoCupon(datosEnvio.cupon.id, pedido.id, user?.id ?? null, descuentoCupon);
+    await registrarUsoCupon(datosEnvio.cupon.id, pedido.id, sessionUser?.id ?? null, descuentoCupon);
   }
 
   return { ok: true, pedidoId: pedido.id };
@@ -836,15 +833,14 @@ export async function crearPedidoBizum(
   if (!lineas.length && !packs.length) return { ok: false, error: "El carrito está vacío" };
 
   const supabase   = createAdminClient();
-  const authClient = await createClient();
-  const { data: { user } } = await authClient.auth.getUser();
+  const sessionUser = await getSessionFromCookie();
 
   let tipoPrecio: "b2c" | "b2b" = "b2c";
-  if (user) {
+  if (sessionUser) {
     const { data: perfil } = await authClient
       .from("perfiles_usuario")
       .select("b2b_aprobado, tipo_cliente")
-      .eq("id", user.id)
+      .eq("id", sessionUser?.id)
       .single();
     if (perfil?.tipo_cliente === "b2b" && perfil?.b2b_aprobado === true) tipoPrecio = "b2b";
   }
@@ -862,7 +858,7 @@ export async function crearPedidoBizum(
   const { data: pedido, error: errPedido } = await supabase
     .from("pedidos")
     .insert({
-      usuario_id:       user?.id ?? null,
+      usuario_id:       sessionUser?.id ?? null,
       estado:           "pendiente_bizum",
       subtotal:         totalProductos,
       descuento:        descuentoCupon,
@@ -905,7 +901,7 @@ export async function crearPedidoBizum(
 
   // 3. Emails — admin + cliente (aviso pendiente Bizum)
   if (datosEnvio.cupon?.id && descuentoCupon > 0) {
-    await registrarUsoCupon(datosEnvio.cupon.id, pedido.id, user?.id ?? null, descuentoCupon);
+    await registrarUsoCupon(datosEnvio.cupon.id, pedido.id, sessionUser?.id ?? null, descuentoCupon);
   }
 
   const lineasEmail = [
