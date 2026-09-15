@@ -340,9 +340,6 @@ export async function listarClientesConPedidos() {
 
 // ── Listar pedidos de un cliente por email (admin) ──────────────────────────
 export async function listarPedidosCliente(email: string) {
-  const admin_user = await verificarAdmin();
-  if (!admin_user) return [];
-
   const supabase = createAdminClient();
   const emailLower = email.toLowerCase();
 
