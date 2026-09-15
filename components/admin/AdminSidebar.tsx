@@ -26,6 +26,7 @@ const NAV_SECTIONS = [
     items: [
       { href: "/admin/blog", label: "Blog", icon: "📝" },
       { href: "/admin/pedidos", label: "Pedidos", icon: "🛒" },
+      { href: "/admin/clientes", label: "Clientes", icon: "👥" },
       { href: "/admin/facturas", label: "Facturas", icon: "📄" },
       { href: "/admin/profesionales", label: "Profesionales", icon: "👩‍🎨" },
       { href: "/admin/resenas", label: "Reseñas", icon: "⭐" },
