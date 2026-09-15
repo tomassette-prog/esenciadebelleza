@@ -19,17 +19,17 @@ export async function createClient() {
           // Reensamblar cookies fragmentadas de Supabase (.0, .1, .2...)
           const chunked = new Map<string, string[]>();
           for (const c of all) {
-            const match = c.name.match(/^(.+\.(auth-token))\.(\d+)$/);
+            const match = c.name.match(/^(sb-.+?-auth-token)\.(\d+)$/);
             if (match) {
               const base = match[1];
-              const idx = parseInt(match[3], 10);
+              const idx = parseInt(match[2], 10);
               if (!chunked.has(base)) chunked.set(base, []);
               chunked.get(base)![idx] = c.value;
             }
           }
 
           // Reemplazar cookies chunked por una sola cookie reensamblada
-          const result = all.filter(c => !/\.auth-token\.\d+$/.test(c.name));
+          const result = all.filter(c => !/^sb-.+?-auth-token\.\d+$/.test(c.name));
           for (const [base, chunks] of chunked) {
             const assembled = chunks.join("");
             const decoded = assembled.startsWith("%") ? decodeURIComponent(assembled) : assembled;
