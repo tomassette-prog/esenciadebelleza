@@ -233,38 +233,6 @@ export async function generarFacturaDesdePedido(
   return { facturaId: factura?.id };
 }
 
-// ── Listar pedidos de un profesional (admin) ────────────────────────────────
-export async function listarPedidosProfesional(profesionalId: string) {
-  const admin_user = await verificarAdmin();
-  if (!admin_user) return [];
-
-  const supabase = createAdminClient();
-
-  // Buscar email del profesional
-  const { data: { user } } = await supabase.auth.admin.getUserById(profesionalId);
-  const email = user?.email;
-  if (!email) return [];
-
-  // Buscar pedidos por usuario_id O por email
-  const { data: pedidosPorId } = await supabase
-    .from("pedidos")
-    .select("id, estado, total, created_at, metodo_pago, email_cliente")
-    .eq("usuario_id", profesionalId)
-    .order("created_at", { ascending: false });
-
-  const { data: pedidosPorEmail } = await supabase
-    .from("pedidos")
-    .select("id, estado, total, created_at, metodo_pago, email_cliente")
-    .eq("email_cliente", email)
-    .is("usuario_id", null)
-    .order("created_at", { ascending: false });
-
-  // Combinar y deduplicar
-  const all = [...(pedidosPorId ?? []), ...(pedidosPorEmail ?? [])];
-  const unique = all.filter((p, i, arr) => arr.findIndex(x => x.id === p.id) === i);
-  return unique.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-}
-
 // ── Listar todos los clientes con pedidos (admin) ───────────────────────────
 export async function listarClientesConPedidos() {
   const admin_user = await verificarAdmin();
