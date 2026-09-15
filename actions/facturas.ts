@@ -341,31 +341,12 @@ export async function listarClientesConPedidos() {
 // ── Listar pedidos de un cliente por email (admin) ──────────────────────────
 export async function listarPedidosCliente(email: string) {
   const supabase = createAdminClient();
-  const emailLower = email.toLowerCase();
 
-  // Buscar usuario_id por email
-  const { data: authUsers } = await supabase.auth.admin.listUsers();
-  const user = authUsers.users.find(u => u.email?.toLowerCase() === emailLower);
-
-  const { data: pedidosPorEmail } = await supabase
+  const { data: pedidos } = await supabase
     .from("pedidos")
-    .select("id, estado, total, created_at, metodo_pago, email_cliente, direccion_envio, facturacion")
-    .ilike("email_cliente", emailLower)
+    .select("id, estado, total, created_at, metodo_pago, email_cliente")
+    .ilike("email_cliente", email)
     .order("created_at", { ascending: false });
 
-  // Si tiene usuario_id, buscar también por ahí
-  let pedidosPorId: typeof pedidosPorEmail = [];
-  if (user) {
-    const { data } = await supabase
-      .from("pedidos")
-      .select("id, estado, total, created_at, metodo_pago, email_cliente, direccion_envio, facturacion")
-      .eq("usuario_id", user.id)
-      .order("created_at", { ascending: false });
-    pedidosPorId = data ?? [];
-  }
-
-  // Combinar y deduplicar
-  const all = [...(pedidosPorEmail ?? []), ...(pedidosPorId ?? [])];
-  const unique = all.filter((p, i, arr) => arr.findIndex(x => x.id === p.id) === i);
-  return unique.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+  return pedidos ?? [];
 }
