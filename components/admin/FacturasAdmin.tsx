@@ -73,17 +73,9 @@ export default function FacturasAdmin() {
     setError(null);
     setExito(null);
 
-    // Usar usuario_id del cliente seleccionado
-    const usuarioId = clienteSeleccionado.usuario_id;
-    if (!usuarioId) {
-      setError("Este cliente no tiene cuenta registrada. Debe registrarse para recibir facturas.");
-      setGenerando(false);
-      return;
-    }
-
     const res = await generarFacturaDesdePedido(
       pedidoSeleccionado,
-      usuarioId,
+      clienteSeleccionado.usuario_id || clienteSeleccionado.email,
       numeroFactura.trim()
     );
 

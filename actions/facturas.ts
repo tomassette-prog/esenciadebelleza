@@ -17,7 +17,7 @@ export async function listarMisFacturas() {
   const { data } = await admin
     .from("facturas")
     .select("id, nombre, archivo_path, archivo_size, created_at")
-    .eq("profesional_id", user.id)
+    .or(`profesional_id.eq.${user.id},email_cliente.eq.${user.email}`)
     .order("created_at", { ascending: false });
 
   // Generar URLs firmadas (bucket privado)
@@ -126,7 +126,7 @@ export async function listarFacturasProfesional(profesionalId: string) {
 // ── Generar factura desde pedido (solo admin) ───────────────────────────────
 export async function generarFacturaDesdePedido(
   pedidoId: string,
-  profesionalId: string,
+  usuarioIdOrEmail: string,
   numeroFactura: string
 ): Promise<{ error?: string; facturaId?: string }> {
   const admin_user = await verificarAdmin();
@@ -146,14 +146,34 @@ export async function generarFacturaDesdePedido(
 
   if (pedidoErr || !pedido) return { error: "Pedido no encontrado" };
 
-  // 2. Obtener datos del usuario para la dirección de facturación
-  const { data: perfil } = await supabase
-    .from("perfiles_usuario")
-    .select("nombre_completo, empresa, nif_cif, direccion_envio, telefono_contacto, direccion_facturacion")
-    .eq("id", profesionalId)
-    .single();
+  // 2. Resolver usuario: puede ser UUID o email
+  let userId: string | null = null;
+  let emailCliente: string = pedido.email_cliente;
+  let perfil = null;
 
-  // 3. Generar HTML
+  const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(usuarioIdOrEmail);
+
+  if (isUUID) {
+    userId = usuarioIdOrEmail;
+  } else {
+    // Es un email — buscar usuario en auth
+    emailCliente = usuarioIdOrEmail;
+    const { data: authUsers } = await supabase.auth.admin.listUsers();
+    const user = authUsers.users.find(u => u.email?.toLowerCase() === emailCliente.toLowerCase());
+    if (user) userId = user.id;
+  }
+
+  // 3. Obtener perfil si tenemos userId
+  if (userId) {
+    const { data } = await supabase
+      .from("perfiles_usuario")
+      .select("nombre_completo, empresa, nif_cif, direccion_envio, telefono_contacto, direccion_facturacion")
+      .eq("id", userId)
+      .single();
+    perfil = data;
+  }
+
+  // 4. Generar HTML
   const { pedidoAFactura, generarHtmlFactura } = await import("@/lib/factura-generator");
 
   const pedidoConFacturacion = {
@@ -173,9 +193,10 @@ export async function generarFacturaDesdePedido(
   const html = generarHtmlFactura(datos);
   const buffer = Buffer.from(html, "utf8");
 
-  // 4. Subir a Storage
+  // 5. Subir a Storage
   const nombre = numeroFactura || datos.numero;
-  const storagePath = `profesionales/${profesionalId}/${Date.now()}-${nombre.replace(/[^a-zA-Z0-9]/g, "_")}.html`;
+  const carpeta = userId || emailCliente.replace(/[^a-zA-Z0-9]/g, "_");
+  const storagePath = `facturas/${carpeta}/${Date.now()}-${nombre.replace(/[^a-zA-Z0-9]/g, "_")}.html`;
 
   const { error: uploadErr } = await supabase.storage
     .from(BUCKET)
@@ -183,15 +204,22 @@ export async function generarFacturaDesdePedido(
 
   if (uploadErr) return { error: `Error subiendo factura: ${uploadErr.message}` };
 
-  // 5. Guardar en BD
+  // 6. Guardar en BD
+  const facturaData: Record<string, unknown> = {
+    nombre: `${nombre} — Pedido #${pedidoId.slice(0, 8).toUpperCase()}`,
+    archivo_path: storagePath,
+    archivo_size: buffer.length,
+  };
+
+  if (userId) {
+    facturaData.profesional_id = userId;
+  } else {
+    facturaData.email_cliente = emailCliente;
+  }
+
   const { data: factura, error: dbErr } = await supabase
     .from("facturas")
-    .insert({
-      profesional_id: profesionalId,
-      nombre: `${nombre} — Pedido #${pedidoId.slice(0, 8).toUpperCase()}`,
-      archivo_path: storagePath,
-      archivo_size: buffer.length,
-    })
+    .insert(facturaData)
     .select("id")
     .single();
 
