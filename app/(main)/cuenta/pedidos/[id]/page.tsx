@@ -1,8 +1,7 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-// getSessionFromCookie removed — using supabase.auth.getUser()
+import { getSessionFromCookie } from "@/lib/supabase/session-helper";
 import type { Metadata } from "next";
 
 export const dynamic = "force-dynamic";
@@ -37,9 +36,7 @@ export default async function PedidoDetallePage({
 }: {
   params: { id: string };
 }) {
-  const supabase = await createClient();
-  const { data: { session } } = await supabase.auth.getSession();
-  const user = session?.user;
+  const session = await getSessionFromCookie();
 
   // Buscar pedido — por usuario_id O por email (invitado)
   const adminClient = createAdminClient();
@@ -51,7 +48,7 @@ export default async function PedidoDetallePage({
       pedidos_lineas ( id, nombre_producto, nombre_variacion, sku, cantidad, precio_unitario, subtotal )
     `)
     .eq("id", params.id)
-    .or(`usuario_id.eq.${user?.id ?? "00000000-0000-0000-0000-000000000000"},email_cliente.eq.${user?.email ?? ""}`)
+    .or(`usuario_id.eq.${session?.id ?? "00000000-0000-0000-0000-000000000000"},email_cliente.eq.${session?.email ?? ""}`)
     .single();
 
   if (!pedido) notFound();

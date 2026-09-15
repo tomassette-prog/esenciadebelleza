@@ -1,6 +1,6 @@
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/server";
-// getSessionFromCookie removed — using supabase.auth.getUser()
+import { getSessionFromCookie } from "@/lib/supabase/session-helper";
+import { createAdminClient } from "@/lib/supabase/admin";
 import type { Metadata } from "next";
 
 export const dynamic = "force-dynamic";
@@ -22,22 +22,22 @@ const ESTADO_LABEL: Record<string, { label: string; color: string }> = {
 };
 
 export default async function PedidosPage() {
-  const supabase = await createClient();
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session?.user) return null;
-  const user = session.user;
+  const session = await getSessionFromCookie();
+  if (!session) return null;
 
-  const { data: pedidosPropios } = await supabase
+  const admin = createAdminClient();
+
+  const { data: pedidosPropios } = await admin
     .from("pedidos")
     .select("id, estado, total, created_at, metodo_pago")
-    .eq("usuario_id", user.id)
+    .eq("usuario_id", session.id)
     .order("created_at", { ascending: false })
     .limit(50);
 
-  const { data: pedidosEmail } = await supabase
+  const { data: pedidosEmail } = await admin
     .from("pedidos")
     .select("id, estado, total, created_at, metodo_pago")
-    .eq("email_cliente", user.email)
+    .eq("email_cliente", session.email)
     .is("usuario_id", null)
     .order("created_at", { ascending: false })
     .limit(50);

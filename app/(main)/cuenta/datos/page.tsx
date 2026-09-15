@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/server";
+import { getSessionFromCookie } from "@/lib/supabase/session-helper";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { actualizarPerfil } from "@/actions/auth";
 import type { Metadata } from "next";
 
@@ -11,15 +12,15 @@ export const metadata: Metadata = {
 };
 
 export default async function DatosPage() {
-  const supabase = await createClient();
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session?.user) return null;
-  const user = session.user;
+  const session = await getSessionFromCookie();
+  if (!session) return null;
 
-  const { data: perfil } = await supabase
+  const admin = createAdminClient();
+
+  const { data: perfil } = await admin
     .from("perfiles_usuario")
     .select("*")
-    .eq("id", user.id)
+    .eq("id", session.id)
     .single();
 
   const esProfesional = perfil?.tipo_cliente === "b2b";
@@ -61,7 +62,7 @@ export default async function DatosPage() {
                 </label>
                 <input
                   type="email"
-                  value={user.email ?? ""}
+                  value={session.email ?? ""}
                   disabled
                   className="w-full border border-neutral-100 bg-neutral-50 px-3 py-2.5 text-sm text-neutral-400"
                 />
