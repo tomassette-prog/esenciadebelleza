@@ -64,6 +64,7 @@ export interface DatosFactura {
 }
 
 const IVA_DEFAULT = 21;
+const LOGO_DEFAULT = "https://esenciadebelleza.es/logo.png";
 
 function euros(n: number): string {
   return n.toFixed(2).replace(".", ",") + " €";
@@ -162,7 +163,7 @@ export function generarHtmlFactura(datos: DatosFactura): string {
   <!-- Cabecera -->
   <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:40px">
     <div>
-      ${datos.logoUrl ? `<img src="${datos.logoUrl}" alt="Esencia de Belleza" style="height:50px;margin-bottom:8px" />` : ""}
+      ${datos.logoUrl ?? LOGO_DEFAULT ? `<img src="${datos.logoUrl ?? LOGO_DEFAULT}" alt="Esencia de Belleza" style="height:60px;margin-bottom:8px" />` : ""}
       <h1 style="font-size:28px;color:#C4857A;margin-bottom:4px;font-weight:800;letter-spacing:-0.5px">
         ESENCIA DE BELLEZA
       </h1>
