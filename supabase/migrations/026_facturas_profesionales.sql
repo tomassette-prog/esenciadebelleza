@@ -19,4 +19,6 @@ CREATE POLICY "Profesional ve sus facturas"
   ON facturas FOR SELECT
   USING (auth.uid() = profesional_id);
 
--- Admin puede hacer todo (vía service_role, no necesita política)
+-- Grants: service_role puede hacer todo (admin), authenticated solo lectura
+GRANT SELECT ON facturas TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON facturas TO service_role;
