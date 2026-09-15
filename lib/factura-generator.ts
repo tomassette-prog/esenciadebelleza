@@ -58,6 +58,13 @@ export interface DatosFactura {
 
   // IVA
   tipoIva?: number;        // default 21
+  recargoEquivalencia?: number; // % REC (ej: 5.2 para IVA 21%)
+
+  // Pago
+  formaPago?: string;      // ej: "Transferencia bancaria"
+  vencimiento?: string;    // ej: "30 días"
+  iban?: string;           // ej: "ES12 3456 7890 1234 5678 9012"
+  notas?: string;          // texto libre
 
   // Logo (URL absoluta al logo SVG)
   logoUrl?: string;
@@ -90,10 +97,12 @@ function desgloseIva(importeConIva: number, tipoIva: number) {
  */
 export function generarHtmlFactura(datos: DatosFactura): string {
   const tipoIva = datos.tipoIva ?? IVA_DEFAULT;
+  const recargo = datos.recargoEquivalencia ?? 0;
   const { base: baseImponible, cuota: cuotaIva } = desgloseIva(
     datos.total,
     tipoIva
   );
+  const cuotaRecargo = recargo > 0 ? baseImponible * recargo / 100 : 0;
 
   const lineasHtml = datos.lineas
     .map(
@@ -116,6 +125,9 @@ export function generarHtmlFactura(datos: DatosFactura): string {
         </td>
         <td style="padding:10px 12px;border-bottom:1px solid #e8e0dc;text-align:right;font-weight:600;color:#3D2018">
           ${euros(subtotalSinIva)}
+        </td>
+        <td style="padding:10px 12px;border-bottom:1px solid #e8e0dc;text-align:center;color:#888">
+          ${tipoIva}%
         </td>
       </tr>`;
       }
@@ -241,8 +253,11 @@ export function generarHtmlFactura(datos: DatosFactura): string {
         <th style="padding:10px 12px;text-align:right;color:#fff;font-size:12px;text-transform:uppercase;letter-spacing:0.5px">
           Precio (sin IVA)
         </th>
-        <th style="padding:10px 12px;text-align:right;color:#fff;font-size:12px;text-transform:uppercase;letter-spacing:0.5px;border-radius:0 6px 0 0">
-          Total (sin IVA)
+        <th style="padding:10px 12px;text-align:right;color:#fff;font-size:12px;text-transform:uppercase;letter-spacing:0.5px">
+          Importe (sin IVA)
+        </th>
+        <th style="padding:10px 12px;text-align:center;color:#fff;font-size:12px;text-transform:uppercase;letter-spacing:0.5px;border-radius:0 6px 0 0">
+          IVA %
         </th>
       </tr>
     </thead>
@@ -283,6 +298,14 @@ export function generarHtmlFactura(datos: DatosFactura): string {
         <span>Cuota IVA (${tipoIva}%)</span>
         <span>${euros(cuotaIva)}</span>
       </div>
+      ${
+        datos.recargoEquivalencia
+          ? `<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #e8e0dc;font-size:13px;color:#888">
+              <span>Recargo de equivalencia (${datos.recargoEquivalencia}%)</span>
+              <span>${euros(cuotaRecargo)}</span>
+            </div>`
+          : ""
+      }
 
       <!-- Total -->
       <div style="display:flex;justify-content:space-between;padding:14px 0;margin-top:8px;background:#C4857A;color:#fff;border-radius:6px;padding-left:16px;padding-right:16px">
@@ -291,6 +314,18 @@ export function generarHtmlFactura(datos: DatosFactura): string {
       </div>
     </div>
   </div>
+
+  <!-- Datos de pago -->
+  ${
+    datos.formaPago || datos.vencimiento || datos.iban || datos.notas
+      ? `<div style="margin-top:24px;padding:16px 20px;background:#f9f5f3;border-radius:6px;display:flex;gap:24px;flex-wrap:wrap;font-size:12px">
+          ${datos.formaPago ? `<div><span style="color:#888;text-transform:uppercase;font-size:10px;letter-spacing:1px">Forma de pago</span><p style="color:#3D2018;margin-top:2px">${datos.formaPago}</p></div>` : ""}
+          ${datos.vencimiento ? `<div><span style="color:#888;text-transform:uppercase;font-size:10px;letter-spacing:1px">Vencimiento</span><p style="color:#3D2018;margin-top:2px">${datos.vencimiento}</p></div>` : ""}
+          ${datos.iban ? `<div><span style="color:#888;text-transform:uppercase;font-size:10px;letter-spacing:1px">IBAN</span><p style="color:#3D2018;margin-top:2px;font-family:monospace">${datos.iban}</p></div>` : ""}
+          ${datos.notas ? `<div style="flex-basis:100%"><span style="color:#888;text-transform:uppercase;font-size:10px;letter-spacing:1px">Notas</span><p style="color:#3D2018;margin-top:2px">${datos.notas}</p></div>` : ""}
+        </div>`
+      : ""
+  }
 
   <!-- Nota legal -->
   <div style="margin-top:48px;padding-top:20px;border-top:1px solid #e8e0dc">
