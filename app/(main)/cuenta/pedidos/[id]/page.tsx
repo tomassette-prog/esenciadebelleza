@@ -38,7 +38,8 @@ export default async function PedidoDetallePage({
   params: { id: string };
 }) {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { session } } = await supabase.auth.getSession();
+  const user = session?.user;
 
   // Buscar pedido — por usuario_id O por email (invitado)
   const adminClient = createAdminClient();

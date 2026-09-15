@@ -10,8 +10,10 @@ export default async function CuentaLayout({
   children: ReactNode;
 }) {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) redirect("/login?redirectTo=/cuenta");
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session?.user) redirect("/login?redirectTo=/cuenta");
+
+  const user = session.user;
 
   const { data: perfil } = await supabase
     .from("perfiles_usuario")

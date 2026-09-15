@@ -13,8 +13,9 @@ export const metadata: Metadata = {
 
 export default async function FacturasPage() {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) redirect("/login?redirectTo=/cuenta/facturas");
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session?.user) redirect("/login?redirectTo=/cuenta/facturas");
+  const user = session.user;
 
   const { data: perfil } = await supabase
     .from("perfiles_usuario")
