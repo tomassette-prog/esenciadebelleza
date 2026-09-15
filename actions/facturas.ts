@@ -146,44 +146,40 @@ export async function generarFacturaDesdePedido(
 
   if (pedidoErr || !pedido) return { error: "Pedido no encontrado" };
 
-  // 2. Obtener datos del profesional para la dirección de facturación
+  // 2. Obtener datos del usuario para la dirección de facturación
   const { data: perfil } = await supabase
     .from("perfiles_usuario")
-    .select("nombre_completo, empresa, nif_cif, direccion_envio, telefono_contacto")
+    .select("nombre_completo, empresa, nif_cif, direccion_envio, telefono_contacto, direccion_facturacion")
     .eq("id", profesionalId)
     .single();
 
   // 3. Generar HTML
   const { pedidoAFactura, generarHtmlFactura } = await import("@/lib/factura-generator");
 
-  // Añadir datos de facturación del perfil al pedido
   const pedidoConFacturacion = {
     ...pedido,
     facturacion: perfil ? {
-      empresa: perfil.empresa ?? undefined,
+      empresa: perfil.empresa ?? perfil.nombre_completo ?? undefined,
       nif_cif: perfil.nif_cif ?? undefined,
-      direccion: perfil.direccion_envio?.calle ?? undefined,
-      ciudad: perfil.direccion_envio?.ciudad ?? undefined,
-      provincia: perfil.direccion_envio?.provincia ?? undefined,
-      codigo_postal: perfil.direccion_envio?.cp ?? undefined,
-    } : null,
+      direccion: perfil.direccion_facturacion?.calle ?? perfil.direccion_envio?.calle ?? undefined,
+      ciudad: perfil.direccion_facturacion?.ciudad ?? perfil.direccion_envio?.ciudad ?? undefined,
+      provincia: perfil.direccion_facturacion?.provincia ?? perfil.direccion_envio?.provincia ?? undefined,
+      codigo_postal: perfil.direccion_facturacion?.cp ?? perfil.direccion_envio?.cp ?? undefined,
+    } : pedido.facturacion ?? null,
   };
 
   const datos = pedidoAFactura(pedidoConFacturacion);
-  // Sobrescribir número de factura si se proporciona uno personalizado
-  if (numeroFactura) {
-    datos.numero = numeroFactura;
-  }
+  if (numeroFactura) datos.numero = numeroFactura;
   const html = generarHtmlFactura(datos);
   const buffer = Buffer.from(html, "utf8");
 
   // 4. Subir a Storage
   const nombre = numeroFactura || datos.numero;
-  const path = `profesionales/${profesionalId}/${Date.now()}-${nombre.replace(/[^a-zA-Z0-9]/g, "_")}.html`;
+  const storagePath = `profesionales/${profesionalId}/${Date.now()}-${nombre.replace(/[^a-zA-Z0-9]/g, "_")}.html`;
 
   const { error: uploadErr } = await supabase.storage
     .from(BUCKET)
-    .upload(path, buffer, { contentType: "text/html; charset=utf-8", upsert: false });
+    .upload(storagePath, buffer, { contentType: "text/html; charset=utf-8", upsert: false });
 
   if (uploadErr) return { error: `Error subiendo factura: ${uploadErr.message}` };
 
@@ -193,18 +189,19 @@ export async function generarFacturaDesdePedido(
     .insert({
       profesional_id: profesionalId,
       nombre: `${nombre} — Pedido #${pedidoId.slice(0, 8).toUpperCase()}`,
-      archivo_path: path,
+      archivo_path: storagePath,
       archivo_size: buffer.length,
     })
     .select("id")
     .single();
 
   if (dbErr) {
-    await supabase.storage.from(BUCKET).remove([path]);
+    await supabase.storage.from(BUCKET).remove([storagePath]);
     return { error: `Error guardando factura: ${dbErr.message}` };
   }
 
   revalidatePath("/admin/profesionales");
+  revalidatePath("/admin/facturas");
   return { facturaId: factura?.id };
 }
 
@@ -236,6 +233,114 @@ export async function listarPedidosProfesional(profesionalId: string) {
 
   // Combinar y deduplicar
   const all = [...(pedidosPorId ?? []), ...(pedidosPorEmail ?? [])];
+  const unique = all.filter((p, i, arr) => arr.findIndex(x => x.id === p.id) === i);
+  return unique.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+}
+
+// ── Listar todos los clientes con pedidos (admin) ───────────────────────────
+export async function listarClientesConPedidos() {
+  const admin_user = await verificarAdmin();
+  if (!admin_user) return [];
+
+  const supabase = createAdminClient();
+
+  // Obtener todos los pedidos con datos de cliente
+  const { data: pedidos } = await supabase
+    .from("pedidos")
+    .select("id, email_cliente, usuario_id, total, created_at, estado")
+    .order("created_at", { ascending: false });
+
+  if (!pedidos) return [];
+
+  // Agrupar por cliente (email como clave principal)
+  const clientesMap = new Map<string, {
+    email: string;
+    nombre: string;
+    usuario_id: string | null;
+    nif_cif: string | null;
+    tipo_cliente: string;
+    num_pedidos: number;
+    total_gastado: number;
+    ultimo_pedido: string;
+  }>();
+
+  for (const p of pedidos) {
+    const email = p.email_cliente?.toLowerCase();
+    if (!email) continue;
+
+    if (clientesMap.has(email)) {
+      const c = clientesMap.get(email)!;
+      c.num_pedidos++;
+      c.total_gastado += Number(p.total);
+      if (new Date(p.created_at) > new Date(c.ultimo_pedido)) {
+        c.ultimo_pedido = p.created_at;
+      }
+    } else {
+      clientesMap.set(email, {
+        email,
+        nombre: "",
+        usuario_id: p.usuario_id,
+        nif_cif: null,
+        tipo_cliente: "b2c",
+        num_pedidos: 1,
+        total_gastado: Number(p.total),
+        ultimo_pedido: p.created_at,
+      });
+    }
+  }
+
+  // Enriquecer con datos de perfil si tienen usuario_id
+  for (const cliente of clientesMap.values()) {
+    if (cliente.usuario_id) {
+      const { data: perfil } = await supabase
+        .from("perfiles_usuario")
+        .select("nombre_completo, nif_cif, tipo_cliente, empresa")
+        .eq("id", cliente.usuario_id)
+        .single();
+
+      if (perfil) {
+        cliente.nombre = perfil.empresa ?? perfil.nombre_completo ?? "";
+        cliente.nif_cif = perfil.nif_cif;
+        cliente.tipo_cliente = perfil.tipo_cliente;
+      }
+    }
+  }
+
+  return Array.from(clientesMap.values())
+    .sort((a, b) => new Date(b.ultimo_pedido).getTime() - new Date(a.ultimo_pedido).getTime());
+}
+
+// ── Listar pedidos de un cliente por email (admin) ──────────────────────────
+export async function listarPedidosCliente(email: string) {
+  const admin_user = await verificarAdmin();
+  if (!admin_user) return [];
+
+  const supabase = createAdminClient();
+  const emailLower = email.toLowerCase();
+
+  // Buscar usuario_id por email
+  const { data: authUsers } = await supabase.auth.admin.listUsers();
+  const user = authUsers.users.find(u => u.email?.toLowerCase() === emailLower);
+
+  const { data: pedidosPorEmail } = await supabase
+    .from("pedidos")
+    .select("id, estado, total, created_at, metodo_pago, email_cliente, direccion_envio, facturacion")
+    .eq("email_cliente", emailLower)
+    .order("created_at", { ascending: false });
+
+  // Si tiene usuario_id, buscar también por ahí
+  let pedidosPorId: typeof pedidosPorEmail = [];
+  if (user) {
+    const { data } = await supabase
+      .from("pedidos")
+      .select("id, estado, total, created_at, metodo_pago, email_cliente, direccion_envio, facturacion")
+      .eq("usuario_id", user.id)
+      .order("created_at", { ascending: false });
+    pedidosPorId = data ?? [];
+  }
+
+  // Combinar y deduplicar
+  const all = [...(pedidosPorEmail ?? []), ...(pedidosPorId ?? [])];
   const unique = all.filter((p, i, arr) => arr.findIndex(x => x.id === p.id) === i);
   return unique.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 }
