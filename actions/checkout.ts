@@ -83,7 +83,7 @@ export async function iniciarPagoCeca(
   // Detectar si el usuario es profesional B2B aprobado
   let tipoPrecio: "b2c" | "b2b" = "b2c";
   if (sessionUser) {
-    const { data: perfil } = await authClient
+    const { data: perfil } = await supabase
       .from("perfiles_usuario")
       .select("b2b_aprobado, tipo_cliente")
       .eq("id", sessionUser?.id)
@@ -277,7 +277,7 @@ export async function iniciarPagoWooCommerce(
 
   let tipoPrecio: "b2c" | "b2b" = "b2c";
   if (sessionUser) {
-    const { data: perfil } = await authClient
+    const { data: perfil } = await supabase
       .from("perfiles_usuario")
       .select("b2b_aprobado, tipo_cliente").eq("id", sessionUser?.id).single();
     if (perfil?.tipo_cliente === "b2b" && perfil?.b2b_aprobado === true) tipoPrecio = "b2b";
@@ -571,7 +571,7 @@ export async function iniciarPagoStripe(
   // Detectar perfil B2B (igual que en Ceca/PayPal)
   let tipoPrecioStripe: "b2c" | "b2b" = "b2c";
   if (sessionUser) {
-    const { data: perfil } = await authClient
+    const { data: perfil } = await supabase
       .from("perfiles_usuario")
       .select("b2b_aprobado, tipo_cliente")
       .eq("id", sessionUser?.id)
@@ -740,7 +740,7 @@ export async function crearPedidoContrarembolso(
 
   let tipoPrecio: "b2c" | "b2b" = "b2c";
   if (sessionUser) {
-    const { data: perfil } = await authClient
+    const { data: perfil } = await supabase
       .from("perfiles_usuario")
       .select("b2b_aprobado, tipo_cliente")
       .eq("id", sessionUser?.id)
@@ -837,7 +837,7 @@ export async function crearPedidoBizum(
 
   let tipoPrecio: "b2c" | "b2b" = "b2c";
   if (sessionUser) {
-    const { data: perfil } = await authClient
+    const { data: perfil } = await supabase
       .from("perfiles_usuario")
       .select("b2b_aprobado, tipo_cliente")
       .eq("id", sessionUser?.id)
