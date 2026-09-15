@@ -48,7 +48,7 @@ export default async function CuentaPage({
     .slice(0, 5);
 
   // Conteo total de pedidos
-  const { count: totalPedidos } = await supabase
+  const { count: totalPedidos } = await admin
     .from("pedidos")
     .select("id", { count: "exact", head: true })
     .or(`usuario_id.eq.${session.id},email_cliente.eq.${session.email}`);
