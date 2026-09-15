@@ -350,3 +350,93 @@ export async function listarPedidosCliente(email: string) {
 
   return pedidos ?? [];
 }
+
+// ── Listar todas las facturas con URL firmada (admin) ───────────────────────
+export async function listarTodasFacturas() {
+  const supabase = createAdminClient();
+
+  const { data: facturas } = await supabase
+    .from("facturas")
+    .select("id, nombre, archivo_path, archivo_size, created_at, profesional_id, email_cliente")
+    .order("created_at", { ascending: false });
+
+  if (!facturas) return [];
+
+  // Generar URLs firmadas y resolver emails
+  const resultado = await Promise.all(
+    facturas.map(async (f) => {
+      const { data: signed } = await supabase.storage
+        .from(BUCKET)
+        .createSignedUrl(f.archivo_path, 3600);
+
+      // Resolver email del cliente
+      let email = f.email_cliente ?? "";
+      if (!email && f.profesional_id) {
+        const { data: { user } } = await supabase.auth.admin.getUserById(f.profesional_id);
+        email = user?.email ?? "";
+      }
+
+      return {
+        id: f.id,
+        nombre: f.nombre,
+        archivo_path: f.archivo_path,
+        archivo_size: f.archivo_size,
+        created_at: f.created_at,
+        email_cliente: email,
+        url: signed?.signedUrl ?? null,
+      };
+    })
+  );
+
+  return resultado;
+}
+
+// ── Enviar factura por email (admin) ────────────────────────────────────────
+export async function enviarFacturaEmail(
+  facturaId: string,
+  email: string
+): Promise<{ error?: string }> {
+  const admin_user = await verificarAdmin();
+  if (!admin_user) return { error: "No autorizado" };
+
+  const supabase = createAdminClient();
+
+  // Obtener factura con URL firmada
+  const { data: factura } = await supabase
+    .from("facturas")
+    .select("id, nombre, archivo_path")
+    .eq("id", facturaId)
+    .single();
+
+  if (!factura) return { error: "Factura no encontrada" };
+
+  const { data: signed } = await supabase.storage
+    .from(BUCKET)
+    .createSignedUrl(factura.archivo_path, 604800); // 7 días
+
+  if (!signed?.signedUrl) return { error: "No se pudo generar el enlace de descarga" };
+
+  // Enviar email con el enlace
+  const { enviarEmail } = await import("@/lib/email");
+  await enviarEmail({
+    to: email,
+    subject: `Factura ${factura.nombre} — Esencia de Belleza`,
+    html: `
+      <div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:20px">
+        <h2 style="color:#C4857A">Tu factura de Esencia de Belleza</h2>
+        <p>Hola,</p>
+        <p>Tienes una nueva factura disponible: <strong>${factura.nombre}</strong></p>
+        <p style="margin:24px 0">
+          <a href="${signed.signedUrl}" style="background:#C4857A;color:#fff;padding:12px 24px;text-decoration:none;border-radius:4px;font-weight:600">
+            Ver factura
+          </a>
+        </p>
+        <p style="color:#888;font-size:12px">Este enlace expira en 7 días. Si tienes alguna pregunta, responde a este email.</p>
+        <hr style="border:none;border-top:1px solid #eee;margin:20px 0">
+        <p style="color:#aaa;font-size:11px">Esencia de Belleza · Peluquería · Estética · Perfumería</p>
+      </div>
+    `,
+  });
+
+  return {};
+}

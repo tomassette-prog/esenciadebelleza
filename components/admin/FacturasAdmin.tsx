@@ -5,6 +5,9 @@ import {
   listarClientesConPedidos,
   listarPedidosCliente,
   generarFacturaDesdePedido,
+  listarTodasFacturas,
+  enviarFacturaEmail,
+  eliminarFactura,
 } from "@/actions/facturas";
 
 interface Cliente {
@@ -42,6 +45,20 @@ export default function FacturasAdmin() {
   const [error, setError] = useState<string | null>(null);
   const [exito, setExito] = useState<string | null>(null);
 
+  // Facturas generadas
+  interface FacturaGenerada {
+    id: string;
+    nombre: string;
+    archivo_path: string;
+    archivo_size: number | null;
+    created_at: string;
+    email_cliente: string;
+    url: string | null;
+  }
+  const [facturas, setFacturas] = useState<FacturaGenerada[]>([]);
+  const [cargandoFacturas, setCargandoFacturas] = useState(true);
+  const [enviando, setEnviando] = useState<string | null>(null);
+
   useEffect(() => {
     async function cargar() {
       setCargandoClientes(true);
@@ -50,7 +67,15 @@ export default function FacturasAdmin() {
       setCargandoClientes(false);
     }
     cargar();
+    cargarFacturas();
   }, []);
+
+  async function cargarFacturas() {
+    setCargandoFacturas(true);
+    const data = await listarTodasFacturas();
+    setFacturas(data);
+    setCargandoFacturas(false);
+  }
 
   async function seleccionarCliente(cliente: Cliente) {
     setClienteSeleccionado(cliente);
@@ -87,6 +112,28 @@ export default function FacturasAdmin() {
       setExito(`Factura ${numeroFactura} generada correctamente.`);
       setNumeroFactura("");
       setPedidoSeleccionado("");
+      cargarFacturas();
+    }
+  }
+
+  async function handleEnviarEmail(facturaId: string, email: string) {
+    setEnviando(facturaId);
+    const res = await enviarFacturaEmail(facturaId, email);
+    setEnviando(null);
+    if (res.error) {
+      setError(res.error);
+    } else {
+      setExito(`Factura enviada a ${email}`);
+    }
+  }
+
+  async function handleEliminar(id: string, nombre: string) {
+    if (!confirm(`¿Eliminar "${nombre}"?`)) return;
+    const res = await eliminarFactura(id);
+    if (res.error) {
+      setError(res.error);
+    } else {
+      cargarFacturas();
     }
   }
 
@@ -291,6 +338,71 @@ export default function FacturasAdmin() {
             </div>
           )}
         </div>
+      </div>
+
+      {/* ── Facturas generadas ─────────────────────────────────────── */}
+      <div className="mt-10">
+        <h2 className="text-xs tracking-widest uppercase text-neutral-500 mb-4">
+          Facturas generadas
+        </h2>
+
+        {cargandoFacturas ? (
+          <p className="text-sm text-neutral-400">Cargando...</p>
+        ) : facturas.length === 0 ? (
+          <p className="text-sm text-neutral-400">Todavía no hay facturas generadas.</p>
+        ) : (
+          <div className="border border-neutral-200 rounded-lg overflow-hidden">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-neutral-50 border-b border-neutral-200">
+                  <th className="text-left text-xs tracking-wider uppercase text-neutral-500 px-4 py-3 font-normal">Factura</th>
+                  <th className="text-left text-xs tracking-wider uppercase text-neutral-500 px-4 py-3 font-normal">Cliente</th>
+                  <th className="text-left text-xs tracking-wider uppercase text-neutral-500 px-4 py-3 font-normal">Fecha</th>
+                  <th className="text-right text-xs tracking-wider uppercase text-neutral-500 px-4 py-3 font-normal">Acciones</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-neutral-100">
+                {facturas.map((f) => (
+                  <tr key={f.id} className="hover:bg-neutral-50 transition-colors">
+                    <td className="px-4 py-3 text-neutral-900 font-medium">{f.nombre}</td>
+                    <td className="px-4 py-3 text-neutral-600">{f.email_cliente}</td>
+                    <td className="px-4 py-3 text-neutral-500 whitespace-nowrap">{formatFecha(f.created_at)}</td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center justify-end gap-2">
+                        {/* Descargar */}
+                        {f.url && (
+                          <a
+                            href={f.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-xs px-3 py-1.5 border border-neutral-200 rounded hover:bg-neutral-100 transition-colors"
+                          >
+                            Descargar
+                          </a>
+                        )}
+                        {/* Enviar por email */}
+                        <button
+                          onClick={() => handleEnviarEmail(f.id, f.email_cliente)}
+                          disabled={enviando === f.id || !f.email_cliente}
+                          className="text-xs px-3 py-1.5 bg-neutral-900 text-white rounded hover:bg-neutral-700 disabled:opacity-50 transition-colors"
+                        >
+                          {enviando === f.id ? "Enviando..." : "Enviar email"}
+                        </button>
+                        {/* Eliminar */}
+                        <button
+                          onClick={() => handleEliminar(f.id, f.nombre)}
+                          className="text-xs px-3 py-1.5 border border-red-200 text-red-600 rounded hover:bg-red-50 transition-colors"
+                        >
+                          Eliminar
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </div>
   );

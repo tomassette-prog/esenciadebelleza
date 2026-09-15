@@ -299,3 +299,23 @@ export async function enviarNotificacionNuevoProfesional(p: {
     console.error("[Email] Error enviando notificación de profesional:", err);
   }
 }
+
+// ── Envío genérico de email ─────────────────────────────────────────────────
+export async function enviarEmail(opts: {
+  to: string;
+  subject: string;
+  html: string;
+}) {
+  if (!process.env.EMAIL_PASS) {
+    console.warn("[Email] EMAIL_PASS no configurado, saltando envío");
+    return;
+  }
+
+  const transporter = createTransport();
+  await transporter.sendMail({
+    from:    `"Esencia de Belleza" <${FROM_EMAIL}>`,
+    to:      opts.to,
+    subject: opts.subject,
+    html:    opts.html,
+  });
+}
