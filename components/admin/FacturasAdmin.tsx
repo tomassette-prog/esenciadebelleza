@@ -41,6 +41,12 @@ export default function FacturasAdmin() {
   const [pedidoSeleccionado, setPedidoSeleccionado] = useState("");
 
   const [numeroFactura, setNumeroFactura] = useState("");
+  const [formaPago, setFormaPago] = useState("");
+  const [vencimiento, setVencimiento] = useState("");
+  const [iban, setIban] = useState("");
+  const [notas, setNotas] = useState("");
+  const [recargoEq, setRecargoEq] = useState("");
+  const [mostrarOpciones, setMostrarOpciones] = useState(false);
   const [generando, setGenerando] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [exito, setExito] = useState<string | null>(null);
@@ -101,7 +107,14 @@ export default function FacturasAdmin() {
     const res = await generarFacturaDesdePedido(
       pedidoSeleccionado,
       clienteSeleccionado.usuario_id || clienteSeleccionado.email,
-      numeroFactura.trim()
+      numeroFactura.trim(),
+      {
+        recargoEquivalencia: recargoEq ? parseFloat(recargoEq) : undefined,
+        formaPago: formaPago || undefined,
+        vencimiento: vencimiento || undefined,
+        iban: iban || undefined,
+        notas: notas || undefined,
+      }
     );
 
     setGenerando(false);
@@ -112,6 +125,11 @@ export default function FacturasAdmin() {
       setExito(`Factura ${numeroFactura} generada correctamente.`);
       setNumeroFactura("");
       setPedidoSeleccionado("");
+      setFormaPago("");
+      setVencimiento("");
+      setIban("");
+      setNotas("");
+      setRecargoEq("");
       cargarFacturas();
     }
   }
@@ -314,6 +332,42 @@ export default function FacturasAdmin() {
                   className="w-full border border-neutral-200 px-3 py-2 text-sm focus:outline-none focus:border-neutral-900 transition-colors rounded"
                 />
               </div>
+
+              {/* Campos opcionales */}
+              <button
+                type="button"
+                onClick={() => setMostrarOpciones(!mostrarOpciones)}
+                className="text-xs text-neutral-400 hover:text-neutral-600 underline underline-offset-2"
+              >
+                {mostrarOpciones ? "Ocultar opciones" : "Más opciones (pago, notas...)"}
+              </button>
+
+              {mostrarOpciones && (
+                <div className="space-y-3 p-4 bg-neutral-50 border border-neutral-200 rounded-lg">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[10px] tracking-wider uppercase text-neutral-500 mb-1">Forma de pago</label>
+                      <input type="text" value={formaPago} onChange={(e) => setFormaPago(e.target.value)} placeholder="Transferencia" className="w-full border border-neutral-200 px-3 py-2 text-sm focus:outline-none focus:border-neutral-900 rounded" />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] tracking-wider uppercase text-neutral-500 mb-1">Vencimiento</label>
+                      <input type="text" value={vencimiento} onChange={(e) => setVencimiento(e.target.value)} placeholder="30 días" className="w-full border border-neutral-200 px-3 py-2 text-sm focus:outline-none focus:border-neutral-900 rounded" />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] tracking-wider uppercase text-neutral-500 mb-1">IBAN</label>
+                    <input type="text" value={iban} onChange={(e) => setIban(e.target.value)} placeholder="ES12 3456 7890 1234 5678 9012" className="w-full border border-neutral-200 px-3 py-2 text-sm focus:outline-none focus:border-neutral-900 rounded font-mono" />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] tracking-wider uppercase text-neutral-500 mb-1">Recargo equivalencia (%)</label>
+                    <input type="number" step="0.1" value={recargoEq} onChange={(e) => setRecargoEq(e.target.value)} placeholder="5.2" className="w-full border border-neutral-200 px-3 py-2 text-sm focus:outline-none focus:border-neutral-900 rounded" />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] tracking-wider uppercase text-neutral-500 mb-1">Notas</label>
+                    <textarea value={notas} onChange={(e) => setNotas(e.target.value)} placeholder="Notas adicionales..." rows={2} className="w-full border border-neutral-200 px-3 py-2 text-sm focus:outline-none focus:border-neutral-900 rounded resize-none" />
+                  </div>
+                </div>
+              )}
 
               {/* Botón */}
               <button

@@ -127,7 +127,14 @@ export async function listarFacturasProfesional(profesionalId: string) {
 export async function generarFacturaDesdePedido(
   pedidoId: string,
   usuarioIdOrEmail: string,
-  numeroFactura: string
+  numeroFactura: string,
+  opciones?: {
+    recargoEquivalencia?: number;
+    formaPago?: string;
+    vencimiento?: string;
+    iban?: string;
+    notas?: string;
+  }
 ): Promise<{ error?: string; facturaId?: string }> {
   const admin_user = await verificarAdmin();
   if (!admin_user) return { error: "No autorizado" };
@@ -190,6 +197,11 @@ export async function generarFacturaDesdePedido(
 
   const datos = pedidoAFactura(pedidoConFacturacion);
   if (numeroFactura) datos.numero = numeroFactura;
+  if (opciones?.recargoEquivalencia) datos.recargoEquivalencia = opciones.recargoEquivalencia;
+  if (opciones?.formaPago) datos.formaPago = opciones.formaPago;
+  if (opciones?.vencimiento) datos.vencimiento = opciones.vencimiento;
+  if (opciones?.iban) datos.iban = opciones.iban;
+  if (opciones?.notas) datos.notas = opciones.notas;
   const html = generarHtmlFactura(datos);
   const buffer = Buffer.from(html, "utf8");
 

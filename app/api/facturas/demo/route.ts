@@ -78,6 +78,12 @@ export async function GET() {
     descuento: 5.0,
     gastosEnvio: 0,
     total: 93.85,
+    tipoIva: 21,
+    recargoEquivalencia: 5.2,
+    formaPago: "Transferencia bancaria",
+    vencimiento: "30 días",
+    iban: "ES12 3456 7890 1234 5678 9012",
+    notas: "Gracias por su compra. Cualquier consulta, contacte con nosotros.",
     logoUrl: `${process.env.NEXT_PUBLIC_SITE_URL ?? "https://esenciadebelleza.es"}/logo.svg`,
   };
 
