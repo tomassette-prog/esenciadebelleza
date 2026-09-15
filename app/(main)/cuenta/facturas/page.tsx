@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { getSessionFromCookie } from "@/lib/supabase/session-helper";
+// getSessionFromCookie removed — using supabase.auth.getUser()
 import { listarMisFacturas } from "@/actions/facturas";
 import type { Metadata } from "next";
 
@@ -12,14 +12,14 @@ export const metadata: Metadata = {
 };
 
 export default async function FacturasPage() {
-  const session = await getSessionFromCookie();
-  if (!session) redirect("/login?redirectTo=/cuenta/facturas");
-
   const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) redirect("/login?redirectTo=/cuenta/facturas");
+
   const { data: perfil } = await supabase
     .from("perfiles_usuario")
     .select("tipo_cliente, b2b_aprobado")
-    .eq("id", session.id)
+    .eq("id", user.id)
     .single();
 
   if (perfil?.tipo_cliente !== "b2b" || !perfil?.b2b_aprobado) {

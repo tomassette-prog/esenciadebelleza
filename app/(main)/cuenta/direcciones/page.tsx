@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
-import { getSessionFromCookie } from "@/lib/supabase/session-helper";
+// getSessionFromCookie removed — using supabase.auth.getUser()
 import { actualizarDirecciones } from "@/actions/direcciones";
 import type { Metadata } from "next";
 
@@ -28,13 +28,14 @@ export default async function DireccionesPage({
 }: {
   searchParams?: { guardado?: string };
 }) {
-  const session = await getSessionFromCookie();
   const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return null;
 
   const { data: perfil } = await supabase
     .from("perfiles_usuario")
     .select("direccion_envio, direccion_facturacion")
-    .eq("id", session?.id)
+    .eq("id", user.id)
     .single();
 
   const envio = (perfil?.direccion_envio ?? {}) as Direccion;
