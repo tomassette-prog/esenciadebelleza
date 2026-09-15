@@ -163,7 +163,7 @@ export function generarHtmlFactura(datos: DatosFactura): string {
   <!-- Cabecera -->
   <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:40px">
     <div>
-      ${datos.logoUrl ?? LOGO_DEFAULT ? `<img src="${datos.logoUrl ?? LOGO_DEFAULT}" alt="Esencia de Belleza" style="height:60px;margin-bottom:8px" />` : ""}
+      ${datos.logoUrl ?? LOGO_DEFAULT ? `<img src="${datos.logoUrl ?? LOGO_DEFAULT}" alt="Esencia de Belleza" style="height:80px;margin-bottom:8px;border-radius:4px" />` : ""}
       <h1 style="font-size:28px;color:#C4857A;margin-bottom:4px;font-weight:800;letter-spacing:-0.5px">
         ESENCIA DE BELLEZA
       </h1>
