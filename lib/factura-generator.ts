@@ -97,7 +97,11 @@ export function generarHtmlFactura(datos: DatosFactura): string {
 
   const lineasHtml = datos.lineas
     .map(
-      (l) => `
+      (l) => {
+        // Precios sin IVA para mostrar en tabla (factura oficial)
+        const precioSinIva = l.precio_unitario / (1 + tipoIva / 100);
+        const subtotalSinIva = l.subtotal / (1 + tipoIva / 100);
+        return `
       <tr>
         <td style="padding:10px 12px;border-bottom:1px solid #e8e0dc">
           <div style="font-weight:600;color:#3D2018">${l.nombre}</div>
@@ -108,12 +112,13 @@ export function generarHtmlFactura(datos: DatosFactura): string {
           ${l.cantidad}
         </td>
         <td style="padding:10px 12px;border-bottom:1px solid #e8e0dc;text-align:right;color:#3D2018">
-          ${euros(l.precio_unitario)}
+          ${euros(precioSinIva)}
         </td>
         <td style="padding:10px 12px;border-bottom:1px solid #e8e0dc;text-align:right;font-weight:600;color:#3D2018">
-          ${euros(l.subtotal)}
+          ${euros(subtotalSinIva)}
         </td>
-      </tr>`
+      </tr>`;
+      }
     )
     .join("");
 
@@ -232,10 +237,10 @@ export function generarHtmlFactura(datos: DatosFactura): string {
           Uds.
         </th>
         <th style="padding:10px 12px;text-align:right;color:#fff;font-size:12px;text-transform:uppercase;letter-spacing:0.5px">
-          Precio
+          Precio (sin IVA)
         </th>
         <th style="padding:10px 12px;text-align:right;color:#fff;font-size:12px;text-transform:uppercase;letter-spacing:0.5px;border-radius:0 6px 0 0">
-          Total
+          Total (sin IVA)
         </th>
       </tr>
     </thead>
@@ -248,8 +253,8 @@ export function generarHtmlFactura(datos: DatosFactura): string {
   <div style="display:flex;justify-content:flex-end">
     <div style="width:320px">
       <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #e8e0dc">
-        <span style="color:#888">Subtotal (IVA incluido)</span>
-        <span>${euros(datos.subtotal)}</span>
+        <span style="color:#888">Base imponible</span>
+        <span>${euros(baseImponible)}</span>
       </div>
       ${
         datos.descuento > 0
@@ -272,10 +277,6 @@ export function generarHtmlFactura(datos: DatosFactura): string {
       }
 
       <!-- Desglose IVA -->
-      <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #e8e0dc;font-size:13px;color:#888">
-        <span>Base imponible (IVA ${tipoIva}%)</span>
-        <span>${euros(baseImponible)}</span>
-      </div>
       <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #e8e0dc;font-size:13px;color:#888">
         <span>Cuota IVA (${tipoIva}%)</span>
         <span>${euros(cuotaIva)}</span>
