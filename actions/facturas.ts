@@ -353,7 +353,7 @@ export async function listarPedidosCliente(email: string) {
   const { data: pedidosPorEmail } = await supabase
     .from("pedidos")
     .select("id, estado, total, created_at, metodo_pago, email_cliente, direccion_envio, facturacion")
-    .eq("email_cliente", emailLower)
+    .ilike("email_cliente", emailLower)
     .order("created_at", { ascending: false });
 
   // Si tiene usuario_id, buscar también por ahí
