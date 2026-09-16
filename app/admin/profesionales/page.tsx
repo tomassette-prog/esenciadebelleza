@@ -1,8 +1,6 @@
 import type { Metadata } from "next";
 import { createAdminClient } from "@/lib/supabase/admin";
-import ProfesionalAcciones from "@/components/admin/ProfesionalAcciones";
-import FacturasProfesional from "@/components/admin/FacturasProfesional";
-import { listarFacturasProfesional } from "@/actions/facturas";
+import ProfesionalesListaClient from "./profesionales-lista-client";
 
 export const dynamic = "force-dynamic";
 
@@ -11,18 +9,26 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-export default async function AdminProfesionalesPage() {
+export default async function AdminProfesionalesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string; pagina?: string; filtro?: string }>;
+}) {
+  const sp = await searchParams;
+  const busqueda = sp.q ?? "";
+  const pagina = Number(sp.pagina ?? 1);
+  const filtro = (sp.filtro as "todos" | "pendientes" | "aprobados") ?? "todos";
+  const porPagina = 20;
   const supabase = createAdminClient();
 
-  // Obtener todos los usuarios con tipo_cliente = b2b
+  // Obtener todos los B2B (la tabla es pequeña, filtramos en memoria para búsqueda por email)
   const { data: profesionales } = await supabase
     .from("perfiles_usuario")
     .select("id, nombre_completo, empresa, nif_cif, telefono, telefono_contacto, tipo_negocio, direccion_envio, b2b_aprobado, descuento_b2b, created_at")
     .eq("tipo_cliente", "b2b")
     .order("created_at", { ascending: false });
 
-  // Obtener emails desde auth.users via admin API
-  const perfilesConEmail: Array<{
+  type Profesional = {
     id: string;
     nombre_completo: string | null;
     empresa: string | null;
@@ -35,7 +41,9 @@ export default async function AdminProfesionalesPage() {
     descuento_b2b: number;
     created_at: string;
     email: string;
-  }> = [];
+  };
+
+  const perfilesConEmail: Profesional[] = [];
 
   for (const perfil of profesionales ?? []) {
     const { data: { user } } = await supabase.auth.admin.getUserById(perfil.id);
@@ -45,8 +53,29 @@ export default async function AdminProfesionalesPage() {
     });
   }
 
-  const pendientes = perfilesConEmail.filter((p) => !p.b2b_aprobado);
-  const aprobados  = perfilesConEmail.filter((p) => p.b2b_aprobado);
+  // Filtrar por búsqueda
+  let filtrados = perfilesConEmail;
+  if (busqueda) {
+    const q = busqueda.toLowerCase();
+    filtrados = perfilesConEmail.filter((p) =>
+      p.email.toLowerCase().includes(q) ||
+      (p.nombre_completo ?? "").toLowerCase().includes(q) ||
+      (p.empresa ?? "").toLowerCase().includes(q) ||
+      (p.nif_cif ?? "").toLowerCase().includes(q)
+    );
+  }
+
+  if (filtro === "pendientes") filtrados = filtrados.filter((p) => !p.b2b_aprobado);
+  else if (filtro === "aprobados") filtrados = filtrados.filter((p) => p.b2b_aprobado);
+
+  // Paginación en memoria
+  const total = filtrados.length;
+  const totalPaginas = Math.ceil(total / porPagina);
+  const desde = (pagina - 1) * porPagina;
+  const paginaActual = filtrados.slice(desde, desde + porPagina);
+
+  const pendientesCount = perfilesConEmail.filter((p) => !p.b2b_aprobado).length;
+  const aprobadosCount = perfilesConEmail.filter((p) => p.b2b_aprobado).length;
 
   return (
     <div>
@@ -56,122 +85,19 @@ export default async function AdminProfesionalesPage() {
       >
         Cuentas Profesionales B2B
       </h1>
-      <p className="text-sm text-neutral-500 mb-8">
-        {pendientes.length} pendientes · {aprobados.length} aprobadas
+      <p className="text-sm text-neutral-500 mb-6">
+        {pendientesCount} pendientes · {aprobadosCount} aprobadas
       </p>
 
-      {/* Pendientes */}
-      {pendientes.length > 0 && (
-        <section className="mb-10">
-          <h2 className="text-xs tracking-widest uppercase text-amber-700 mb-4 flex items-center gap-2">
-            <span className="inline-block w-2 h-2 rounded-full bg-amber-500" />
-            Pendientes de aprobación ({pendientes.length})
-          </h2>
-          <div className="bg-white border border-neutral-100 overflow-hidden">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-neutral-100 bg-neutral-50">
-                  <th className="text-left text-xs tracking-wider uppercase text-neutral-500 px-4 py-3 font-normal">Nombre</th>
-                  <th className="text-left text-xs tracking-wider uppercase text-neutral-500 px-4 py-3 font-normal">Email</th>
-                  <th className="text-left text-xs tracking-wider uppercase text-neutral-500 px-4 py-3 font-normal">Empresa</th>
-                  <th className="text-left text-xs tracking-wider uppercase text-neutral-500 px-4 py-3 font-normal">NIF/CIF</th>
-                  <th className="text-left text-xs tracking-wider uppercase text-neutral-500 px-4 py-3 font-normal">Contacto</th>
-                  <th className="text-left text-xs tracking-wider uppercase text-neutral-500 px-4 py-3 font-normal">Dirección</th>
-                  <th className="text-left text-xs tracking-wider uppercase text-neutral-500 px-4 py-3 font-normal">Fecha</th>
-                  <th className="text-right text-xs tracking-wider uppercase text-neutral-500 px-4 py-3 font-normal">Descuento</th>
-                  <th className="px-4 py-3" />
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-neutral-50">
-                {pendientes.map((p) => (
-                  <tr key={p.id} className="hover:bg-amber-50/30 transition-colors">
-                    <td className="px-4 py-3 text-neutral-900">{p.nombre_completo ?? "—"}</td>
-                    <td className="px-4 py-3 text-neutral-600">{p.email}</td>
-                    <td className="px-4 py-3 text-neutral-700 font-medium">
-                      {p.empresa ?? "—"}
-                      {p.tipo_negocio && <span className="block text-xs text-neutral-400">{p.tipo_negocio}</span>}
-                    </td>
-                    <td className="px-4 py-3 text-neutral-600">{p.nif_cif ?? "—"}</td>
-                    <td className="px-4 py-3 text-neutral-600">
-                      {p.telefono_contacto ?? p.telefono ?? "—"}
-                    </td>
-                    <td className="px-4 py-3 text-neutral-500 text-xs">
-                      {p.direccion_envio
-                        ? `${p.direccion_envio.calle}, ${p.direccion_envio.cp} ${p.direccion_envio.ciudad}`
-                        : "—"}
-                    </td>
-                    <td className="px-4 py-3 text-neutral-500 whitespace-nowrap">
-                      {new Date(p.created_at).toLocaleDateString("es-ES")}
-                    </td>
-                    <td className="px-4 py-3">
-                      <ProfesionalAcciones userId={p.id} b2bAprobado={false} descuentoB2b={p.descuento_b2b ?? 0} />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
-      )}
-
-      {pendientes.length === 0 && (
-        <div className="mb-10 p-6 bg-green-50 border border-green-200 text-green-800 text-sm">
-          No hay solicitudes pendientes de aprobación.
-        </div>
-      )}
-
-      {/* Aprobadas */}
-      {aprobados.length > 0 && (
-        <section>
-          <h2 className="text-xs tracking-widest uppercase text-green-700 mb-4 flex items-center gap-2">
-            <span className="inline-block w-2 h-2 rounded-full bg-green-500" />
-            Cuentas aprobadas ({aprobados.length})
-          </h2>
-          <div className="bg-white border border-neutral-100 overflow-hidden">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-neutral-100 bg-neutral-50">
-                  <th className="text-left text-xs tracking-wider uppercase text-neutral-500 px-4 py-3 font-normal">Nombre</th>
-                  <th className="text-left text-xs tracking-wider uppercase text-neutral-500 px-4 py-3 font-normal">Email</th>
-                  <th className="text-left text-xs tracking-wider uppercase text-neutral-500 px-4 py-3 font-normal">Empresa</th>
-                  <th className="text-left text-xs tracking-wider uppercase text-neutral-500 px-4 py-3 font-normal">NIF/CIF</th>
-                  <th className="text-right text-xs tracking-wider uppercase text-neutral-500 px-4 py-3 font-normal">Descuento</th>
-                  <th className="px-4 py-3" />
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-neutral-50">
-                {aprobados.map((p) => (
-                  <tr key={p.id} className="hover:bg-neutral-50 transition-colors">
-                    <td className="px-4 py-3 text-neutral-900">{p.nombre_completo ?? "—"}</td>
-                    <td className="px-4 py-3 text-neutral-600">{p.email}</td>
-                    <td className="px-4 py-3 text-neutral-700 font-medium">{p.empresa ?? "—"}</td>
-                    <td className="px-4 py-3 text-neutral-600">{p.nif_cif ?? "—"}</td>
-                    <td className="px-4 py-3">
-                      <ProfesionalAcciones userId={p.id} b2bAprobado={true} descuentoB2b={p.descuento_b2b ?? 0} />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          {/* Facturas por profesional */}
-          {await Promise.all(
-            aprobados.map(async (p) => {
-              const facturas = await listarFacturasProfesional(p.id);
-              const nombre = p.empresa ?? p.nombre_completo ?? p.email;
-              return (
-                <FacturasProfesional
-                  key={`facturas-${p.id}`}
-                  profesionalId={p.id}
-                  profesionalNombre={nombre}
-                  facturasIniciales={facturas}
-                />
-              );
-            })
-          )}
-        </section>
-      )}
+      <ProfesionalesListaClient
+        profesionales={paginaActual}
+        total={total}
+        totalPaginas={totalPaginas}
+        paginaActual={pagina}
+        busqueda={busqueda}
+        filtro={filtro}
+        pendientesCount={pendientesCount}
+      />
     </div>
   );
 }

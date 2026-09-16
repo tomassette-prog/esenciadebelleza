@@ -25,6 +25,7 @@ export async function aprobarProfesional(
   if (error) return { error: error.message };
 
   revalidatePath("/admin/profesionales");
+  revalidatePath(`/admin/profesionales/${userId}`);
   return {};
 }
 
@@ -43,6 +44,7 @@ export async function rechazarProfesional(
   if (error) return { error: error.message };
 
   revalidatePath("/admin/profesionales");
+  revalidatePath(`/admin/profesionales/${userId}`);
   return {};
 }
 
@@ -64,5 +66,44 @@ export async function actualizarDescuentoProfesional(
   if (error) return { error: error.message };
 
   revalidatePath("/admin/profesionales");
+  revalidatePath(`/admin/profesionales/${userId}`);
   return {};
+}
+
+// ── Detalle de un profesional (perfil + pedidos + facturas) ──────────────────
+export async function obtenerDetalleProfesional(userId: string) {
+  const supabase = createAdminClient();
+
+  // 1. Perfil
+  const { data: perfil, error: perfilError } = await supabase
+    .from("perfiles_usuario")
+    .select("*")
+    .eq("id", userId)
+    .single();
+
+  if (perfilError || !perfil) return { profesional: null, error: perfilError?.message ?? "Perfil no encontrado" };
+
+  // 2. Email desde auth
+  const { data: { user } } = await supabase.auth.admin.getUserById(userId);
+  const email = user?.email ?? "(sin email)";
+
+  // 3. Pedidos del profesional
+  const { data: pedidos } = await supabase
+    .from("pedidos")
+    .select("id, estado, total, metodo_pago, tipo_precio, created_at")
+    .eq("usuario_id", userId)
+    .order("created_at", { ascending: false });
+
+  const totalGastado = (pedidos ?? []).reduce((sum, p) => sum + (p.total ?? 0), 0);
+
+  return {
+    profesional: {
+      ...perfil,
+      email,
+      pedidos: pedidos ?? [],
+      totalGastado,
+      totalPedidos: (pedidos ?? []).length,
+    },
+    error: null,
+  };
 }
