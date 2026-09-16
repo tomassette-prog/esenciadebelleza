@@ -34,8 +34,9 @@ export async function obtenerDetalleCliente(userId: string) {
     .order("created_at", { ascending: false });
 
   // Merge y deduplicar
-  const pedidosMap = new Map<string, typeof pedidosPorId>();
-  for (const p of [...(pedidosPorId ?? []), ...(pedidosPorEmail ?? [])]) {
+  const todosPedidos = [...(pedidosPorId ?? []), ...(pedidosPorEmail ?? [])];
+  const pedidosMap = new Map<string, (typeof todosPedidos)[number]>();
+  for (const p of todosPedidos) {
     pedidosMap.set(p.id, p);
   }
   const pedidos = [...pedidosMap.values()].sort(
