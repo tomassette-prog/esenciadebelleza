@@ -9,14 +9,15 @@ const BUCKET = "facturas";
  */
 export async function GET(
   _req: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   const supabase = createAdminClient();
 
   const { data: factura } = await supabase
     .from("facturas")
     .select("id, nombre, archivo_path")
-    .eq("id", params.id)
+    .eq("id", id)
     .single();
 
   if (!factura) {
