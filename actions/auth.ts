@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getSessionFromCookie } from "@/lib/supabase/session-helper";
 import { enviarNotificacionNuevoProfesional } from "@/lib/email";
 
 const ADMIN_EMAILS = ["ziarresamot@gmail.com"];
@@ -278,7 +279,6 @@ export async function cambiarPassword(
   _prevState: { error: string; success: boolean } | null,
   formData: FormData
 ): Promise<{ error: string; success: boolean }> {
-  const supabase = await createClient();
   const nueva     = formData.get("nueva") as string;
   const confirmar = formData.get("confirmar") as string;
 
@@ -292,10 +292,20 @@ export async function cambiarPassword(
     return { error: "Las contraseñas no coinciden.", success: false };
   }
 
-  // updateUser ya exige sesión válida — si no hay sesión, falla solo
-  const { error: updateError } = await supabase.auth.updateUser({ password: nueva });
+  // Obtener sesión desde la cookie (más robusto que supabase.auth.getUser)
+  const session = await getSessionFromCookie();
+  if (!session) {
+    return { error: "No autenticado. Vuelve a iniciar sesión.", success: false };
+  }
+
+  // Usar admin client para actualizar la contraseña
+  const admin = createAdminClient();
+  const { error: updateError } = await admin.auth.admin.updateUserById(session.id, {
+    password: nueva,
+  });
+
   if (updateError) {
-    return { error: "No se pudo actualizar. Vuelve a iniciar sesión e inténtalo de nuevo.", success: false };
+    return { error: "No se pudo actualizar la contraseña. Inténtalo de nuevo.", success: false };
   }
 
   revalidatePath("/", "layout");
