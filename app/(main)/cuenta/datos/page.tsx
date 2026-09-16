@@ -2,6 +2,7 @@ import Link from "next/link";
 import { getSessionFromCookie } from "@/lib/supabase/session-helper";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { actualizarPerfil } from "@/actions/auth";
+import CambiarPasswordForm from "@/components/layout/CambiarPasswordForm";
 import type { Metadata } from "next";
 
 export const dynamic = "force-dynamic";
@@ -128,23 +129,7 @@ export default async function DatosPage() {
         </div>
 
         {/* Seguridad */}
-        <div className="bg-white border border-neutral-100 p-6">
-          <h3 className="text-xs tracking-widest uppercase text-neutral-500 mb-4">
-            Seguridad
-          </h3>
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-neutral-900">Contraseña</p>
-              <p className="text-xs text-neutral-400 mt-0.5">Última actualización: nunca</p>
-            </div>
-            <Link
-              href="/recuperar"
-              className="text-xs tracking-widest uppercase text-neutral-900 border border-neutral-200 px-4 py-2 hover:bg-neutral-900 hover:text-white transition-colors"
-            >
-              Cambiar
-            </Link>
-          </div>
-        </div>
+        <CambiarPasswordForm />
 
         {/* Tipo de cuenta */}
         <div className="bg-white border border-neutral-100 p-6">

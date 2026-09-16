@@ -273,6 +273,51 @@ export async function nuevaPassword(
   redirect("/cuenta?password_actualizado=1");
 }
 
+// ── Cambiar contraseña (logueado, requiere contraseña actual) ────────────────
+export async function cambiarPassword(
+  _prevState: { error: string; success: boolean } | null,
+  formData: FormData
+): Promise<{ error: string; success: boolean }> {
+  const supabase = await createClient();
+  const actual    = formData.get("actual") as string;
+  const nueva     = formData.get("nueva") as string;
+  const confirmar = formData.get("confirmar") as string;
+
+  if (!actual || !nueva || !confirmar) {
+    return { error: "Rellena todos los campos.", success: false };
+  }
+  if (nueva.length < 8) {
+    return { error: "La nueva contraseña debe tener al menos 8 caracteres.", success: false };
+  }
+  if (nueva !== confirmar) {
+    return { error: "Las contraseñas no coinciden.", success: false };
+  }
+
+  // Verificar que la contraseña actual es correcta
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user?.email) {
+    return { error: "No autenticado.", success: false };
+  }
+
+  const { error: signInError } = await supabase.auth.signInWithPassword({
+    email: user.email,
+    password: actual,
+  });
+
+  if (signInError) {
+    return { error: "La contraseña actual no es correcta.", success: false };
+  }
+
+  // Actualizar a la nueva contraseña
+  const { error: updateError } = await supabase.auth.updateUser({ password: nueva });
+  if (updateError) {
+    return { error: "No se pudo actualizar la contraseña. Inténtalo de nuevo.", success: false };
+  }
+
+  revalidatePath("/", "layout");
+  return { error: "", success: true };
+}
+
 // ── Actualizar perfil ─────────────────────────────────────────────────────────
 export async function actualizarPerfil(
   formData: FormData

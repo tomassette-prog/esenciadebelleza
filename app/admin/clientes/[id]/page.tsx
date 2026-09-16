@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { obtenerDetalleCliente } from "@/actions/clientes";
 import { HistorialPedidos } from "@/components/admin/HistorialPedidos";
+import PasswordTemporalBtn from "@/components/admin/PasswordTemporalBtn";
 
 export const dynamic = "force-dynamic";
 
@@ -161,6 +162,14 @@ export default async function DetalleClientePage({
                 </div>
               )}
             </div>
+          </section>
+
+          {/* Contraseña temporal */}
+          <section className="bg-white border border-neutral-100 p-5">
+            <h2 className="text-xs tracking-widest uppercase text-neutral-500 mb-4">
+              Contraseña temporal
+            </h2>
+            <PasswordTemporalBtn userId={id} nombre={cliente.nombre_completo ?? cliente.email} />
           </section>
         </div>
       </div>

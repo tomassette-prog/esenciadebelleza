@@ -107,3 +107,52 @@ export async function obtenerDetalleProfesional(userId: string) {
     error: null,
   };
 }
+
+// ── Poner contraseña temporal ────────────────────────────────────────────────
+export async function ponerPasswordTemporal(
+  userId: string,
+  password: string
+): Promise<{ error?: string; success?: boolean }> {
+  const admin_user = await verificarAdmin();
+  if (!admin_user) return { error: "No autorizado" };
+
+  if (password.length < 8) {
+    return { error: "La contraseña debe tener al menos 8 caracteres." };
+  }
+
+  const supabase = createAdminClient();
+  const { error } = await supabase.auth.admin.updateUserById(userId, {
+    password,
+  });
+
+  if (error) return { error: error.message };
+
+  revalidatePath(`/admin/profesionales/${userId}`);
+  revalidatePath(`/admin/clientes/${userId}`);
+  return { success: true };
+}
+
+// ── Enviar email de reseteo de contraseña ────────────────────────────────────
+export async function enviarResetPassword(
+  userId: string
+): Promise<{ error?: string; success?: boolean }> {
+  const admin_user = await verificarAdmin();
+  if (!admin_user) return { error: "No autorizado" };
+
+  const supabase = createAdminClient();
+
+  // Obtener email del usuario
+  const { data: { user }, error: userError } = await supabase.auth.admin.getUserById(userId);
+  if (userError || !user?.email) return { error: "No se encontró el email del usuario." };
+
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://esenciadebelleza.es";
+
+  // Usar el cliente anónimo para enviar el reset (la admin API no tiene este método directo)
+  const { error } = await supabase.auth.resetPasswordForEmail(user.email, {
+    redirectTo: `${siteUrl}/auth/callback?next=/cuenta/nueva-password`,
+  });
+
+  if (error) return { error: error.message };
+
+  return { success: true };
+}

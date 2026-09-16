@@ -5,6 +5,7 @@ import { obtenerDetalleProfesional } from "@/actions/profesionales";
 import { listarFacturasProfesional } from "@/actions/facturas";
 import ProfesionalAcciones from "@/components/admin/ProfesionalAcciones";
 import FacturasProfesional from "@/components/admin/FacturasProfesional";
+import PasswordTemporalBtn from "@/components/admin/PasswordTemporalBtn";
 import { HistorialPedidos } from "@/components/admin/HistorialPedidos";
 
 export const dynamic = "force-dynamic";
@@ -191,6 +192,14 @@ export default async function DetalleProfesionalPage({
               b2bAprobado={profesional.b2b_aprobado}
               descuentoB2b={profesional.descuento_b2b ?? 0}
             />
+          </section>
+
+          {/* Contraseña temporal */}
+          <section className="bg-white border border-neutral-100 p-5">
+            <h2 className="text-xs tracking-widest uppercase text-neutral-500 mb-4">
+              Contraseña temporal
+            </h2>
+            <PasswordTemporalBtn userId={id} nombre={profesional.nombre_completo ?? profesional.email} />
           </section>
         </div>
       </div>
