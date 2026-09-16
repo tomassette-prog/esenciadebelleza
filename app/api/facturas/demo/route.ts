@@ -19,7 +19,7 @@ export async function GET() {
       cp: "46470",
       ciudad: "Catarroja",
       provincia: "Valencia",
-      telefono: "622 004 408",
+      telefono: "+34 604 825 305",
       email: "info@esenciadebelleza.es",
       web: "esenciadebelleza.es",
     },

@@ -423,21 +423,15 @@ export default function FacturasAdmin() {
                     <td className="px-4 py-3 text-neutral-500 whitespace-nowrap">{formatFecha(f.created_at)}</td>
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-end gap-2">
-                        {/* Descargar */}
-                        {f.url && (
-                          <button
-                            onClick={async () => {
-                              const resp = await fetch(f.url!);
-                              const html = await resp.text();
-                              const blob = new Blob([html], { type: "text/html" });
-                              const blobUrl = URL.createObjectURL(blob);
-                              window.open(blobUrl, "_blank");
-                            }}
-                            className="text-xs px-3 py-1.5 border border-neutral-200 rounded hover:bg-neutral-100 transition-colors"
-                          >
-                            Ver
-                          </button>
-                        )}
+                        {/* Ver */}
+                        <a
+                          href={`/api/facturas/ver/${f.id}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-xs px-3 py-1.5 border border-neutral-200 rounded hover:bg-neutral-100 transition-colors"
+                        >
+                          Ver
+                        </a>
                         {/* Enviar por email */}
                         <button
                           onClick={() => handleEnviarEmail(f.id, f.email_cliente)}

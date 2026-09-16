@@ -1,7 +1,7 @@
 "use server";
 
 import { createAdminClient } from "@/lib/supabase/admin";
-import { createClient } from "@/lib/supabase/server";
+import { getSessionFromCookie } from "@/lib/supabase/session-helper";
 import { verificarAdmin } from "@/lib/admin-auth";
 import { revalidatePath } from "next/cache";
 
@@ -9,15 +9,14 @@ const BUCKET = "facturas";
 
 // ── Listar facturas del profesional logueado ─────────────────────────────────
 export async function listarMisFacturas() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return [];
+  const session = await getSessionFromCookie();
+  if (!session) return [];
 
   const admin = createAdminClient();
   const { data } = await admin
     .from("facturas")
     .select("id, nombre, archivo_path, archivo_size, created_at")
-    .or(`profesional_id.eq.${user.id},email_cliente.eq.${user.email}`)
+    .or(`profesional_id.eq.${session.id},email_cliente.eq.${session.email}`)
     .order("created_at", { ascending: false });
 
   // Generar URLs firmadas (bucket privado)

@@ -134,7 +134,7 @@ export async function enviarPendienteBizum(p: PedidoNotificacion) {
       <div style="background:#fdf5f4;border:2px solid #C4857A;border-radius:8px;padding:20px;margin:0 0 20px;text-align:center">
         <p style="margin:0 0 8px;font-size:15px;color:#3D2018"><strong>📱 Instrucciones de pago por Bizum</strong></p>
         <p style="margin:0 0 6px;font-size:14px">Envía <strong style="font-size:18px">${p.total.toFixed(2)} €</strong> por Bizum al:</p>
-        <p style="margin:0 0 10px;font-size:22px;font-weight:bold;color:#C4857A">622 004 408</p>
+        <p style="margin:0 0 10px;font-size:22px;font-weight:bold;color:#C4857A">+34 604 825 305</p>
         <p style="margin:0;font-size:13px;color:#888">En el <strong>concepto</strong> indica tu número de pedido: <strong>#${p.pedidoId.slice(0, 8).toUpperCase()}</strong></p>
       </div>
 
@@ -156,7 +156,7 @@ export async function enviarPendienteBizum(p: PedidoNotificacion) {
       <div style="margin-top:24px;padding:16px 20px;background:#fdf5f4;border-radius:6px;text-align:center">
         <p style="margin:0;font-size:13px;color:#888">Una vez confirmemos tu pago, recibirás un email de confirmación y prepararemos tu envío.</p>
       </div>
-      <p style="margin-top:20px;font-size:13px;color:#888;text-align:center">Para cualquier consulta escríbenos a <a href="mailto:${FROM_EMAIL}" style="color:#C4857A">${FROM_EMAIL}</a> o llámanos al <strong>622 004 408</strong>.</p>
+      <p style="margin-top:20px;font-size:13px;color:#888;text-align:center">Para cualquier consulta escríbenos a <a href="mailto:${FROM_EMAIL}" style="color:#C4857A">${FROM_EMAIL}</a> o llámanos al <strong>+34 604 825 305</strong>.</p>
     </div>
   </div>
 </body>
@@ -221,7 +221,7 @@ export async function enviarConfirmacionCliente(p: PedidoNotificacion) {
         <p style="margin:0 0 8px;font-size:15px;color:#3D2018"><strong>📦 Tu pedido llegará en 24–48 h laborables</strong></p>
         <p style="margin:0;font-size:13px;color:#888">Te enviaremos un email con el número de seguimiento cuando salga de nuestro almacén.</p>
       </div>
-      <p style="margin-top:20px;font-size:13px;color:#888;text-align:center">Para cualquier consulta escríbenos a <a href="mailto:${FROM_EMAIL}" style="color:#C4857A">${FROM_EMAIL}</a> o llámanos al <strong>622 004 408</strong>.</p>
+      <p style="margin-top:20px;font-size:13px;color:#888;text-align:center">Para cualquier consulta escríbenos a <a href="mailto:${FROM_EMAIL}" style="color:#C4857A">${FROM_EMAIL}</a> o llámanos al <strong>+34 604 825 305</strong>.</p>
     </div>
   </div>
 </body>

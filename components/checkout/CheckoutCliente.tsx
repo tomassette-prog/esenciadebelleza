@@ -724,7 +724,7 @@ export function CheckoutCliente({
                 </div>
               </button>
               <p className="text-[11px] text-neutral-400 mt-2 text-center">
-                Envía el total por Bizum al <strong className="text-neutral-600">622 004 408</strong> · Incluye tu número de pedido en el concepto
+                Envía el total por Bizum al <strong className="text-neutral-600">+34 604 825 305</strong> · Incluye tu número de pedido en el concepto
               </p>
             </div>
 
