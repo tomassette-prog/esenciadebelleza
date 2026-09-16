@@ -279,10 +279,11 @@ export async function cambiarPassword(
   _prevState: { error: string; success: boolean } | null,
   formData: FormData
 ): Promise<{ error: string; success: boolean }> {
+  const actual    = formData.get("actual") as string;
   const nueva     = formData.get("nueva") as string;
   const confirmar = formData.get("confirmar") as string;
 
-  if (!nueva || !confirmar) {
+  if (!actual || !nueva || !confirmar) {
     return { error: "Rellena todos los campos.", success: false };
   }
   if (nueva.length < 8) {
@@ -292,13 +293,25 @@ export async function cambiarPassword(
     return { error: "Las contraseñas no coinciden.", success: false };
   }
 
-  // Obtener sesión desde la cookie (más robusto que supabase.auth.getUser)
+  // Obtener sesión desde la cookie
   const session = await getSessionFromCookie();
   if (!session) {
     return { error: "No autenticado. Vuelve a iniciar sesión.", success: false };
   }
 
-  // Usar admin client para actualizar la contraseña
+  // Verificar contraseña actual con signInWithPassword (cliente aislado, sin cookies)
+  const { createClient } = await import("@/lib/supabase/server");
+  const verifySupabase = await createClient();
+  const { error: signInError } = await verifySupabase.auth.signInWithPassword({
+    email: session.email,
+    password: actual,
+  });
+
+  if (signInError) {
+    return { error: "La contraseña actual no es correcta.", success: false };
+  }
+
+  // Actualizar contraseña con admin API
   const admin = createAdminClient();
   const { error: updateError } = await admin.auth.admin.updateUserById(session.id, {
     password: nueva,
