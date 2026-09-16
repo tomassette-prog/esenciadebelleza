@@ -273,17 +273,16 @@ export async function nuevaPassword(
   redirect("/cuenta?password_actualizado=1");
 }
 
-// ── Cambiar contraseña (logueado, requiere contraseña actual) ────────────────
+// ── Cambiar contraseña (logueado) ───────────────────────────────────────────
 export async function cambiarPassword(
   _prevState: { error: string; success: boolean } | null,
   formData: FormData
 ): Promise<{ error: string; success: boolean }> {
   const supabase = await createClient();
-  const actual    = formData.get("actual") as string;
   const nueva     = formData.get("nueva") as string;
   const confirmar = formData.get("confirmar") as string;
 
-  if (!actual || !nueva || !confirmar) {
+  if (!nueva || !confirmar) {
     return { error: "Rellena todos los campos.", success: false };
   }
   if (nueva.length < 8) {
@@ -293,25 +292,10 @@ export async function cambiarPassword(
     return { error: "Las contraseñas no coinciden.", success: false };
   }
 
-  // Verificar que la contraseña actual es correcta
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user?.email) {
-    return { error: "No autenticado.", success: false };
-  }
-
-  const { error: signInError } = await supabase.auth.signInWithPassword({
-    email: user.email,
-    password: actual,
-  });
-
-  if (signInError) {
-    return { error: "La contraseña actual no es correcta.", success: false };
-  }
-
-  // Actualizar a la nueva contraseña
+  // updateUser ya exige sesión válida — si no hay sesión, falla solo
   const { error: updateError } = await supabase.auth.updateUser({ password: nueva });
   if (updateError) {
-    return { error: "No se pudo actualizar la contraseña. Inténtalo de nuevo.", success: false };
+    return { error: "No se pudo actualizar. Vuelve a iniciar sesión e inténtalo de nuevo.", success: false };
   }
 
   revalidatePath("/", "layout");

@@ -46,19 +46,6 @@ export default function CambiarPasswordForm() {
         )}
 
         <div>
-          <label htmlFor="actual" className="block text-xs tracking-wider uppercase text-neutral-600 mb-1.5">
-            Contraseña actual
-          </label>
-          <input
-            id="actual"
-            name="actual"
-            type="password"
-            required
-            className="w-full border border-neutral-200 px-3 py-2.5 text-sm focus:outline-none focus:border-neutral-900 transition-colors"
-          />
-        </div>
-
-        <div>
           <label htmlFor="nueva" className="block text-xs tracking-wider uppercase text-neutral-600 mb-1.5">
             Nueva contraseña
           </label>
