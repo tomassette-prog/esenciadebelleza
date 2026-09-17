@@ -247,8 +247,19 @@ export function buildOrganizationJsonLd() {
     "@type": "Organization",
     name: SITE_NAME,
     url: BASE_URL,
-    logo: `${BASE_URL}/logo.png`,
-    sameAs: [],
+    logo: {
+      "@type": "ImageObject",
+      url: `${BASE_URL}/logo.png`,
+      width: 400,
+      height: 255,
+      caption: SITE_NAME,
+    },
+    image: `${BASE_URL}/logo.png`,
+    sameAs: [
+      "https://www.instagram.com/esencia_d_belleza_",
+      "https://www.facebook.com/profile.php?id=61591054413595",
+      "https://www.tiktok.com/@esencia.de.belleza",
+    ],
     contactPoint: {
       "@type": "ContactPoint",
       contactType: "customer service",
