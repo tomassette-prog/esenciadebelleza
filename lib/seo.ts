@@ -115,6 +115,10 @@ export function buildProductJsonLd(
   producto: ProductoCompleto,
   aggregate?: ResenaAggregate
 ) {
+  // Si exclude_merchant está activo, no emitir Product JSON-LD
+  // para que Google Merchant Center deje de listar el producto
+  if (producto.exclude_merchant) return null;
+
   // Imagen principal: intentar imagen del producto, luego primera variación con imagen
   const imagenPrincipal =
     producto.imagen_principal_url ??

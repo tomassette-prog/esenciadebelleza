@@ -15,6 +15,7 @@ export interface ProductoPadre {
   activo: boolean;
   destacado: boolean;
   nuevo: boolean;
+  exclude_merchant: boolean;
   variaciones?: ProductoVariacion[];
   created_at: string;
   updated_at: string;

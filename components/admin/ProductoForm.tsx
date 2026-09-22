@@ -25,6 +25,7 @@ interface Props {
     oferta?: boolean;
     es_pack?: boolean;
     activo?: boolean;
+    exclude_merchant?: boolean;
     // Para variación única (solo en crear)
     sku?: string;
     nombre_variacion?: string;
@@ -179,6 +180,15 @@ export function ProductoForm({ action, marcas, categoriasExistentes, subcategori
               <span className="text-sm text-neutral-700">Activo (visible en tienda)</span>
             </label>
           )}
+          <label className="flex items-center gap-2 cursor-pointer select-none" title="Excluir de Google Merchant Center">
+            <input
+              type="checkbox"
+              name="exclude_merchant"
+              defaultChecked={defaultValues.exclude_merchant ?? false}
+              className="w-4 h-4 accent-orange-600"
+            />
+            <span className="text-sm text-orange-700">🚫 No publicar en Google Shopping</span>
+          </label>
         </div>
       </section>
 

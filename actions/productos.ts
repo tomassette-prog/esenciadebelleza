@@ -130,6 +130,7 @@ export async function actualizarProducto(
   const oferta_flag = formData.get("oferta") === "on";
   const es_pack = formData.get("es_pack") === "on";
   const activo = formData.get("activo") !== "off";
+  const exclude_merchant = formData.get("exclude_merchant") === "on";
 
   if (!nombre || !categoria) return { error: "Nombre y categoría son obligatorios." };
 
@@ -162,6 +163,7 @@ export async function actualizarProducto(
       oferta: oferta_flag,
       es_pack,
       activo,
+      exclude_merchant,
     })
     .eq("id", id);
 

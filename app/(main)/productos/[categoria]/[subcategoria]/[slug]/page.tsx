@@ -157,10 +157,12 @@ export default async function ProductoPage({ params, searchParams }: PageProps) 
       <link rel="canonical" href={canonicalUrl} />
 
       {/* ── JSON-LD Rich Snippets ── */}
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(productJsonLd) }}
-      />
+      {productJsonLd && (
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(productJsonLd) }}
+        />
+      )}
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }}

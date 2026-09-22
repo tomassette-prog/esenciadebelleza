@@ -117,6 +117,7 @@ export default async function EditarProductoPage({ params, searchParams }: { par
           oferta: (producto as Record<string, unknown>).oferta as boolean ?? false,
           es_pack: (producto as Record<string, unknown>).es_pack as boolean ?? false,
           activo: producto.activo,
+          exclude_merchant: (producto as Record<string, unknown>).exclude_merchant as boolean ?? false,
         }}
       />
 
