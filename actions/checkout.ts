@@ -200,7 +200,7 @@ export async function iniciarPagoCeca(
   if (packs.length) {
     const { lineasPedido: packLineas } = explotarPacks(packs);
     const { error: errPacksCeca } = await supabase.from("pedidos_lineas").insert(
-      packLineas.map((p) => ({{
+      packLineas.map((p) => ({
         pedido_id:        pedido.id,
         variacion_id:     p.variacion_id || null,
         sku:              p.sku,
