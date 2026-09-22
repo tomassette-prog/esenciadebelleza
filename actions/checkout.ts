@@ -11,6 +11,21 @@ import { calcularGastoEnvio, getSuplementoContrareembolso } from "@/lib/envio";
 import { registrarUsoCupon } from "@/actions/cupones";
 import { enviarNotificacionPedido, enviarPendienteBizum } from "@/lib/email";
 
+const MAX_UNIDADES_POR_PRODUCTO = 9;
+
+// ── Validar cantidades del carrito ────────────────────────────────────────────
+function validarCantidades(lineas: LineaCarrito[]): string | null {
+  for (const l of lineas) {
+    if (l.cantidad > MAX_UNIDADES_POR_PRODUCTO) {
+      return `"${l.nombre}" tiene ${l.cantidad} unidades. El máximo es ${MAX_UNIDADES_POR_PRODUCTO}. Para pedidos grandes, contacta con la tienda.`;
+    }
+    if (l.cantidad <= 0) {
+      return `"${l.nombre}" tiene cantidad inválida.`;
+    }
+  }
+  return null;
+}
+
 // ── Convertir packs a líneas de pedido (explota cada pack en sus componentes) ─
 function explotarPacks(packs: LineaPack[]): {
   lineasPedido: { pack_id: string; nombre: string; sku: string; variacion_id: string; cantidad: number; precio_unitario: number; subtotal: number; nombre_variacion: string; imagen_url: string | null }[];
@@ -61,6 +76,9 @@ export async function iniciarPagoCeca(
   error:      string | null;
 }> {
   if (!lineas.length && !packs.length) return { gatewayUrl: null, campos: null, gastoEnvio: 0, error: "El carrito está vacío" };
+
+  const errCantidades = validarCantidades(lineas);
+  if (errCantidades) return { gatewayUrl: null, campos: null, gastoEnvio: 0, error: errCantidades };
 
   const supabase   = createAdminClient();
   const sessionUser = await getSessionFromCookie();
@@ -159,7 +177,7 @@ export async function iniciarPagoCeca(
   }
 
   // Guardar líneas de productos individuales
-  await supabase.from("pedidos_lineas").insert(
+  const { error: errLineasCeca } = await supabase.from("pedidos_lineas").insert(
     lineas.map((l) => ({
       pedido_id:        pedido.id,
       variacion_id:     l.variacion_id,
@@ -172,12 +190,17 @@ export async function iniciarPagoCeca(
       subtotal:         l.precio * l.cantidad,
     }))
   );
+  if (errLineasCeca) {
+    console.error("[cecabank] Error guardando líneas:", errLineasCeca);
+    await supabase.from("pedidos").delete().eq("id", pedido.id);
+    return { gatewayUrl: null, campos: null, gastoEnvio, error: "No se pudieron guardar los productos. Es posible que el stock se haya agotado." };
+  }
 
   // Guardar líneas de packs (una línea por pack completo)
   if (packs.length) {
     const { lineasPedido: packLineas } = explotarPacks(packs);
-    await supabase.from("pedidos_lineas").insert(
-      packLineas.map((p) => ({
+    const { error: errPacksCeca } = await supabase.from("pedidos_lineas").insert(
+      packLineas.map((p) => ({{
         pedido_id:        pedido.id,
         variacion_id:     p.variacion_id || null,
         sku:              p.sku,
@@ -256,6 +279,9 @@ export async function iniciarPagoWooCommerce(
   }
 ): Promise<{ pagoUrl: string | null; pedidoId: string | null; gastoEnvio: number; error: string | null }> {
   if (!lineas.length) return { pagoUrl: null, pedidoId: null, gastoEnvio: 0, error: "El carrito está vacío" };
+
+  const errCantidadesWoo = validarCantidades(lineas);
+  if (errCantidadesWoo) return { pagoUrl: null, pedidoId: null, gastoEnvio: 0, error: errCantidadesWoo };
 
   const supabase   = createAdminClient();
   const sessionUser = await getSessionFromCookie();
@@ -338,7 +364,7 @@ export async function iniciarPagoWooCommerce(
   }
 
   // Guardar líneas
-  await supabase.from("pedidos_lineas").insert(
+  const { error: errLineasWoo } = await supabase.from("pedidos_lineas").insert(
     lineas.map((l) => ({
       pedido_id: pedido.id, variacion_id: l.variacion_id,
       sku: l.sku, nombre_producto: l.nombre, nombre_variacion: l.nombre_variacion,
@@ -346,6 +372,11 @@ export async function iniciarPagoWooCommerce(
       cantidad: l.cantidad, subtotal: l.precio * l.cantidad,
     }))
   );
+  if (errLineasWoo) {
+    console.error("[woo] Error guardando líneas:", errLineasWoo);
+    await supabase.from("pedidos").delete().eq("id", pedido.id);
+    return { pagoUrl: null, pedidoId: null, gastoEnvio, error: "No se pudieron guardar los productos. Es posible que el stock se haya agotado." };
+  }
 
   // 2. Crear pedido en WooCommerce como PENDING (no pagado)
   const WOO_URL = process.env.WOO_URL!;
@@ -519,6 +550,9 @@ export async function iniciarPagoStripe(
 ): Promise<{ url: string | null; error: string | null }> {
   if (!lineas.length && !packs.length) return { url: null, error: "El carrito está vacío" };
 
+  const errCantidadesStripe = validarCantidades(lineas);
+  if (errCantidadesStripe) return { url: null, error: errCantidadesStripe };
+
   const supabase   = createAdminClient();
   const sessionUser = await getSessionFromCookie();
 
@@ -602,7 +636,7 @@ export async function iniciarPagoStripe(
   }).select("id").single();
 
   if (pedido) {
-    await supabase.from("pedidos_lineas").insert(
+    const { error: errLineas } = await supabase.from("pedidos_lineas").insert(
       lineas.map((l) => ({
         pedido_id: pedido.id, variacion_id: l.variacion_id,
         sku: l.sku, nombre_producto: l.nombre, nombre_variacion: l.nombre_variacion,
@@ -610,6 +644,27 @@ export async function iniciarPagoStripe(
         cantidad: l.cantidad, subtotal: l.precio * l.cantidad,
       }))
     );
+    if (errLineas) {
+      console.error("[stripe] Error guardando líneas:", errLineas);
+      await supabase.from("pedidos").delete().eq("id", pedido.id);
+      return { url: null, error: "No se pudieron guardar los productos. Es posible que el stock se haya agotado." };
+    }
+
+    // Guardar líneas de packs
+    if (packs.length) {
+      const { lineasPedido: packLineas } = explotarPacks(packs);
+      const { error: errPacks } = await supabase.from("pedidos_lineas").insert(
+        packLineas.map((p) => ({
+          pedido_id: pedido.id, variacion_id: p.variacion_id || null,
+          sku: p.sku, nombre_producto: p.nombre, nombre_variacion: p.nombre_variacion,
+          imagen_url: p.imagen_url, precio_unitario: p.precio_unitario,
+          cantidad: p.cantidad, subtotal: p.subtotal,
+        }))
+      );
+      if (errPacks) {
+        console.error("[stripe] Error guardando packs:", errPacks);
+      }
+    }
   }
 
   // Crear sesión de Stripe Checkout con todos los métodos disponibles en España
@@ -735,6 +790,9 @@ export async function crearPedidoContrarembolso(
 ): Promise<{ ok: boolean; pedidoId?: string; error?: string }> {
   if (!lineas.length && !packs.length) return { ok: false, error: "El carrito está vacío" };
 
+  const errCantidadesCR = validarCantidades(lineas);
+  if (errCantidadesCR) return { ok: false, error: errCantidadesCR };
+
   const supabase   = createAdminClient();
   const sessionUser = await getSessionFromCookie();
 
@@ -786,21 +844,25 @@ export async function crearPedidoContrarembolso(
   // 2. Guardar líneas
   const { lineasPedido } = explotarPacks(packs);
 
-  for (const l of lineas) {
-    await supabase.from("pedidos_lineas").insert({
+  const lineasToInsert = [
+    ...lineas.map((l) => ({
       pedido_id: pedido.id, variacion_id: l.variacion_id, sku: l.sku,
       nombre_producto: l.nombre, nombre_variacion: l.nombre_variacion,
       cantidad: l.cantidad, precio_unitario: l.precio,
       subtotal: l.precio * l.cantidad, imagen_url: l.imagen_url,
-    });
-  }
-  for (const lp of lineasPedido) {
-    await supabase.from("pedidos_lineas").insert({
+    })),
+    ...lineasPedido.map((lp) => ({
       pedido_id: pedido.id, variacion_id: lp.variacion_id, sku: lp.sku,
       nombre_producto: lp.nombre, nombre_variacion: lp.nombre_variacion,
       cantidad: lp.cantidad, precio_unitario: lp.precio_unitario,
       subtotal: lp.subtotal, imagen_url: lp.imagen_url,
-    });
+    })),
+  ];
+  const { error: errLineasCR } = await supabase.from("pedidos_lineas").insert(lineasToInsert);
+  if (errLineasCR) {
+    console.error("[contrarembolso] Error guardando líneas:", errLineasCR);
+    await supabase.from("pedidos").delete().eq("id", pedido.id);
+    return { ok: false, error: "No se pudieron guardar los productos. Es posible que el stock se haya agotado." };
   }
 
   // 3. NO crear en WooCommerce aquí — el admin usará "Lanzar pedido" cuando revise el pedido
@@ -831,6 +893,9 @@ export async function crearPedidoBizum(
   }
 ): Promise<{ ok: boolean; pedidoId?: string; error?: string }> {
   if (!lineas.length && !packs.length) return { ok: false, error: "El carrito está vacío" };
+
+  const errCantidadesBizum = validarCantidades(lineas);
+  if (errCantidadesBizum) return { ok: false, error: errCantidadesBizum };
 
   const supabase   = createAdminClient();
   const sessionUser = await getSessionFromCookie();
@@ -880,23 +945,27 @@ export async function crearPedidoBizum(
   }
 
   // 2. Guardar líneas
-  const { lineasPedido } = explotarPacks(packs);
+  const { lineasPedido: lineasBizum } = explotarPacks(packs);
 
-  for (const l of lineas) {
-    await supabase.from("pedidos_lineas").insert({
+  const lineasBizumInsert = [
+    ...lineas.map((l) => ({
       pedido_id: pedido.id, variacion_id: l.variacion_id, sku: l.sku,
       nombre_producto: l.nombre, nombre_variacion: l.nombre_variacion,
       cantidad: l.cantidad, precio_unitario: l.precio,
       subtotal: l.precio * l.cantidad, imagen_url: l.imagen_url,
-    });
-  }
-  for (const lp of lineasPedido) {
-    await supabase.from("pedidos_lineas").insert({
+    })),
+    ...lineasBizum.map((lp) => ({
       pedido_id: pedido.id, variacion_id: lp.variacion_id, sku: lp.sku,
       nombre_producto: lp.nombre, nombre_variacion: lp.nombre_variacion,
       cantidad: lp.cantidad, precio_unitario: lp.precio_unitario,
       subtotal: lp.subtotal, imagen_url: lp.imagen_url,
-    });
+    })),
+  ];
+  const { error: errLineasBizum } = await supabase.from("pedidos_lineas").insert(lineasBizumInsert);
+  if (errLineasBizum) {
+    console.error("[bizum] Error guardando líneas:", errLineasBizum);
+    await supabase.from("pedidos").delete().eq("id", pedido.id);
+    return { ok: false, error: "No se pudieron guardar los productos. Es posible que el stock se haya agotado." };
   }
 
   // 3. Emails — admin + cliente (aviso pendiente Bizum)
@@ -909,7 +978,7 @@ export async function crearPedidoBizum(
       nombre: l.nombre, nombre_variacion: l.nombre_variacion,
       cantidad: l.cantidad, precio: l.precio,
     })),
-    ...lineasPedido.map((lp) => ({
+    ...lineasBizum.map((lp) => ({
       nombre: lp.nombre, nombre_variacion: lp.nombre_variacion,
       cantidad: lp.cantidad, precio: lp.precio_unitario,
     })),

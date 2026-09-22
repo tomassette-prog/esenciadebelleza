@@ -4,6 +4,13 @@ import { useState, useTransition } from "react";
 import Link from "next/link";
 import { eliminarPedidos } from "@/actions/pedidos";
 
+interface LineaPedido {
+  id: string;
+  nombre_producto: string;
+  nombre_variacion?: string;
+  cantidad: number;
+}
+
 interface Pedido {
   id: string;
   estado: string;
@@ -16,6 +23,7 @@ interface Pedido {
   created_at: string;
   direccion_envio: Record<string, string> | null;
   metodo_pago: string | null;
+  pedidos_lineas: LineaPedido[];
 }
 
 interface Estilos { label: string; color: string }
@@ -145,6 +153,7 @@ export function PedidosTable({
               </th>
               <th className="px-4 py-3 text-left">Fecha</th>
               <th className="px-4 py-3 text-left">Cliente</th>
+              <th className="px-4 py-3 text-left">Productos</th>
               <th className="px-4 py-3 text-right">Total</th>
               <th className="px-4 py-3 text-right">Coste</th>
               <th className="px-4 py-3 text-right">Ganancia</th>
@@ -156,7 +165,7 @@ export function PedidosTable({
           <tbody className="divide-y divide-gray-100">
             {pedidos.length === 0 && (
               <tr>
-                <td colSpan={9} className="px-4 py-8 text-center text-gray-400">
+                <td colSpan={10} className="px-4 py-8 text-center text-gray-400">
                   No hay pedidos todavía
                 </td>
               </tr>
@@ -197,6 +206,23 @@ export function PedidosTable({
                       )}
                     </div>
                     <div className="text-gray-400 text-xs">{p.email_cliente}</div>
+                  </td>
+                  <td className="px-4 py-3">
+                    {p.pedidos_lineas.length > 0 ? (
+                      <div className="text-sm text-gray-700 max-w-xs">
+                        {p.pedidos_lineas.slice(0, 2).map((l) => (
+                          <div key={l.id} className="truncate">
+                            {l.nombre_variacion ? `${l.nombre_producto} — ${l.nombre_variacion}` : l.nombre_producto}
+                            {l.cantidad > 1 && <span className="text-gray-400 ml-1">×{l.cantidad}</span>}
+                          </div>
+                        ))}
+                        {p.pedidos_lineas.length > 2 && (
+                          <div className="text-xs text-gray-400">+{p.pedidos_lineas.length - 2} más</div>
+                        )}
+                      </div>
+                    ) : (
+                      <span className="text-xs text-gray-300 italic">Sin líneas</span>
+                    )}
                   </td>
                   <td className="px-4 py-3 text-right font-semibold">
                     {p.total.toFixed(2)} €

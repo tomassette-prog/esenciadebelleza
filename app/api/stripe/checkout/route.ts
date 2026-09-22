@@ -12,6 +12,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Carrito vacío" }, { status: 400 });
     }
 
+    // Validar cantidades (máx 9 unidades por producto)
+    const MAX_UNIDADES = 9;
+    for (const l of lineas as { nombre: string; cantidad: number }[]) {
+      if (l.cantidad > MAX_UNIDADES) {
+        return NextResponse.json({ error: `"${l.nombre}" tiene ${l.cantidad} unidades. El máximo es ${MAX_UNIDADES}. Para pedidos grandes, contacta con la tienda.` }, { status: 400 });
+      }
+    }
+
     const supabase   = createAdminClient();
     const authClient = await createClient();
     const { data: { user } } = await authClient.auth.getUser();
@@ -67,7 +75,7 @@ export async function POST(req: NextRequest) {
     }).select("id").single();
 
     if (pedido) {
-      await supabase.from("pedidos_lineas").insert(
+      const { error: errLineas } = await supabase.from("pedidos_lineas").insert(
         lineas.map((l: { variacion_id: string; sku: string; nombre: string; nombre_variacion: string; imagen_url: string; precio: number; cantidad: number }) => ({
           pedido_id: pedido.id, variacion_id: l.variacion_id,
           sku: l.sku, nombre_producto: l.nombre, nombre_variacion: l.nombre_variacion,
@@ -75,6 +83,12 @@ export async function POST(req: NextRequest) {
           cantidad: l.cantidad, subtotal: l.precio * l.cantidad,
         }))
       );
+      if (errLineas) {
+        console.error("[stripe-checkout] Error guardando líneas:", errLineas);
+        // Eliminar pedido huérfano
+        await supabase.from("pedidos").delete().eq("id", pedido.id);
+        return NextResponse.json({ error: "No se pudieron guardar los productos. Es posible que el stock se haya agotado." }, { status: 409 });
+      }
     }
 
     // Crear sesión Stripe

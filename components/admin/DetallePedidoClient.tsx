@@ -222,6 +222,12 @@ export default function DetallePedidoClient({ pedido }: { pedido: Pedido }) {
       {/* Líneas de pedido */}
       <div className="bg-white rounded-xl shadow overflow-hidden">
         <h2 className="font-semibold text-gray-700 px-5 py-4 border-b border-gray-100">Productos del pedido</h2>
+        {pedido.pedidos_lineas.length === 0 && (
+          <div className="px-5 py-4 bg-red-50 border-b border-red-200">
+            <p className="text-sm text-red-700 font-medium">⚠️ Este pedido no tiene líneas de producto guardadas.</p>
+            <p className="text-xs text-red-500 mt-1">Es posible que el stock se agotó durante el checkout. Revisa Stripe para ver los artículos del carrito.</p>
+          </div>
+        )}
         <table className="min-w-full text-sm">
           <thead className="bg-gray-50 text-gray-500 text-xs uppercase">
             <tr>
@@ -233,6 +239,13 @@ export default function DetallePedidoClient({ pedido }: { pedido: Pedido }) {
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-50">
+            {pedido.pedidos_lineas.length === 0 && (
+              <tr>
+                <td colSpan={5} className="px-5 py-6 text-center text-sm text-gray-400">
+                  No hay productos registrados en este pedido
+                </td>
+              </tr>
+            )}
             {pedido.pedidos_lineas.map((l) => (
               <tr key={l.id} className="hover:bg-gray-50">
                 <td className="px-5 py-3">

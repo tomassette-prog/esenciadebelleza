@@ -35,6 +35,11 @@ export async function crearOrdenPaypal(
 ): Promise<{ orderId: string | null; gastoEnvio: number; error: string | null }> {
   if (!lineas.length) return { orderId: null, gastoEnvio: 0, error: "El carrito está vacío" };
 
+  const MAX_UNIDADES = 9;
+  for (const l of lineas) {
+    if (l.cantidad > MAX_UNIDADES) return { orderId: null, gastoEnvio: 0, error: `"${l.nombre}" tiene ${l.cantidad} unidades. El máximo es ${MAX_UNIDADES}. Para pedidos grandes, contacta con la tienda.` };
+  }
+
   // Validar precios contra la base de datos
   const supabaseValidar = createAdminClient();
   const variacionIds = lineas.map((l) => l.variacion_id).filter(Boolean);
@@ -164,7 +169,7 @@ export async function crearOrdenPaypal(
     }).select("id").single();
 
     if (pedido && !pedidoErr) {
-      await supabase.from("pedidos_lineas").insert(
+      const { error: errLineasPaypal } = await supabase.from("pedidos_lineas").insert(
         lineas.map((l) => ({
           pedido_id:        pedido.id,
           variacion_id:     l.variacion_id,
@@ -176,6 +181,11 @@ export async function crearOrdenPaypal(
           subtotal:         l.precio * l.cantidad,
         }))
       );
+      if (errLineasPaypal) {
+        console.error("[paypal] Error guardando líneas:", errLineasPaypal);
+        await supabase.from("pedidos").delete().eq("id", pedido.id);
+        return { orderId: null, gastoEnvio, error: "No se pudieron guardar los productos. Es posible que el stock se haya agotado." };
+      }
     }
 
     // Devolver el order.id para que el SDK de PayPal lo gestione en el frontend

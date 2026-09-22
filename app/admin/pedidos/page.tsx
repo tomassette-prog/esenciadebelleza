@@ -48,6 +48,7 @@ export default async function AdminPedidosPage({
     created_at:      p.created_at as string,
     direccion_envio: p.direccion_envio as Record<string, string> | null,
     metodo_pago:     p.metodo_pago as string | null,
+    pedidos_lineas:  (p.pedidos_lineas ?? []) as { id: string; nombre_producto: string; nombre_variacion?: string; cantidad: number }[],
   }));
 
   return (
