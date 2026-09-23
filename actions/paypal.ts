@@ -213,19 +213,35 @@ export async function capturarPagoPaypal(
       },
     });
     const data = await res.json();
-    if (!res.ok) return { ok: false, error: data.message };
+    // Captura duplicada (doble clic / reintento): también cuenta como capturado
+    const yaCapturado = !res.ok && data?.name === "ORDER_ALREADY_CAPTURED";
+    if (!res.ok && !yaCapturado) return { ok: false, error: data.message };
 
-    if (data.status === "COMPLETED") {
-      // Actualizar estado del pedido en Supabase
+    if (data.status === "COMPLETED" || yaCapturado) {
+      // Actualizar estado del pedido en Supabase (solo pendiente -> pagado)
       const supabase = createAdminClient();
-      const { data: pedido } = await supabase
+      const { data: actualizados } = await supabase
         .from("pedidos")
         .update({ estado: "pagado" })
         .eq("stripe_payment_id", orderId)
-        .select("id, email_cliente, direccion_envio, gastos_envio, total, tipo_precio, cupon_id, descuento_cupon, usuario_id")
+        .eq("estado", "pendiente")
+        .select("id");
+
+      const { data: pedido } = await supabase
+        .from("pedidos")
+        .select("id, email_cliente, direccion_envio, gastos_envio, total, tipo_precio, cupon_id, descuento_cupon, usuario_id, estado")
+        .eq("stripe_payment_id", orderId)
         .single();
 
-      if (pedido) {
+      // Solo es éxito si el pedido quedó pagado (nuestra transición o ya confirmado antes)
+      if (!pedido || pedido.estado !== "pagado") {
+        return { ok: false, error: "Pago recibido pero no se pudo confirmar el pedido. Contacta con la tienda." };
+      }
+
+      // Emails y cupón solo en la transición ganadora (evita duplicados)
+      const primeraConfirmacion = !!actualizados && actualizados.length === 1;
+
+      if (pedido && primeraConfirmacion) {
         // Obtener líneas del pedido
         const { data: lineas } = await supabase
           .from("pedidos_lineas")

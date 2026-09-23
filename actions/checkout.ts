@@ -226,7 +226,11 @@ export async function iniciarPagoCeca(
   return { gatewayUrl, campos, gastoEnvio, error: null };
 }
 
-// ── Marcar pedido como pagado y crear en WooCommerce ─────────────────────────
+// ── Consulta de estado del pago Cecabank (SOLO LECTURA) ──────────────────────
+// La transición a "pagado" únicamente la realiza la notificación firmada del
+// banco (lib/ceca-confirmar.ts vía /api/ceca/notificacion, con comprobación de
+// importe). Esta action solo consulta el resultado: un cliente jamás puede
+// marcar su pedido como pagado.
 export async function confirmarPedidoCeca(
   numOper: string
 ): Promise<{ ok: boolean; wc_order_id?: number; email?: string; pedidoId?: string }> {
@@ -234,37 +238,11 @@ export async function confirmarPedidoCeca(
 
   const { data: pedido } = await supabase
     .from("pedidos")
-    .select("id, email_cliente, direccion_envio, gastos_envio, total, tipo_precio, estado, cupon_id, descuento_cupon, usuario_id")
+    .select("id, estado, email_cliente")
     .eq("stripe_payment_id", numOper)
     .single();
 
-  if (!pedido) return { ok: false };
-
-  // UPDATE atómico: solo actualiza si sigue en estado pendiente (evita race condition)
-  const { data: updated202 } = await supabase
-    .from("pedidos")
-    .update({ estado: "pagado" })
-    .eq("stripe_payment_id", numOper)
-    .eq("estado", "pendiente")
-    .select("id");
-
-  if (!updated202 || updated202.length === 0) return { ok: true }; // ya procesado por otra llamada concurrente
-
-  // Obtener líneas para email y WooCommerce
-  const { data: lineas } = await supabase
-    .from("pedidos_lineas")
-    .select("sku, cantidad, precio_unitario, nombre_producto, nombre_variacion")
-    .eq("pedido_id", pedido.id);
-
-  const dir = pedido.direccion_envio as Record<string, string>;
-
-  // Enviar notificación al admin y confirmación al cliente
-  // Registrar uso de cupón si aplica
-  if (pedido.cupon_id && pedido.descuento_cupon > 0) {
-    await registrarUsoCupon(pedido.cupon_id, pedido.id, pedido.usuario_id, pedido.descuento_cupon);
-  }
-
-  // WooCommerce se lanza manualmente desde el panel de administración
+  if (!pedido || pedido.estado !== "pagado") return { ok: false };
   return { ok: true, email: pedido.email_cliente, pedidoId: pedido.id };
 }
 

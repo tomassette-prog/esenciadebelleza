@@ -6,6 +6,7 @@ import Link from "next/link";
 import Script from "next/script";
 import { useCarrito } from "@/context/CarritoContext";
 import { confirmarPedidoCeca, confirmarPedidoStripe } from "@/actions/checkout";
+import { capturarPagoPaypal } from "@/actions/paypal";
 
 type Estado = "cargando" | "exito" | "error";
 
@@ -55,6 +56,20 @@ export default function ConfirmacionInner() {
           if (email && pedidoId) {
             setOrderData({ orderId: pedidoId, email });
           }
+          setEstado("exito");
+        } else {
+          setEstado("error");
+        }
+      });
+      return;
+    }
+
+    // ── Flujo PayPal ────────────────────────────────────────────────────────
+    if (metodo === "paypal" && numOper) {
+      capturarPagoPaypal(numOper).then((res) => {
+        if (res.ok) {
+          vaciar();
+          setOrderData({ orderId: numOper, email: "" });
           setEstado("exito");
         } else {
           setEstado("error");

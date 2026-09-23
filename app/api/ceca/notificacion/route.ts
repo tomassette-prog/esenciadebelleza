@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verificarFirmaCeca } from "@/lib/cecabank";
-import { confirmarPedidoCeca } from "@/actions/checkout";
+import { confirmarPagoCecaFirmado } from "@/lib/ceca-confirmar";
 
 /**
  * Notificación server-to-server de Cecabank.
@@ -32,12 +32,15 @@ export async function POST(req: NextRequest) {
     return new NextResponse("FIRMA_INVALIDA", { status: 400 });
   }
 
-  // Confirmar pedido y crear en WooCommerce
-  const { ok } = await confirmarPedidoCeca(numOper);
+  // Confirmar pedido con el IMPORTE FIRMADO como prueba de pago
+  const importeCents = importe.includes(".")
+    ? Math.round(parseFloat(importe) * 100)
+    : parseInt(importe, 10);
+  const { ok, motivo } = await confirmarPagoCecaFirmado(numOper, importeCents);
   if (ok) {
     console.log(`[Cecabank Notif] Pedido confirmado. numOper=${numOper}`);
   } else {
-    console.error("[Cecabank Notif] No se encontró pedido para numOper:", numOper);
+    console.error("[Cecabank Notif] Pago NO confirmado:", numOper, motivo ?? "");
   }
 
   // Cecabank espera el texto "OK" para dar el pago por procesado
