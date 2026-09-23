@@ -6,6 +6,7 @@ import { getSessionFromCookie } from "@/lib/supabase/session-helper";
 import { generarNumOper, generarCamposCeca } from "@/lib/cecabank";
 import { stripe } from "@/lib/stripe";
 import type { LineaCarrito, LineaPack } from "@/context/CarritoContext";
+import { validarYCalcular } from "@/lib/validar-pedido";
 
 import { calcularGastoEnvio, getSuplementoContrareembolso } from "@/lib/envio";
 import { registrarUsoCupon } from "@/actions/cupones";
@@ -806,14 +807,17 @@ export async function crearPedidoContrarembolso(
     if (perfil?.tipo_cliente === "b2b" && perfil?.b2b_aprobado === true) tipoPrecio = "b2b";
   }
 
-  const totalProductos = lineas.reduce((acc, l) => acc + l.precio * l.cantidad, 0)
-                       + packs.reduce((acc, p) => acc + p.precio * p.cantidad, 0);
+  // Precios, packs y descuento validados/recalculados contra la BD
+  const calc = await validarYCalcular({ lineas, packs, cupon: datosEnvio.cupon ?? null, tipoPrecio });
+  if (!calc.ok) return { ok: false, error: calc.error };
+
+  const totalProductos = calc.subtotal;
   const gastoEnvioBase = calcularGastoEnvio(totalProductos, datosEnvio.provincia, datosEnvio.ciudad);
 
   if (gastoEnvioBase === -1) return { ok: false, error: "No realizamos envíos a esa provincia." };
 
   const gastoEnvio = gastoEnvioBase + getSuplementoContrareembolso(totalProductos);
-  const descuentoCupon = datosEnvio.cupon?.descuento ?? 0;
+  const descuentoCupon = calc.descuento;
   const totalFinal = totalProductos - descuentoCupon + gastoEnvio;
 
   // 1. Guardar pedido en Supabase
@@ -831,7 +835,7 @@ export async function crearPedidoContrarembolso(
       email_cliente:    datosEnvio.email,
       notas:            datosEnvio.notas ?? "",
       direccion_envio:  datosEnvio as unknown as Record<string, unknown>,
-      cupon_id:         datosEnvio.cupon?.id ?? null,
+      cupon_id:         calc.cuponId,
       descuento_cupon:  descuentoCupon,
     })
     .select("id")
@@ -911,13 +915,16 @@ export async function crearPedidoBizum(
     if (perfil?.tipo_cliente === "b2b" && perfil?.b2b_aprobado === true) tipoPrecio = "b2b";
   }
 
-  const totalProductos = lineas.reduce((acc, l) => acc + l.precio * l.cantidad, 0)
-                       + packs.reduce((acc, p) => acc + p.precio * p.cantidad, 0);
+  // Precios, packs y descuento validados/recalculados contra la BD
+  const calc = await validarYCalcular({ lineas, packs, cupon: datosEnvio.cupon ?? null, tipoPrecio });
+  if (!calc.ok) return { ok: false, error: calc.error };
+
+  const totalProductos = calc.subtotal;
   const gastoEnvio = calcularGastoEnvio(totalProductos, datosEnvio.provincia, datosEnvio.ciudad);
 
   if (gastoEnvio === -1) return { ok: false, error: "No realizamos envíos a esa provincia." };
 
-  const descuentoCupon = datosEnvio.cupon?.descuento ?? 0;
+  const descuentoCupon = calc.descuento;
   const totalFinal = totalProductos - descuentoCupon + gastoEnvio;
 
   // 1. Guardar pedido en Supabase
@@ -935,7 +942,7 @@ export async function crearPedidoBizum(
       email_cliente:    datosEnvio.email,
       notas:            datosEnvio.notas ?? "",
       direccion_envio:  datosEnvio as unknown as Record<string, unknown>,
-      cupon_id:         datosEnvio.cupon?.id ?? null,
+      cupon_id:         calc.cuponId,
       descuento_cupon:  descuentoCupon,
     })
     .select("id")
