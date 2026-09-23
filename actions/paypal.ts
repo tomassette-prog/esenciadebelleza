@@ -3,7 +3,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { calcularGastoEnvio } from "@/lib/envio";
-import type { LineaCarrito } from "@/context/CarritoContext";
+import type { LineaCarrito, LineaPack } from "@/context/CarritoContext";
 
 const PAYPAL_BASE = "https://api-m.paypal.com"; // live
 
@@ -35,7 +35,8 @@ export async function crearOrdenPaypal(
       ciudad: string; provincia: string; codigo_postal: string;
     } | null;
     cupon?: { id: string; codigo: string; descuento: number } | null;
-  }
+  },
+  packs: LineaPack[] = []
 ): Promise<{ orderId: string | null; gastoEnvio: number; error: string | null }> {
   if (!lineas.length) return { orderId: null, gastoEnvio: 0, error: "El carrito está vacío" };
 
@@ -59,7 +60,24 @@ export async function crearOrdenPaypal(
       if (Math.abs(l.precio - dbVar.precio_b2c) > 0.02) return { orderId: null, gastoEnvio: 0, error: `El precio de "${l.nombre}" ha cambiado. Actualiza la página.` };
     }
   }
+// ── Packs de regalo: validar precio/disponibilidad y sumar al total ──
+  const supabasePacks = createAdminClient();
+  let totalPacks = 0;
+  if (packs.length) {
+    const { data: dbPacks } = await supabasePacks
+      .from("packs_regalo")
+      .select("id, precio_pack, activo")
+      .in("id", packs.map((p) => p.pack_id));
+    const packsMap = new Map((dbPacks ?? []).map((p: { id: string; precio_pack: number; activo: boolean }) => [p.id, p]));
+    for (const p of packs) {
+      const dbPack = packsMap.get(p.pack_id);
+      if (!dbPack || !dbPack.activo) return { orderId: null, gastoEnvio: 0, error: `El pack "${p.nombre}" ya no está disponible.` };
+      if (Math.abs(p.precio - dbPack.precio_pack) > 0.02) return { orderId: null, gastoEnvio: 0, error: `El precio del pack "${p.nombre}" ha cambiado. Actualiza la página.` };
+      totalPacks += p.precio * p.cantidad;
+    }
+  }
 
+  const totalProductos = lineas.reduce((acc, l) => acc + l.precio * l.cantidad, 0) + totalPacks
   const totalProductos = lineas.reduce((acc, l) => acc + l.precio * l.cantidad, 0);
   const gastoEnvio     = calcularGastoEnvio(totalProductos, datosEnvio.provincia, datosEnvio.ciudad);
   if (gastoEnvio === -1) return { orderId: null, gastoEnvio: 0, error: "No realizamos envíos a esa provincia." };
@@ -89,12 +107,20 @@ export async function crearOrdenPaypal(
     const token = await getPaypalToken();
 
     const res = await fetch(`${PAYPAL_BASE}/v2/checkout/orders`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({
+      method: "POST[
+              ...lineas.map((l) => ({
+                name:        l.nombre.slice(0, 127),
+                unit_amount: { currency_code: "EUR", value: l.precio.toFixed(2) },
+                quantity:    String(l.cantidad),
+                sku:         l.sku,
+              })),
+              ...packs.map((p) => ({
+                name:        `Pack de regalo — ${p.nombre}`.slice(0, 127),
+                unit_amount: { currency_code: "EUR", value: p.precio.toFixed(2) },
+                quantity:    String(p.cantidad),
+                sku:         `PACK-${p.pack_id.slice(0, 8)}`,
+              })),
+            ]N.stringify({
         intent: "CAPTURE",
         purchase_units: [
           {
@@ -149,18 +175,30 @@ export async function crearOrdenPaypal(
     const supabase = createAdminClient();
     const { data: pedido, error: pedidoErr } = await supabase.from("pedidos").insert({
       usuario_id:       user?.id ?? null,
-      estado:           "pendiente",
-      subtotal:         totalProductos,
-      descuento:        descuentoCupon,
-      gastos_envio:     gastoEnvio,
-      total:            totalFinal,
-      tipo_precio:      tipoPrecio,
-      metodo_pago:      "paypal",
-      stripe_payment_id: order.id,   // reutilizamos como payment_ref
-      email_cliente:    datosEnvio.email,
-      notas:            datosEnvio.notas ?? "",
-      cupon_id:         cuponId,
-      descuento_cupon:  descuentoCupon,
+      estado:           "pendiente",[
+        ...lineas.map((l) => ({
+          pedido_id:        pedido.id,
+          variacion_id:     l.variacion_id,
+          sku:              l.sku,
+          nombre_producto:  l.nombre,
+          nombre_variacion: l.nombre_variacion,
+          cantidad:         l.cantidad,
+          precio_unitario:  l.precio,
+          subtotal:         l.precio * l.cantidad,
+        })),
+        // Packs de regalo: una línea por pack completo (mismo criterio que el resto de flujos)
+        ...packs.map((p) => ({
+          pedido_id:        pedido.id,
+          variacion_id:     (p.items?.[0]?.variacion_id) || null,
+          sku:              `PACK-${p.pack_id.slice(0, 8)}`,
+          nombre_producto:  p.nombre,
+          nombre_variacion: "Pack de regalo",
+          imagen_url:       p.imagen_url ?? null,
+          cantidad:         p.cantidad,
+          precio_unitario:  p.precio,
+          subtotal:         p.precio * p.cantidad,
+        })),
+      ]descuento_cupon:  descuentoCupon,
       direccion_envio: {
         nombre:        datosEnvio.nombre,
         apellidos:     datosEnvio.apellidos,
