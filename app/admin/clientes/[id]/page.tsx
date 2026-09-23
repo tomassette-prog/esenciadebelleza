@@ -164,13 +164,15 @@ export default async function DetalleClientePage({
             </div>
           </section>
 
-          {/* Contraseña temporal */}
-          <section className="bg-white border border-neutral-100 p-5">
-            <h2 className="text-xs tracking-widest uppercase text-neutral-500 mb-4">
-              Contraseña temporal
-            </h2>
-            <PasswordTemporalBtn userId={id} nombre={cliente.nombre_completo ?? cliente.email} />
-          </section>
+          {/* Contraseña temporal (solo clientes con cuenta de acceso) */}
+          {cliente.usuario_id ? (
+            <section className="bg-white border border-neutral-100 p-5">
+              <h2 className="text-xs tracking-widest uppercase text-neutral-500 mb-4">
+                Contraseña temporal
+              </h2>
+              <PasswordTemporalBtn userId={cliente.usuario_id} nombre={cliente.nombre_completo ?? cliente.email} />
+            </section>
+          ) : null}
         </div>
       </div>
     </div>
