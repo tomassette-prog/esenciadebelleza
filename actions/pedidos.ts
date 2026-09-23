@@ -153,9 +153,8 @@ export async function lanzarPedidoWoo(
   if (pedido.woo_order_id) return { error: "Este pedido ya fue enviado a WooCommerce" };
 
   const wooUrl = process.env.WOO_URL!;
-  // Token del endpoint de pedidos de WooCommerce (rotar el histórico y fijar
-  // WOO_ORDER_TOKEN en Vercel para dejar de usar el valor por defecto)
-  const wooToken = process.env.WOO_ORDER_TOKEN ?? "eb_secret_esencia_2026";
+  const wooToken = process.env.WOO_ORDER_TOKEN;
+  if (!wooToken) return { error: "Falta la variable WOO_ORDER_TOKEN en el servidor" };
 
   const dir = pedido.direccion_envio as Record<string, string>;
   const refPago = (pedido.stripe_payment_id ?? pedido.id).toString().slice(0, 20).toUpperCase();
