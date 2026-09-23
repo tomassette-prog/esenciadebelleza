@@ -1,14 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { stripe } from "@/lib/stripe";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { createClient } from "@/lib/supabase/server";
+import { getSessionFromCookie } from "@/lib/supabase/session-helper";
 import { calcularGastoEnvio } from "@/lib/envio";
 
 export async function POST(req: NextRequest) {
   try {
-    const { lineas, datosEnvio } = await req.json();
+    const { lineas, packs, datosEnvio } = await req.json();
 
-    if (!lineas?.length) {
+    if (!lineas?.length && !packs?.length) {
       return NextResponse.json({ error: "Carrito vacío" }, { status: 400 });
     }
 
@@ -20,11 +20,65 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const supabase   = createAdminClient();
-    const authClient = await createClient();
-    const { data: { user } } = await authClient.auth.getUser();
+    const supabase    = createAdminClient();
+    const sessionUser = await getSessionFromCookie();
 
-    const totalProductos = lineas.reduce((acc: number, l: { precio: number; cantidad: number }) => acc + l.precio * l.cantidad, 0);
+    // Perfil B2B aprobado → pedido con tipo de precio profesional (igual que en PayPal/Bizum/CR)
+    let tipoPrecio: "b2c" | "b2b" = "b2c";
+    if (sessionUser) {
+      const { data: perfil } = await supabase
+        .from("perfiles_usuario")
+        .select("b2b_aprobado, tipo_cliente")
+        .eq("id", sessionUser.id)
+        .single();
+      if (perfil?.tipo_cliente === "b2b" && perfil?.b2b_aprobado === true) tipoPrecio = "b2b";
+    }
+
+    // ── Validar precios contra la base de datos (anti-manipulación) ──
+    const variacionIds = lineas.map((l: { variacion_id: string }) => l.variacion_id).filter(Boolean);
+    if (variacionIds.length > 0) {
+      const { data: dbVars } = await supabase
+        .from("productos_variaciones")
+        .select("id, precio_b2c, precio_b2b, activa")
+        .in("id", variacionIds);
+      const varsMap = new Map((dbVars ?? []).map((v: { id: string; precio_b2c: number; precio_b2b: number | null; activa: boolean }) => [v.id, v]));
+      for (const l of lineas as { variacion_id: string; nombre: string; precio: number }[]) {
+        const dbVar = varsMap.get(l.variacion_id);
+        if (!dbVar || !dbVar.activa) {
+          return NextResponse.json({ error: `"${l.nombre}" ya no está disponible.` }, { status: 409 });
+        }
+        const okB2c = Math.abs(l.precio - dbVar.precio_b2c) <= 0.02;
+        const okB2b = tipoPrecio === "b2b" && !!dbVar.precio_b2b && Math.abs(l.precio - dbVar.precio_b2b) <= 0.02;
+        if (!okB2c && !okB2b) {
+          return NextResponse.json({ error: `El precio de "${l.nombre}" ha cambiado. Actualiza la página.` }, { status: 409 });
+        }
+      }
+    }sessionU
+
+    // ── Packs de regalo: validar precio y disponibilidad ──
+    const packsReq = (packs ?? []) as {
+      pack_id: string; nombre: string; precio: number; cantidad: number;
+      imagen_url: string | null; items?: { sku: string; variacion_id: string; cantidad: number }[];
+    }[];
+    if (packsReq.length) {
+      const { data: dbPacks } = await supabase
+        .from("packs_regalo")
+        .select("id, precio_pack, activo")
+        .in("id", packsReq.map((p) => p.pack_id));
+      const packsMap = new Map((dbPacks ?? []).map((p: { id: string; precio_pack: number; activo: boolean }) => [p.id, p]));
+      for (const p of packsReq) {
+        const dbPack = packsMap.get(p.pack_id);
+        if (!dbPack || !dbPack.activo) {
+          return NextResponse.json({ error: `El pack "${p.nombre}" ya no está disponible.` }, { status: 409 });
+        }
+        if (Math.abs(p.precio - dbPack.precio_pack) > 0.02) {
+          return NextResponse.json({ error: `El precio del pack "${p.nombre}" ha cambiado. Actualiza la página.` }, { status: 409 });
+        }
+      }
+    }
+
+    const totalProductos = lineas.reduce((acc: number, l: { precio: number; cantidad: number }) => acc + l.precio * l.cantidad, 0)
+                         + packsReq.reduce((acc, p) => acc + p.precio * p.cantidad, 0);
     const gastoEnvio     = calcularGastoEnvio(totalProductos, datosEnvio.provincia, datosEnvio.ciudad);
     if (gastoEnvio === -1) {
       return NextResponse.json({ error: "No realizamos envíos a esa provincia." }, { status: 400 });
@@ -59,7 +113,7 @@ export async function POST(req: NextRequest) {
       descuento:       descuentoCupon,
       gastos_envio:    gastoEnvio,
       total:           totalFinal,
-      tipo_precio:     "b2c",
+      tipo_precio:     tipoPrecio,
       metodo_pago:     "stripe",
       email_cliente:   datosEnvio.email,
       notas:           datosEnvio.notas ?? "",
@@ -75,14 +129,21 @@ export async function POST(req: NextRequest) {
     }).select("id").single();
 
     if (pedido) {
-      const { error: errLineas } = await supabase.from("pedidos_lineas").insert(
-        lineas.map((l: { variacion_id: string; sku: string; nombre: string; nombre_variacion: string; imagen_url: string; precio: number; cantidad: number }) => ({
+      const { error: errLineas } = await supabase.from("pedidos_lineas").insert([
+        ...lineas.map((l: { variacion_id: string; sku: string; nombre: string; nombre_variacion: string; imagen_url: string; precio: number; cantidad: number }) => ({
           pedido_id: pedido.id, variacion_id: l.variacion_id,
           sku: l.sku, nombre_producto: l.nombre, nombre_variacion: l.nombre_variacion,
           imagen_url: l.imagen_url, precio_unitario: l.precio,
           cantidad: l.cantidad, subtotal: l.precio * l.cantidad,
-        }))
-      );
+        })),
+        // Packs de regalo: una línea por pack completo (mismo criterio que el resto de flujos)
+        ...packsReq.map((p) => ({
+          pedido_id: pedido.id, variacion_id: (p.items?.[0]?.variacion_id) || null,
+          sku: `PACK-${p.pack_id.slice(0, 8)}`, nombre_producto: p.nombre, nombre_variacion: "Pack de regalo",
+          imagen_url: p.imagen_url, precio_unitario: p.precio,
+          cantidad: p.cantidad, subtotal: p.precio * p.cantidad,
+        })),
+      ]);
       if (errLineas) {
         console.error("[stripe-checkout] Error guardando líneas:", errLineas);
         // Eliminar pedido huérfano
@@ -102,7 +163,18 @@ export async function POST(req: NextRequest) {
           price_data: {
             currency:     "eur",
             product_data: {
-              name:   l.nombre_variacion ? `${l.nombre} — ${l.nombre_variacion}` : l.nombre,
+           packsReq.map((p) => ({
+          price_data: {
+            currency:     "eur",
+            product_data: {
+              name:   `Pack de regalo — ${p.nombre}`,
+              images: p.imagen_url ? [p.imagen_url] : [],
+            },
+            unit_amount: Math.round(p.precio * 100),
+          },
+          quantity: p.cantidad,
+        })),
+        ...   name:   l.nombre_variacion ? `${l.nombre} — ${l.nombre_variacion}` : l.nombre,
               images: l.imagen_url ? [l.imagen_url] : [],
             },
             unit_amount: Math.round(l.precio * 100),

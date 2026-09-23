@@ -159,7 +159,7 @@ export function CheckoutCliente({
       const res = await fetch("/api/stripe/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ lineas, datosEnvio: datosCompletos }),
+        body: JSON.stringify({ lineas, packs, datosEnvio: datosCompletos }),
       });
       const data = await res.json();
       if (data.url) {
