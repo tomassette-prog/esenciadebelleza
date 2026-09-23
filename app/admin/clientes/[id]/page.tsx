@@ -23,6 +23,10 @@ export default async function DetalleClientePage({
   if (error || !cliente) notFound();
 
   const dir = cliente.direccion_envio as { calle?: string; cp?: string; ciudad?: string; provincia?: string } | null;
+  const facturacion = cliente.direccion_facturacion as {
+    empresa?: string; nif_cif?: string; direccion?: string; calle?: string;
+    ciudad?: string; provincia?: string; codigo_postal?: string; cp?: string;
+  } | null;
 
   return (
     <div>
@@ -117,6 +121,28 @@ export default async function DetalleClientePage({
               </p>
             ) : (
               <p className="text-sm text-neutral-400">Sin dirección registrada</p>
+            )}
+          </section>
+
+          {/* Datos de facturación */}
+          <section className="bg-white border border-neutral-100 p-5">
+            <h2 className="text-xs tracking-widest uppercase text-neutral-500 mb-4">
+              Datos de facturación
+            </h2>
+            {facturacion && (facturacion.empresa || facturacion.nif_cif || facturacion.direccion || facturacion.calle) ? (
+              <div className="text-sm text-neutral-700 space-y-1">
+                {facturacion.empresa && <p>{facturacion.empresa}</p>}
+                {facturacion.nif_cif && <p className="text-neutral-500">NIF/CIF: {facturacion.nif_cif}</p>}
+                {(facturacion.direccion ?? facturacion.calle) && (
+                  <p>
+                    {facturacion.direccion ?? facturacion.calle}<br />
+                    {facturacion.codigo_postal ?? facturacion.cp} {facturacion.ciudad}
+                    {facturacion.provincia ? `, ${facturacion.provincia}` : ""}
+                  </p>
+                )}
+              </div>
+            ) : (
+              <p className="text-sm text-neutral-400">Sin datos de facturación</p>
             )}
           </section>
 

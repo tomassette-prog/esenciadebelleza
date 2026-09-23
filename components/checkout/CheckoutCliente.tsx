@@ -662,6 +662,7 @@ export function CheckoutCliente({
               lineas={lineas}
               datosEnvio={{
                 ...datos,
+                facturacion: facturacionIgualEnvio ? null : facturacion,
                 cupon: cuponAplicado ? { id: cuponAplicado.id, codigo: cuponAplicado.codigo, descuento: cuponAplicado.descuento } : null,
               }}
               disabled={cargando}

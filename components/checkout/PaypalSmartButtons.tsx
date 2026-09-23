@@ -8,6 +8,10 @@ interface DatosEnvio {
   email: string; nombre: string; apellidos: string; telefono: string;
   direccion: string; ciudad: string; provincia: string; codigo_postal: string;
   notas?: string;
+  facturacion?: {
+    empresa: string; nif_cif: string; direccion: string;
+    ciudad: string; provincia: string; codigo_postal: string;
+  } | null;
   cupon?: { id: string; codigo: string; descuento: number } | null;
 }
 

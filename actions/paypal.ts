@@ -30,6 +30,10 @@ export async function crearOrdenPaypal(
     email: string; nombre: string; apellidos: string; telefono: string;
     direccion: string; ciudad: string; provincia: string; codigo_postal: string;
     notas?: string;
+    facturacion?: {
+      empresa: string; nif_cif: string; direccion: string;
+      ciudad: string; provincia: string; codigo_postal: string;
+    } | null;
     cupon?: { id: string; codigo: string; descuento: number } | null;
   }
 ): Promise<{ orderId: string | null; gastoEnvio: number; error: string | null }> {
@@ -165,6 +169,7 @@ export async function crearOrdenPaypal(
         ciudad:        datosEnvio.ciudad,
         provincia:     datosEnvio.provincia,
         codigo_postal: datosEnvio.codigo_postal,
+        ...(datosEnvio.facturacion ? { facturacion: datosEnvio.facturacion } : {}),
       },
     }).select("id").single();
 
