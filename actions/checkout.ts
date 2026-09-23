@@ -10,7 +10,7 @@ import { validarYCalcular } from "@/lib/validar-pedido";
 
 import { calcularGastoEnvio, getSuplementoContrareembolso } from "@/lib/envio";
 import { registrarUsoCupon } from "@/actions/cupones";
-import { enviarNotificacionPedido, enviarPendienteBizum } from "@/lib/email";
+import { enviarNotificacionPedido, enviarPendienteBizum, enviarConfirmacionCliente } from "@/lib/email";
 
 const MAX_UNIDADES_POR_PRODUCTO = 9;
 
@@ -435,6 +435,9 @@ export async function iniciarPagoWooCommerce(
     return { pagoUrl: null, pedidoId: pedido?.id ?? null, gastoEnvio, error: msg };
   }
 }
+
+// ── Crear pedido en WooCommerce ───────────────────────────────────────────────
+
 export async function crearPedidoWooCommerce(params: {
   email:          string;
   nombre:         string;
@@ -748,7 +751,29 @@ export async function confirmarPedidoStripe(
     await registrarUsoCupon(pedido.cupon_id, pedido.id, pedido.usuario_id, pedido.descuento_cupon);
   }
 
-  // WooCommerce se lanza manualmente desde el panel de administración
+  // Emails — admin + cliente (solo quien gana la transición a 'pagado' llega
+  // aquí, así que no se duplican con el webhook)
+  const emailPayload = {
+    pedidoId:   pedido.id,
+    email:      pedido.email_cliente,
+    nombre:     dir.nombre    ?? "",
+    apellidos:  dir.apellidos ?? "",
+    total:      pedido.total,
+    gastoEnvio: pedido.gastos_envio,
+    metodoPago: "Stripe",
+    tipoPrecio: pedido.tipo_precio,
+    provincia:  dir.provincia ?? "",
+    ciudad:     dir.ciudad    ?? "",
+    lineas: (lineas ?? []).map((l) => ({
+      nombre:           l.nombre_producto,
+      nombre_variacion: l.nombre_variacion,
+      cantidad:         l.cantidad,
+      precio:           l.precio_unitario,
+    })),
+  };
+  await enviarNotificacionPedido(emailPayload);
+  await enviarConfirmacionCliente(emailPayload);
+
   return { ok: true, email: pedido.email_cliente, pedidoId: pedido.id };
 }
 
@@ -803,7 +828,7 @@ export async function crearPedidoContrarembolso(
     .from("pedidos")
     .insert({
       usuario_id:       sessionUser?.id ?? null,
-      estado:           "pagado",
+      estado:           "pendiente",
       subtotal:         totalProductos,
       descuento:        descuentoCupon,
       gastos_envio:     gastoEnvio,
@@ -851,11 +876,35 @@ export async function crearPedidoContrarembolso(
   // 3. NO crear en WooCommerce aquí — el admin usará "Lanzar pedido" cuando revise el pedido
   //    Esto sigue el mismo flujo que Stripe/Cecabank: pedido en Supabase → admin revisa → envía a depeluqueria
 
-  // 4. Email al admin y confirmación al cliente
-  // Registrar uso de cupón si aplica
+  // 4. Emails — admin + cliente (confirmación: se paga contra reembolso al recibir)
   if (datosEnvio.cupon?.id && descuentoCupon > 0) {
     await registrarUsoCupon(datosEnvio.cupon.id, pedido.id, sessionUser?.id ?? null, descuentoCupon);
   }
+
+  const lineasEmail = [
+    ...lineas.map((l) => ({
+      nombre: l.nombre, nombre_variacion: l.nombre_variacion,
+      cantidad: l.cantidad, precio: l.precio,
+    })),
+    ...lineasPedido.map((lp) => ({
+      nombre: lp.nombre, nombre_variacion: lp.nombre_variacion,
+      cantidad: lp.cantidad, precio: lp.precio_unitario,
+    })),
+  ];
+
+  const emailData = {
+    pedidoId: pedido.id, email: datosEnvio.email,
+    nombre: datosEnvio.nombre, apellidos: datosEnvio.apellidos,
+    total: totalFinal, gastoEnvio, descuento: descuentoCupon || undefined,
+    codigoCupon: datosEnvio.cupon?.codigo, metodoPago: "Contra reembolso",
+    tipoPrecio, provincia: datosEnvio.provincia,
+    ciudad: datosEnvio.ciudad, lineas: lineasEmail,
+  };
+
+  await Promise.all([
+    enviarNotificacionPedido(emailData),
+    enviarConfirmacionCliente(emailData),
+  ]);
 
   return { ok: true, pedidoId: pedido.id };
 }
@@ -976,7 +1025,7 @@ export async function crearPedidoBizum(
     nombre: datosEnvio.nombre, apellidos: datosEnvio.apellidos,
     total: totalFinal, gastoEnvio, descuento: descuentoCupon || undefined,
     codigoCupon: datosEnvio.cupon?.codigo, metodoPago: "bizum",
-    tipoPrecio: tipoPrecio, provincia: datosEnvio.provincia,
+    tipoPrecio, provincia: datosEnvio.provincia,
     ciudad: datosEnvio.ciudad, lineas: lineasEmail,
   };
 

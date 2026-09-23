@@ -213,76 +213,77 @@ export async function capturarPagoPaypal(
       },
     });
     const data = await res.json();
-    // Captura duplicada (doble clic / reintento): también cuenta como capturado
-    const yaCapturado = !res.ok && data?.name === "ORDER_ALREADY_CAPTURED";
+
+    // Recargar la página de confirmación re-ejecuta la captura y PayPal responde
+    // ORDER_ALREADY_CAPTURED: el pago YA se hizo, eso no es un error
+    // (si no, mostramos "pago no confirmado" tras cobrar e invitamos a pagar otra vez)
+    const yaCapturado =
+      !res.ok &&
+      (data?.details?.[0]?.issue === "ORDER_ALREADY_CAPTURED" || data?.name === "ORDER_ALREADY_CAPTURED");
     if (!res.ok && !yaCapturado) return { ok: false, error: data.message };
 
     if (data.status === "COMPLETED" || yaCapturado) {
-      // Actualizar estado del pedido en Supabase (solo pendiente -> pagado)
+      // Transición atómica única pendiente -> pagado; quien la gana envía emails
       const supabase = createAdminClient();
       const { data: actualizados } = await supabase
         .from("pedidos")
         .update({ estado: "pagado" })
         .eq("stripe_payment_id", orderId)
         .eq("estado", "pendiente")
-        .select("id");
+        .select("id, email_cliente, direccion_envio, gastos_envio, total, tipo_precio, cupon_id, descuento_cupon, usuario_id");
 
-      const { data: pedido } = await supabase
-        .from("pedidos")
-        .select("id, email_cliente, direccion_envio, gastos_envio, total, tipo_precio, cupon_id, descuento_cupon, usuario_id, estado")
-        .eq("stripe_payment_id", orderId)
-        .single();
+      const pedido = actualizados?.[0] ?? null;
 
-      // Solo es éxito si el pedido quedó pagado (nuestra transición o ya confirmado antes)
-      if (!pedido || pedido.estado !== "pagado") {
+      // Sin transición: otro flujo lo confirmó antes (recarga de la página) o
+      // el pedido ya no existe — solo es éxito si quedó pagado
+      if (!pedido) {
+        const { data: existente } = await supabase
+          .from("pedidos")
+          .select("id, estado")
+          .eq("stripe_payment_id", orderId)
+          .maybeSingle();
+        if (existente?.estado === "pagado") return { ok: true };
         return { ok: false, error: "Pago recibido pero no se pudo confirmar el pedido. Contacta con la tienda." };
       }
 
-      // Emails y cupón solo en la transición ganadora (evita duplicados)
-      const primeraConfirmacion = !!actualizados && actualizados.length === 1;
+      // Nuestra transición ganadora: emails + cupón, solo esta vez
+      const { data: lineas } = await supabase
+        .from("pedidos_lineas")
+        .select("sku, cantidad, precio_unitario, nombre_producto, nombre_variacion")
+        .eq("pedido_id", pedido.id);
 
-      if (pedido && primeraConfirmacion) {
-        // Obtener líneas del pedido
-        const { data: lineas } = await supabase
-          .from("pedidos_lineas")
-          .select("sku, cantidad, precio_unitario, nombre_producto, nombre_variacion")
-          .eq("pedido_id", pedido.id);
+      const dir = pedido.direccion_envio as Record<string, string>;
 
-        const dir = pedido.direccion_envio as Record<string, string>;
+      const { enviarNotificacionPedido, enviarConfirmacionCliente } = await import("@/lib/email");
+      const emailPayloadPP = {
+        pedidoId:   pedido.id,
+        email:      pedido.email_cliente,
+        nombre:     dir?.nombre    ?? "",
+        apellidos:  dir?.apellidos ?? "",
+        total:      pedido.total,
+        gastoEnvio: pedido.gastos_envio,
+        descuento:  pedido.descuento_cupon ?? 0,
+        metodoPago: "PayPal",
+        tipoPrecio: pedido.tipo_precio,
+        provincia:  dir?.provincia ?? "",
+        ciudad:     dir?.ciudad    ?? "",
+        lineas: (lineas ?? []).map((l) => ({
+          nombre:           l.nombre_producto,
+          nombre_variacion: l.nombre_variacion,
+          cantidad:         l.cantidad,
+          precio:           l.precio_unitario,
+        })),
+      };
+      await enviarNotificacionPedido(emailPayloadPP);
+      await enviarConfirmacionCliente(emailPayloadPP);
 
-        // Enviar notificación al admin y confirmación al cliente
-        const { enviarNotificacionPedido, enviarConfirmacionCliente } = await import("@/lib/email");
-        const emailPayloadPP = {
-          pedidoId:   pedido.id,
-          email:      pedido.email_cliente,
-          nombre:     dir?.nombre    ?? "",
-          apellidos:  dir?.apellidos ?? "",
-          total:      pedido.total,
-          gastoEnvio: pedido.gastos_envio,
-          descuento:  pedido.descuento_cupon ?? 0,
-          metodoPago: "PayPal",
-          tipoPrecio: pedido.tipo_precio,
-          provincia:  dir?.provincia ?? "",
-          ciudad:     dir?.ciudad    ?? "",
-          lineas: (lineas ?? []).map((l) => ({
-            nombre:           l.nombre_producto,
-            nombre_variacion: l.nombre_variacion,
-            cantidad:         l.cantidad,
-            precio:           l.precio_unitario,
-          })),
-        };
-        await enviarNotificacionPedido(emailPayloadPP);
-        await enviarConfirmacionCliente(emailPayloadPP);
-
-        // Registrar uso de cupón si aplica
-        if (pedido.cupon_id && pedido.descuento_cupon > 0) {
-          const { registrarUsoCupon } = await import("@/actions/cupones");
-          await registrarUsoCupon(pedido.cupon_id, pedido.id, pedido.usuario_id, pedido.descuento_cupon);
-        }
-
-        // WooCommerce se lanza manualmente desde el panel de administración
+      // Registrar uso de cupón si aplica
+      if (pedido.cupon_id && pedido.descuento_cupon > 0) {
+        const { registrarUsoCupon } = await import("@/actions/cupones");
+        await registrarUsoCupon(pedido.cupon_id, pedido.id, pedido.usuario_id, pedido.descuento_cupon);
       }
 
+      // WooCommerce se lanza manualmente desde el panel de administración
       return { ok: true };
     }
     return { ok: false, error: `Estado inesperado: ${data.status}` };

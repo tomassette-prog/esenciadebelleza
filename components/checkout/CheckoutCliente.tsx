@@ -688,7 +688,7 @@ export function CheckoutCliente({
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-neutral-500">+{getSuplementoContrareembolso(totalPrecio).toFixed(2)} € suplemento</span>
                   <span className="text-lg font-light">
-                    {(totalPrecio + gastoEnvioConf + getSuplementoContrareembolso(totalPrecio) || totalPrecio + gastoEnvio + getSuplementoContrareembolso(totalPrecio)).toLocaleString("es-ES", { style: "currency", currency: "EUR" })}
+                    {(totalPrecio - descuentoCupon + (gastoEnvioConf || gastoEnvio) + getSuplementoContrareembolso(totalPrecio)).toLocaleString("es-ES", { style: "currency", currency: "EUR" })}
                   </span>
                   <svg className="w-4 h-4 opacity-50 group-hover:opacity-100 transition-opacity" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />

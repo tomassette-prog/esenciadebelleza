@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { stripe } from "@/lib/stripe";
 import { enviarNotificacionPedido, enviarConfirmacionCliente } from "@/lib/email";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { registrarUsoCupon } from "@/actions/cupones";
 import Stripe from "stripe";
 
 export async function POST(req: NextRequest) {
@@ -36,7 +37,7 @@ export async function POST(req: NextRequest) {
     // Obtener el pedido
     const { data: pedido } = await supabase
       .from("pedidos")
-      .select("id, email_cliente, direccion_envio, gastos_envio, total, tipo_precio, estado")
+      .select("id, email_cliente, direccion_envio, gastos_envio, total, tipo_precio, estado, cupon_id, descuento_cupon, usuario_id")
       .eq("stripe_payment_id", session.id)
       .single();
 
@@ -68,6 +69,11 @@ export async function POST(req: NextRequest) {
     }
 
     console.log(`[Stripe Webhook] Pedido ${pedido.id} marcado como pagado`);
+
+    // Registrar uso de cupón (idempotente por pedido) — sin esto, usos_maximos es inútil
+    if (pedido.cupon_id && pedido.descuento_cupon > 0) {
+      await registrarUsoCupon(pedido.cupon_id, pedido.id, pedido.usuario_id, pedido.descuento_cupon);
+    }
 
     // Obtener líneas
     const { data: lineas } = await supabase

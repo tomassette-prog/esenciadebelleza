@@ -177,15 +177,25 @@ export async function registrarUsoCupon(
 ): Promise<void> {
   const supabase = createAdminClient();
 
-  // Insertar en historial de uso
-  await supabase.from("cupones_uso").insert({
+  // Idempotente: cada pedido consume un único uso (reintentos de webhook o
+  // recargas de la página de confirmación no deben inflar el contador)
+  const { data: existente } = await supabase
+    .from("cupones_uso")
+    .select("id")
+    .eq("pedido_id", pedidoId)
+    .maybeSingle();
+  if (existente) return;
+
+  // Insertar en historial de uso (UNIQUE(pedido_id) en BD cubre carreras)
+  const { error: errInsert } = await supabase.from("cupones_uso").insert({
     cupon_id:          cuponId,
     pedido_id:         pedidoId,
     usuario_id:        usuarioId,
     descuento_aplicado: descuentoAplicado,
   });
+  if (errInsert) return;
 
-  // Incrementar contador de usos
+  // Incrementar contador con compare-and-swap (no se pierden incrementos concurrentes)
   const { data: c } = await supabase
     .from("cupones")
     .select("usos_actuales")
@@ -195,6 +205,7 @@ export async function registrarUsoCupon(
     await supabase
       .from("cupones")
       .update({ usos_actuales: c.usos_actuales + 1 })
-      .eq("id", cuponId);
+      .eq("id", cuponId)
+      .eq("usos_actuales", c.usos_actuales);
   }
 }
