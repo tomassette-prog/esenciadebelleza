@@ -1,6 +1,7 @@
 "use server";
 
 import { createAdminClient } from "@/lib/supabase/admin";
+import { verificarAdmin } from "@/lib/admin-auth";
 
 interface ClienteFila {
   id: string;
@@ -42,6 +43,7 @@ async function enriquecerConPerfil(
 
 // ── Detalle de un cliente (por id de `clientes` o, en su defecto, de auth) ────
 export async function obtenerDetalleCliente(id: string) {
+  await verificarAdmin();
   const supabase = createAdminClient();
 
   // 1. Cliente desde el registro de clientes (creado por el trigger de pedidos)
@@ -161,6 +163,8 @@ export async function buscarClientes(
   porPagina: number = 20,
   filtro: "todos" | "b2b" | "b2c" = "todos"
 ) {
+  await verificarAdmin();
+
   const supabase = createAdminClient();
   const desde = (pagina - 1) * porPagina;
   // Sanitizar: los comodines/comas de PostgREST .or() rompen la sintaxis

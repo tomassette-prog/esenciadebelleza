@@ -1,35 +1,30 @@
-"use server";
-
-import { cookies } from "next/headers";
+import { getSessionFromCookie } from "@/lib/supabase/session-helper";
 
 const ADMIN_EMAILS = ["ziarresamot@gmail.com"];
-const PROJECT_REF = "yjanobsfzcwpusynvlun";
 
-/** Verifica que el usuario autenticado sea admin leyendo la cookie de sesión de Supabase. */
-export async function verificarAdmin() {
-  const cookieStore = await cookies();
-  const cookieName = `sb-${PROJECT_REF}-auth-token`;
-
-  // Leer cookie completa o reconstruir desde chunks (igual que el admin layout)
-  let raw = cookieStore.get(cookieName)?.value ?? "";
-  if (!raw) {
-    for (let i = 0; ; i++) {
-      const chunk = cookieStore.get(`${cookieName}.${i}`)?.value;
-      if (!chunk) break;
-      raw += chunk;
-    }
+/**
+ * Verifica que la sesión autenticada (JWT verificado contra Supabase en
+ * getSessionFromCookie) pertenezca al administrador. Lanza si no lo es.
+ */
+export async function verificarAdmin(): Promise<{ email: string }> {
+  const session = await getSessionFromCookie();
+  if (!session || !ADMIN_EMAILS.includes(session.email)) {
+    throw new Error("No autorizado");
   }
+  return { email: session.email };
+}
 
-  if (!raw) throw new Error("No autorizado");
-
+/**
+ * Autorización para rutas API: sesión de admin verificada o bearer con
+ * CRON_SECRET (scripts de automatización). Devuelve true/false sin lanzar.
+ */
+export async function autorizarAdminOSecreto(authorization: string | null): Promise<boolean> {
+  const secreto = process.env.CRON_SECRET;
+  if (secreto && authorization === `Bearer ${secreto}`) return true;
   try {
-    const decoded = raw.startsWith("%") ? decodeURIComponent(raw) : raw;
-    const parsed = JSON.parse(decoded);
-    const email: string = parsed?.user?.email ?? "";
-    if (email && ADMIN_EMAILS.includes(email)) return { email };
+    await verificarAdmin();
+    return true;
   } catch {
-    // cookie malformada
+    return false;
   }
-
-  throw new Error("No autorizado");
 }

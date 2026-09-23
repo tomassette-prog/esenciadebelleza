@@ -1,41 +1,16 @@
-﻿import { cookies } from "next/headers";
-import { redirect } from "next/navigation";
+﻿import { redirect } from "next/navigation";
 import { type ReactNode } from "react";
 import { AdminSidebar } from "@/components/admin/AdminSidebar";
+import { getSessionFromCookie } from "@/lib/supabase/session-helper";
 
 const ADMIN_EMAILS = ["ziarresamot@gmail.com"];
-const PROJECT_REF = "yjanobsfzcwpusynvlun";
 
 export const maxDuration = 300;
 
-async function getSessionEmail(): Promise<string | null> {
-  const cookieStore = await cookies();
-  const cookieName = `sb-${PROJECT_REF}-auth-token`;
-
-  // Leer cookie completa o reconstruir desde chunks
-  let raw = cookieStore.get(cookieName)?.value ?? "";
-  if (!raw) {
-    for (let i = 0; ; i++) {
-      const chunk = cookieStore.get(`${cookieName}.${i}`)?.value;
-      if (!chunk) break;
-      raw += chunk;
-    }
-  }
-  if (!raw) return null;
-
-  try {
-    // Next.js puede devolver el valor URL-encoded
-    const decoded = raw.startsWith("%") ? decodeURIComponent(raw) : raw;
-    const parsed = JSON.parse(decoded);
-    // El email está en parsed.user.email (session object de Supabase)
-    return parsed?.user?.email ?? null;
-  } catch {
-    return null;
-  }
-}
-
 export default async function AdminLayout({ children }: { children: ReactNode }) {
-  const email = await getSessionEmail();
+  // Sesión VERIFICADA por JWT contra Supabase (el JSON de la cookie es forjable)
+  const session = await getSessionFromCookie();
+  const email = session?.email ?? null;
 
   if (!email || !ADMIN_EMAILS.includes(email)) {
     redirect("/login?redirectTo=/admin/productos");

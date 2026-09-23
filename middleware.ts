@@ -78,11 +78,9 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
-  // Debug header (remove after verifying)
-  if (isProtected) {
-    response.headers.set("x-debug-auth", user ? `ok:${user.email}` : `no-user:rawLen=${raw.length}`);
-  }
-
+  // Nota: esta comprobación de cookie es SOLO UX (redirección temprana a login).
+  // La autorización real se verifica en servidor contra Supabase Auth
+  // (lib/supabase/session-helper.ts valida la firma del JWT).
   return response;
 }
 

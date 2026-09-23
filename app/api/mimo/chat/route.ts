@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { autorizarAdminOSecreto } from "@/lib/admin-auth";
 
 function getTextFromPayload(payload: any): string {
   if (typeof payload?.content === 'string') return payload.content;
@@ -32,6 +33,11 @@ function normalizeMessages(body: any): Array<{ role: string; content: string }> 
 }
 
 export async function POST(request: Request) {
+  // Proxy de IA (consume saldo del servicio) solo para el panel de administracion
+  if (!(await autorizarAdminOSecreto(request.headers.get("authorization")))) {
+    return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+  }
+
   try {
     const body = await request.json();
     const apiBaseUrl = process.env.XIAOMI_MIMO_API_URL || 'https://token-plan-ams.xiaomimimo.com/v1';

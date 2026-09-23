@@ -1,6 +1,7 @@
 // Direct price update from diff data - no WooCommerce fetch needed
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { autorizarAdminOSecreto } from "@/lib/admin-auth";
 
 function adminClient() {
   return createClient(
@@ -11,6 +12,11 @@ function adminClient() {
 }
 
 export async function POST(req: Request) {
+  // Solo admin (sesion verificada) o automatizacion con CRON_SECRET
+  if (!(await autorizarAdminOSecreto(req.headers.get("authorization")))) {
+    return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+  }
+
   const { changes } = await req.json();
   
   if (!changes?.length) {

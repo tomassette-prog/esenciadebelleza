@@ -1,6 +1,7 @@
 // Apply price changes directly using WooCommerce batch API
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { autorizarAdminOSecreto } from "@/lib/admin-auth";
 
 const WOO_URL = process.env.WOO_URL!;
 const CK = process.env.WOO_CONSUMER_KEY!;
@@ -14,7 +15,12 @@ function adminClient() {
   );
 }
 
-export async function POST() {
+export async function POST(req: Request) {
+  // Solo admin (sesion verificada) o automatizacion con CRON_SECRET
+  if (!(await autorizarAdminOSecreto(req.headers.get("authorization")))) {
+    return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+  }
+
   const supa = adminClient();
   const auth = Buffer.from(`${CK}:${CS}`).toString("base64");
 

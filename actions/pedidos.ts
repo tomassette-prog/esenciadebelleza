@@ -3,9 +3,11 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { revalidatePath } from "next/cache";
 import { enviarNotificacionPedido, enviarConfirmacionCliente } from "@/lib/email";
+import { verificarAdmin } from "@/lib/admin-auth";
 
 // ── Listar pedidos con métricas ──────────────────────────────────────────────
 export async function listarPedidos(pagina = 1, porPagina = 20) {
+  await verificarAdmin();
   const supabase = createAdminClient();
   const desde = (pagina - 1) * porPagina;
 
@@ -28,6 +30,7 @@ export async function listarPedidos(pagina = 1, porPagina = 20) {
 
 // ── Detalle de un pedido ──────────────────────────────────────────────────────
 export async function obtenerPedido(id: string) {
+  await verificarAdmin();
   const supabase = createAdminClient();
   const { data, error } = await supabase
     .from("pedidos")
@@ -47,6 +50,7 @@ export async function actualizarComision(
   id: string,
   datos: { coste_proveedor?: number; ganancia_neta?: number; notas_internas?: string }
 ) {
+  await verificarAdmin();
   const supabase = createAdminClient();
   const { error } = await supabase
     .from("pedidos")
@@ -61,6 +65,7 @@ export async function actualizarComision(
 
 // ── Actualizar estado del pedido ──────────────────────────────────────────────
 export async function actualizarEstadoPedido(id: string, estado: string) {
+  await verificarAdmin();
   const supabase = createAdminClient();
 
   // Si cambia a "pagado" y era Bizum, enviar email de confirmación al cliente
@@ -134,6 +139,7 @@ export async function lanzarPedidoWoo(
   id: string,
   extra?: { notas_proveedor?: string }
 ) {
+  await verificarAdmin();
   const supabase = createAdminClient();
 
   // Obtener pedido con líneas
@@ -153,15 +159,15 @@ export async function lanzarPedidoWoo(
   const refPago = (pedido.stripe_payment_id ?? pedido.id).toString().slice(0, 20).toUpperCase();
 
   // Nota clara para el almacén de depeluqueriaproductos
-  const esContrareembolso = (pedido.metodo_pago ?? "").toLowerCase().includes("contrarembolso");
+  const esContrarembolso = (pedido.metodo_pago ?? "").toLowerCase().includes("contrarembolso");
   const notaCliente = [
     `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
-    esContrareembolso
+    esContrarembolso
       ? `⚠️  PEDIDO CONTRA REEMBOLSO — COBRAR AL ENTREGAR  ⚠️`
       : `PEDIDO DESDE ESENCIA DE BELLEZA`,
     `Ref. pago: ${refPago}`,
     `Método pago: ${(pedido.metodo_pago ?? "—").toUpperCase()}`,
-    ...(esContrareembolso
+    ...(esContrarembolso
       ? [``, `🔴 ATENCIÓN: Este pedido debe cobrarse en destino.`,
          `   Total a cobrar: ${pedido.total?.toFixed(2)} € (IVA incluido)`,
          `   Incluye suplemento contrarembolso en gastos de envío.`]
@@ -314,6 +320,7 @@ export async function lanzarPedidoWoo(
 
 // ── Eliminar pedidos pendientes o cancelados ─────────────────────────────────
 export async function eliminarPedidos(ids: string[]) {
+  await verificarAdmin();
   if (!ids.length) return { eliminados: 0, error: null };
 
   const supabase = createAdminClient();
@@ -336,6 +343,7 @@ export const eliminarPedidosPendientes = eliminarPedidos;
 
 // ── Métricas globales de comisiones ──────────────────────────────────────────
 export async function obtenerMetricas() {
+  await verificarAdmin();
   const supabase = createAdminClient();
 
   const { data, error } = await supabase

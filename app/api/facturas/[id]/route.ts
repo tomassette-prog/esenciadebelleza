@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getSessionFromCookie } from "@/lib/supabase/session-helper";
+import { verificarAdmin } from "@/lib/admin-auth";
 import { pedidoAFactura, generarHtmlFactura } from "@/lib/factura-generator";
 
 export async function GET(
@@ -16,6 +18,17 @@ export async function GET(
 
   if (error || !pedido) {
     return new NextResponse("Pedido no encontrado", { status: 404 });
+  }
+
+  // Solo el dueno del pedido (email de sesion verificado) o el admin
+  const session = await getSessionFromCookie();
+  const esDueno = !!session && session.email.toLowerCase() === String(pedido.email_cliente ?? "").toLowerCase();
+  let esAdmin = false;
+  if (session) {
+    try { await verificarAdmin(); esAdmin = true; } catch { /* no admin */ }
+  }
+  if (!esDueno && !esAdmin) {
+    return new NextResponse("No autorizado", { status: 401 });
   }
 
   // Extraer datos de facturación del JSONB direccion_envio si existe
