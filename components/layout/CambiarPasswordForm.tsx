@@ -17,7 +17,7 @@ function SubmitButton() {
   );
 }
 
-function PasswordField({
+export function PasswordField({
   id,
   label,
   placeholder,
