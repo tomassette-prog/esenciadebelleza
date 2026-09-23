@@ -136,7 +136,7 @@ FROM (
     lower(btrim(email_cliente))          AS email,
     count(*)::int                        AS total_pedidos,
     COALESCE(sum(total), 0)              AS total_gastado,
-    max(usuario_id)                      AS usuario_id,
+    (array_agg(usuario_id ORDER BY created_at DESC))[1] AS usuario_id,
     max(CASE WHEN tipo_precio = 'b2b' THEN 1 ELSE 0 END)::int AS es_b2b,
     min(created_at)                      AS primer_pedido_at,
     max(created_at)                      AS ultimo_pedido_at
