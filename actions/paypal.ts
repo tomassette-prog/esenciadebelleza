@@ -3,7 +3,9 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { calcularGastoEnvio } from "@/lib/envio";
-import type { LineaCarrito } from "@/context/CarritoContext";
+import { validarYCalcular } from "@/lib/validar-pedido";
+import { getSessionFromCookie } from "@/lib/supabase/session-helper";
+import type { LineaCarrito, LineaPack } from "@/context/CarritoContext";
 
 const PAYPAL_BASE = "https://api-m.paypal.com"; // live
 
@@ -30,8 +32,13 @@ export async function crearOrdenPaypal(
     email: string; nombre: string; apellidos: string; telefono: string;
     direccion: string; ciudad: string; provincia: string; codigo_postal: string;
     notas?: string;
+    facturacion?: {
+      empresa: string; nif_cif: string; direccion: string;
+      ciudad: string; provincia: string; codigo_postal: string;
+    } | null;
     cupon?: { id: string; codigo: string; descuento: number } | null;
-  }
+  },
+  packs: LineaPack[] = []
 ): Promise<{ orderId: string | null; gastoEnvio: number; error: string | null }> {
   if (!lineas.length) return { orderId: null, gastoEnvio: 0, error: "El carrito está vacío" };
 
@@ -40,44 +47,28 @@ export async function crearOrdenPaypal(
     if (l.cantidad > MAX_UNIDADES) return { orderId: null, gastoEnvio: 0, error: `"${l.nombre}" tiene ${l.cantidad} unidades. El máximo es ${MAX_UNIDADES}. Para pedidos grandes, contacta con la tienda.` };
   }
 
-  // Validar precios contra la base de datos
-  const supabaseValidar = createAdminClient();
-  const variacionIds = lineas.map((l) => l.variacion_id).filter(Boolean);
-  if (variacionIds.length > 0) {
-    const { data: dbVars } = await supabaseValidar
-      .from("productos_variaciones")
-      .select("id, precio_b2c, activa")
-      .in("id", variacionIds);
-    const varsMap = new Map((dbVars ?? []).map((v: { id: string; precio_b2c: number; activa: boolean }) => [v.id, v]));
-    for (const l of lineas) {
-      const dbVar = varsMap.get(l.variacion_id);
-      if (!dbVar || !dbVar.activa) return { orderId: null, gastoEnvio: 0, error: `"${l.nombre}" ya no está disponible.` };
-      if (Math.abs(l.precio - dbVar.precio_b2c) > 0.02) return { orderId: null, gastoEnvio: 0, error: `El precio de "${l.nombre}" ha cambiado. Actualiza la página.` };
-    }
+  // Deteccion temprana de sesion y tipo de precio (JWT verificado)
+  const sessionUser = await getSessionFromCookie();
+  let tipoPrecio: "b2c" | "b2b" = "b2c";
+  if (sessionUser) {
+    const perfilClient = createAdminClient();
+    const { data: perfil } = await perfilClient
+      .from("perfiles_usuario")
+      .select("b2b_aprobado, tipo_cliente")
+      .eq("id", sessionUser.id)
+      .single();
+    if (perfil?.tipo_cliente === "b2b" && perfil?.b2b_aprobado === true) tipoPrecio = "b2b";
   }
 
-  const totalProductos = lineas.reduce((acc, l) => acc + l.precio * l.cantidad, 0);
+  // Precios, packs y descuento validados/recalculados contra la BD
+  const calc = await validarYCalcular({ lineas, packs, cupon: datosEnvio.cupon ?? null, tipoPrecio });
+  if (!calc.ok) return { orderId: null, gastoEnvio: 0, error: calc.error };
+
+  const totalProductos = calc.subtotal;
+  const descuentoCupon = calc.descuento;
+  const cuponId: string | null = calc.cuponId;
   const gastoEnvio     = calcularGastoEnvio(totalProductos, datosEnvio.provincia, datosEnvio.ciudad);
   if (gastoEnvio === -1) return { orderId: null, gastoEnvio: 0, error: "No realizamos envíos a esa provincia." };
-
-  // ── Validar cupón de descuento ──
-  const supabaseCupon = createAdminClient();
-  let descuentoCupon = 0;
-  let cuponId: string | null = null;
-  if (datosEnvio.cupon?.id && datosEnvio.cupon?.descuento > 0) {
-    const { data: cupon } = await supabaseCupon
-      .from("cupones")
-      .select("id, activo, usos_maximos, usos_actuales, fecha_expiracion, importe_minimo")
-      .eq("id", datosEnvio.cupon.id)
-      .single();
-    if (cupon && cupon.activo
-      && (!cupon.fecha_expiracion || new Date(cupon.fecha_expiracion) >= new Date())
-      && (cupon.usos_maximos === null || cupon.usos_actuales < cupon.usos_maximos)
-      && totalProductos >= cupon.importe_minimo) {
-      descuentoCupon = datosEnvio.cupon.descuento;
-      cuponId = cupon.id;
-    }
-  }
 
   const totalFinal = totalProductos - descuentoCupon + gastoEnvio;
 
@@ -103,12 +94,20 @@ export async function crearOrdenPaypal(
                 ...(descuentoCupon > 0 ? { discount: { currency_code: "EUR", value: descuentoCupon.toFixed(2) } } : {}),
               },
             },
-            items: lineas.map((l) => ({
-              name:        l.nombre.slice(0, 127),
-              unit_amount: { currency_code: "EUR", value: l.precio.toFixed(2) },
-              quantity:    String(l.cantidad),
-              sku:         l.sku,
-            })),
+            items: [
+              ...lineas.map((l) => ({
+                name:        l.nombre.slice(0, 127),
+                unit_amount: { currency_code: "EUR", value: l.precio.toFixed(2) },
+                quantity:    String(l.cantidad),
+                sku:         l.sku,
+              })),
+              ...packs.map((p) => ({
+                name:        `Pack de regalo — ${p.nombre}`.slice(0, 127),
+                unit_amount: { currency_code: "EUR", value: p.precio.toFixed(2) },
+                quantity:    String(p.cantidad),
+                sku:         `PACK-${p.pack_id.slice(0, 8)}`,
+              })),
+            ],
             shipping: {
               name: { full_name: `${datosEnvio.nombre} ${datosEnvio.apellidos}` },
               address: {
@@ -132,19 +131,9 @@ export async function crearOrdenPaypal(
     }
 
     // Guardar pedido pendiente en Supabase
-    const authClient = await createClient();
-    const { data: { user } } = await authClient.auth.getUser();
-
-    let tipoPrecio: "b2c" | "b2b" = "b2c";
-    if (user) {
-      const { data: perfil } = await authClient.from("perfiles_usuario")
-        .select("b2b_aprobado, tipo_cliente").eq("id", user.id).single();
-      if (perfil?.tipo_cliente === "b2b" && perfil?.b2b_aprobado === true) tipoPrecio = "b2b";
-    }
-
     const supabase = createAdminClient();
     const { data: pedido, error: pedidoErr } = await supabase.from("pedidos").insert({
-      usuario_id:       user?.id ?? null,
+      usuario_id:       sessionUser?.id ?? null,
       estado:           "pendiente",
       subtotal:         totalProductos,
       descuento:        descuentoCupon,
@@ -169,8 +158,8 @@ export async function crearOrdenPaypal(
     }).select("id").single();
 
     if (pedido && !pedidoErr) {
-      const { error: errLineasPaypal } = await supabase.from("pedidos_lineas").insert(
-        lineas.map((l) => ({
+      const { error: errLineasPaypal } = await supabase.from("pedidos_lineas").insert([
+        ...lineas.map((l) => ({
           pedido_id:        pedido.id,
           variacion_id:     l.variacion_id,
           sku:              l.sku,
@@ -179,8 +168,20 @@ export async function crearOrdenPaypal(
           cantidad:         l.cantidad,
           precio_unitario:  l.precio,
           subtotal:         l.precio * l.cantidad,
-        }))
-      );
+        })),
+        // Packs de regalo: una linea por pack completo
+        ...packs.map((p) => ({
+          pedido_id:        pedido.id,
+          variacion_id:     (p.items?.[0]?.variacion_id) || null,
+          sku:              `PACK-${p.pack_id.slice(0, 8)}`,
+          nombre_producto:  p.nombre,
+          nombre_variacion: "Pack de regalo",
+          imagen_url:       p.imagen_url ?? null,
+          cantidad:         p.cantidad,
+          precio_unitario:  p.precio,
+          subtotal:         p.precio * p.cantidad,
+        })),
+      ]);
       if (errLineasPaypal) {
         console.error("[paypal] Error guardando líneas:", errLineasPaypal);
         await supabase.from("pedidos").delete().eq("id", pedido.id);

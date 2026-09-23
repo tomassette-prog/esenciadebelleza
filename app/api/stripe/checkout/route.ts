@@ -3,12 +3,14 @@ import { stripe } from "@/lib/stripe";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { calcularGastoEnvio } from "@/lib/envio";
+import { validarYCalcular } from "@/lib/validar-pedido";
+import { getSessionFromCookie } from "@/lib/supabase/session-helper";
 
 export async function POST(req: NextRequest) {
   try {
-    const { lineas, datosEnvio } = await req.json();
+    const { lineas, packs, datosEnvio } = await req.json();
 
-    if (!lineas?.length) {
+    if (!lineas?.length && !packs?.length) {
       return NextResponse.json({ error: "Carrito vacío" }, { status: 400 });
     }
 
@@ -20,32 +22,34 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const supabase   = createAdminClient();
-    const authClient = await createClient();
-    const { data: { user } } = await authClient.auth.getUser();
+    const supabase    = createAdminClient();
+    const sessionUser = await getSessionFromCookie();
 
-    const totalProductos = lineas.reduce((acc: number, l: { precio: number; cantidad: number }) => acc + l.precio * l.cantidad, 0);
+    // Perfil B2B aprobado -> tipo de precio profesional (igual que el resto de flujos)
+    let tipoPrecio: "b2c" | "b2b" = "b2c";
+    if (sessionUser) {
+      const { data: perfil } = await supabase
+        .from("perfiles_usuario")
+        .select("b2b_aprobado, tipo_cliente")
+        .eq("id", sessionUser.id)
+        .single();
+      if (perfil?.tipo_cliente === "b2b" && perfil?.b2b_aprobado === true) tipoPrecio = "b2b";
+    }
+
+    // Precios, packs y descuento validados/recalculados contra la BD
+    const packsReq = (packs ?? []) as {
+      pack_id: string; nombre: string; precio: number; cantidad: number;
+      imagen_url: string | null; items?: { variacion_id: string }[];
+    }[];
+    const calc = await validarYCalcular({ lineas, packs: packsReq, cupon: datosEnvio.cupon ?? null, tipoPrecio });
+    if (!calc.ok) return NextResponse.json({ error: calc.error }, { status: 409 });
+
+    const totalProductos = calc.subtotal;
+    const descuentoCupon = calc.descuento;
+    const cuponId: string | null = calc.cuponId;
     const gastoEnvio     = calcularGastoEnvio(totalProductos, datosEnvio.provincia, datosEnvio.ciudad);
     if (gastoEnvio === -1) {
       return NextResponse.json({ error: "No realizamos envíos a esa provincia." }, { status: 400 });
-    }
-
-    // ── Validar cupón de descuento (si se proporciona) ──
-    let descuentoCupon = 0;
-    let cuponId: string | null = null;
-    if (datosEnvio.cupon?.id && datosEnvio.cupon?.descuento > 0) {
-      const { data: cupon } = await supabase
-        .from("cupones")
-        .select("id, activo, usos_maximos, usos_actuales, fecha_expiracion, importe_minimo")
-        .eq("id", datosEnvio.cupon.id)
-        .single();
-      if (cupon && cupon.activo
-        && (!cupon.fecha_expiracion || new Date(cupon.fecha_expiracion) >= new Date())
-        && (cupon.usos_maximos === null || cupon.usos_actuales < cupon.usos_maximos)
-        && totalProductos >= cupon.importe_minimo) {
-        descuentoCupon = datosEnvio.cupon.descuento;
-        cuponId = cupon.id;
-      }
     }
 
     const totalFinal = totalProductos - descuentoCupon + gastoEnvio;
@@ -53,13 +57,13 @@ export async function POST(req: NextRequest) {
 
     // Guardar pedido
     const { data: pedido } = await supabase.from("pedidos").insert({
-      usuario_id:      user?.id ?? null,
+      usuario_id:      sessionUser?.id ?? null,
       estado:          "pendiente",
       subtotal:        totalProductos,
       descuento:       descuentoCupon,
       gastos_envio:    gastoEnvio,
       total:           totalFinal,
-      tipo_precio:     "b2c",
+      tipo_precio:     tipoPrecio,
       metodo_pago:     "stripe",
       email_cliente:   datosEnvio.email,
       notas:           datosEnvio.notas ?? "",
@@ -75,14 +79,26 @@ export async function POST(req: NextRequest) {
     }).select("id").single();
 
     if (pedido) {
-      const { error: errLineas } = await supabase.from("pedidos_lineas").insert(
-        lineas.map((l: { variacion_id: string; sku: string; nombre: string; nombre_variacion: string; imagen_url: string; precio: number; cantidad: number }) => ({
+      const { error: errLineas } = await supabase.from("pedidos_lineas").insert([
+        ...lineas.map((l: { variacion_id: string; sku: string; nombre: string; nombre_variacion: string; imagen_url: string; precio: number; cantidad: number }) => ({
           pedido_id: pedido.id, variacion_id: l.variacion_id,
           sku: l.sku, nombre_producto: l.nombre, nombre_variacion: l.nombre_variacion,
           imagen_url: l.imagen_url, precio_unitario: l.precio,
           cantidad: l.cantidad, subtotal: l.precio * l.cantidad,
-        }))
-      );
+        })),
+        // Packs de regalo: una linea por pack completo
+        ...packsReq.map((p) => ({
+          price_data: {
+            currency:     "eur",
+            product_data: {
+              name:   `Pack de regalo — ${p.nombre}`,
+              images: p.imagen_url ? [p.imagen_url] : [],
+            },
+            unit_amount: Math.round(p.precio * 100),
+          },
+          quantity: p.cantidad,
+        })),
+      ]);
       if (errLineas) {
         console.error("[stripe-checkout] Error guardando líneas:", errLineas);
         // Eliminar pedido huérfano
@@ -101,13 +117,23 @@ export async function POST(req: NextRequest) {
         ...lineas.map((l: { nombre: string; nombre_variacion?: string; imagen_url?: string; precio: number; cantidad: number }) => ({
           price_data: {
             currency:     "eur",
-            product_data: {
-              name:   l.nombre_variacion ? `${l.nombre} — ${l.nombre_variacion}` : l.nombre,
+            product_data: { name: l.nombre_variacion ? `${l.nombre} — ${l.nombre_variacion}` : l.nombre,
               images: l.imagen_url ? [l.imagen_url] : [],
             },
             unit_amount: Math.round(l.precio * 100),
           },
           quantity: l.cantidad,
+        })),
+        ...packsReq.map((p) => ({
+          price_data: {
+            currency:     "eur",
+            product_data: {
+              name:   `Pack de regalo — ${p.nombre}`,
+              images: p.imagen_url ? [p.imagen_url] : [],
+            },
+            unit_amount: Math.round(p.precio * 100),
+          },
+          quantity: p.cantidad,
         })),
         ...(descuentoCupon > 0 ? [{
           price_data: {

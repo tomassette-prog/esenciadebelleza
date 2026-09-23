@@ -660,6 +660,7 @@ export function CheckoutCliente({
             {/* ── PayPal — alternativa de pago ── */}
             <PaypalSmartButtons
               lineas={lineas}
+              packs={packs}
               datosEnvio={{
                 ...datos,
                 facturacion: facturacionIgualEnvio ? null : facturacion,
