@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { crearOrdenPaypal, capturarPagoPaypal } from "@/actions/paypal";
-import type { LineaCarrito, LineaPack } from "@/context/CarritoContext";
+import type { LineaCarrito } from "@/context/CarritoContext";
 
 interface DatosEnvio {
   email: string; nombre: string; apellidos: string; telefono: string;
@@ -17,7 +17,6 @@ interface DatosEnvio {
 
 interface Props {
   lineas: LineaCarrito[];
-  packs?: LineaPack[];
   datosEnvio: DatosEnvio;
   disabled?: boolean;
 }
@@ -30,7 +29,7 @@ declare global {
     };
   }
 }
-packs, 
+
 export default function PaypalSmartButtons({ lineas, datosEnvio, disabled }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [error,   setError]   = useState<string | null>(null);
@@ -80,7 +79,7 @@ export default function PaypalSmartButtons({ lineas, datosEnvio, disabled }: Pro
       // Crear orden al hacer clic en el botón
       createOrder: async () => {
         setError(null);
-        const res = await crearOrdenPaypal(lineas, datosEnvio, packs ?? []);
+        const res = await crearOrdenPaypal(lineas, datosEnvio);
         if (res.error || !res.orderId) {
           setError(res.error ?? "Error al crear el pago");
           throw new Error(res.error ?? "Error");
@@ -111,7 +110,7 @@ export default function PaypalSmartButtons({ lineas, datosEnvio, disabled }: Pro
     }).render(containerRef.current!).catch(() => {
       // Puede fallar si el componente se desmonta antes de renderizar
     });
-  }, [loaded, lineas, packs, datosEnvio, disabled]);
+  }, [loaded, lineas, datosEnvio, disabled]);
 
   if (!clientId) return null;
 
