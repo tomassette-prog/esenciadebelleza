@@ -27,19 +27,21 @@ export async function getSessionFromCookie(): Promise<{
   }
   if (!raw) return null;
 
+  let accessToken: string | null = null;
   try {
     const decoded = raw.startsWith("%") ? decodeURIComponent(raw) : raw;
     const parsed = JSON.parse(decoded);
-    const token: string | undefined = parsed?.access_token;
-    if (!token) return null;
-
-    // Verificación real: firma + expiración contra el servidor de auth
-    const supabase = createAdminClient();
-    const { data, error } = await supabase.auth.getUser(token);
-    if (error || !data.user?.email) return null;
-
-    return { id: data.user.id, email: data.user.email };
+    accessToken = parsed?.access_token ?? null;
   } catch {
     return null;
   }
+  if (!accessToken) return null;
+
+  // Verificar la firma del JWT contra Supabase: NUNCA confiar en el JSON de la cookie
+  // (un JSON forjado daría acceso como cualquier usuario, incluido el admin)
+  const admin = createAdminClient();
+  const { data: { user }, error } = await admin.auth.getUser(accessToken);
+  if (error || !user?.id || !user.email) return null;
+
+  return { id: user.id, email: user.email };
 }
