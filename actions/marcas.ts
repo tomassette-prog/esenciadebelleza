@@ -58,6 +58,30 @@ export async function actualizarMarca(id: string, data: {
   return { ok: true };
 }
 
+export async function eliminarMarca(id: string): Promise<{ ok?: boolean; error?: string }> {
+  await verificarAdmin();
+  const supa = adminClient();
+
+  // 1. Quitar la marca de todos los productos que la referencian
+  const { error: errProductos } = await supa
+    .from("productos_padre")
+    .update({ marca_id: null })
+    .eq("marca_id", id);
+
+  if (errProductos) return { error: `Error al desasociar productos: ${errProductos.message}` };
+
+  // 2. Eliminar la marca
+  const { error: errMarca } = await supa.from("marcas").delete().eq("id", id);
+  if (errMarca) return { error: `Error al eliminar marca: ${errMarca.message}` };
+
+  revalidatePath("/admin/marcas");
+  revalidatePath("/admin/productos");
+  revalidatePath("/admin/catalogo");
+  revalidatePath("/marcas");
+  revalidatePath("/");
+  return { ok: true };
+}
+
 export async function subirLogoMarca(
   id: string,
   slug: string,

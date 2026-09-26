@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition, useRef } from "react";
-import { crearMarca, actualizarMarca, subirLogoMarca } from "@/actions/marcas";
+import { crearMarca, actualizarMarca, subirLogoMarca, eliminarMarca } from "@/actions/marcas";
 
 interface Marca {
   id: string;
@@ -56,6 +56,17 @@ export function MarcasAdmin({ marcas: inicial }: { marcas: Marca[] }) {
     startTransition(async () => {
       await actualizarMarca(id, { activa: !activa });
       setMarcas(prev => prev.map(m => m.id === id ? { ...m, activa: !activa } : m));
+    });
+  }
+
+  function handleEliminar(id: string, nombre: string) {
+    if (!confirm(`¿Eliminar la marca "${nombre}"? Los productos asociados quedarán sin marca.`)) return;
+    setMsg(null);
+    startTransition(async () => {
+      const res = await eliminarMarca(id);
+      if (res.error) { setMsg("Error: " + res.error); return; }
+      setMarcas(prev => prev.filter(m => m.id !== id));
+      setMsg(`✓ Marca "${nombre}" eliminada`);
     });
   }
 
@@ -217,6 +228,13 @@ export function MarcasAdmin({ marcas: inicial }: { marcas: Marca[] }) {
                         className="text-xs text-neutral-500 hover:text-neutral-900 underline underline-offset-2"
                       >
                         Editar
+                      </button>
+                      <button
+                        onClick={() => handleEliminar(m.id, m.nombre)}
+                        disabled={isPending}
+                        className="text-xs text-red-400 hover:text-red-700 underline underline-offset-2 disabled:opacity-40"
+                      >
+                        Eliminar
                       </button>
                     </div>
                   )}

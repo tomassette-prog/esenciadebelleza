@@ -81,16 +81,31 @@ function generateSku(marca: string | null, nombre: string, variacion: string, id
 
 async function upsertMarca(nombre: string): Promise<string | null> {
   if (!nombre) return null;
-  const slug = generateSlug(nombre);
+
+  // ── Validación: rechazar nombres que claramente no son marcas ──
+  const nombreLimpio = nombre.trim();
+  if (nombreLimpio.length < 3) return null;
+
+  const NO_MARCAS = [
+    "activador", "pack", "oferta", "nuevo", "promo", "lote", "set", "kit",
+    "muestra", "viaje", "profesional", "natural", "premium", "basico",
+    "sin marca", "varios", "generico", "otras",
+  ];
+  if (NO_MARCAS.includes(nombreLimpio.toLowerCase())) {
+    console.warn(`    [SKIP] "${nombreLimpio}" no es una marca válida`);
+    return null;
+  }
+
+  const slug = generateSlug(nombreLimpio);
 
   const { data, error } = await supabase
     .from("marcas")
-    .upsert({ nombre, slug }, { onConflict: "slug" })
+    .upsert({ nombre: nombreLimpio, slug }, { onConflict: "slug" })
     .select("id")
     .single();
 
   if (error) {
-    console.warn(`    Marca "${nombre}": ${error.message}`);
+    console.warn(`    Marca "${nombreLimpio}": ${error.message}`);
     return null;
   }
   return data.id;

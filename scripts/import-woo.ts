@@ -237,6 +237,13 @@ const marcaCache = new Map<string, string>();
 
 async function upsertMarca(nombre: string): Promise<string> {
   if (marcaCache.has(nombre)) return marcaCache.get(nombre)!;
+
+  // Safety net: rechazar si no está en la lista de marcas conocidas
+  if (!MARCAS_SET.has(nombre.toLowerCase())) {
+    console.warn(`  [SKIP] "${nombre}" no está en MARCAS_CONOCIDAS — no se crea`);
+    return "";
+  }
+
   const slug = slugify(nombre);
   const { data, error } = await supabase
     .from("marcas")
@@ -260,6 +267,9 @@ const MARCAS_CONOCIDAS = [
   "Keen Strok","Hairtalk","Keler","Lendan","Arual","Vis Plantis","Dr. Sante",
   "Novon","Hey Joe","Kuul","Karseell","Cantu","Candelahn","Coiffer","Don Algodon",
 ];
+
+// Validación: solo crear marcas que estén en MARCAS_CONOCIDAS
+const MARCAS_SET = new Set(MARCAS_CONOCIDAS.map(m => m.toLowerCase()));
 
 function detectarMarca(nombre: string): string | null {
   const nombreLower = nombre.toLowerCase();
