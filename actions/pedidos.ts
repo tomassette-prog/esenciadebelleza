@@ -326,12 +326,20 @@ export async function eliminarPedidos(ids: string[]) {
 
   const supabase = createAdminClient();
 
+  // Cancelar antes los pedidos no pagados: el trigger de BD restaura el stock
+  // exactamente una vez en la transición pendiente* -> cancelado
+  await supabase
+    .from("pedidos")
+    .update({ estado: "cancelado" })
+    .in("id", ids)
+    .in("estado", ["pendiente", "pendiente_bizum"]);
+
   // Solo eliminar pedidos pendientes o cancelados (no tocar pagados/en preparación/etc.)
   const { data, error } = await supabase
     .from("pedidos")
     .delete()
     .in("id", ids)
-    .in("estado", ["pendiente", "cancelado"])
+    .in("estado", ["pendiente", "pendiente_bizum", "cancelado"])
     .select("id");
 
   if (error) return { eliminados: 0, error: error.message };
