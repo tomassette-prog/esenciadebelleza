@@ -322,7 +322,7 @@ export default async function ProductoPage({ params, searchParams }: PageProps) 
                 nombreVariacion={variacionActiva.nombre_variacion}
                 imagenUrl={variacionActiva.imagen_url ?? p.imagen_principal_url ?? null}
                 precio={descuentoB2b > 0
-                  ? variacionActiva.precio_b2c * (1 - descuentoB2b / 100)
+                  ? Math.round(variacionActiva.precio_b2c * (1 - descuentoB2b / 100) * 100) / 100
                   : b2bAprobado && variacionActiva.precio_b2b && variacionActiva.precio_b2b > 0
                     ? variacionActiva.precio_b2b
                     : variacionActiva.precio_b2c}

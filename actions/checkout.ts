@@ -29,10 +29,10 @@ function validarCantidades(lineas: LineaCarrito[]): string | null {
 
 // ── Convertir packs a líneas de pedido (explota cada pack en sus componentes) ─
 function explotarPacks(packs: LineaPack[]): {
-  lineasPedido: { pack_id: string; nombre: string; sku: string; variacion_id: string; cantidad: number; precio_unitario: number; subtotal: number; nombre_variacion: string; imagen_url: string | null }[];
+  lineasPedido: { pack_id: string; nombre: string; sku: string; variacion_id: string | null; cantidad: number; precio_unitario: number; subtotal: number; nombre_variacion: string; imagen_url: string | null }[];
   lineasWoo:    { sku: string; cantidad: number }[];
 } {
-  const lineasPedido: { pack_id: string; nombre: string; sku: string; variacion_id: string; cantidad: number; precio_unitario: number; subtotal: number; nombre_variacion: string; imagen_url: string | null }[] = [];
+  const lineasPedido: { pack_id: string; nombre: string; sku: string; variacion_id: string | null; cantidad: number; precio_unitario: number; subtotal: number; nombre_variacion: string; imagen_url: string | null }[] = [];
   const wooMap = new Map<string, number>();
 
   for (const pack of packs) {
@@ -41,7 +41,7 @@ function explotarPacks(packs: LineaPack[]): {
       pack_id:          pack.pack_id,
       nombre:           pack.nombre,
       sku:              `PACK-${pack.pack_id.slice(0, 8)}`,
-      variacion_id:     pack.items[0]?.variacion_id ?? "",  // referencia al primer item
+      variacion_id:     pack.items[0]?.variacion_id ?? null,  // referencia al primer item
       cantidad:         pack.cantidad,
       precio_unitario:  pack.precio,
       subtotal:         pack.precio * pack.cantidad,
@@ -722,8 +722,9 @@ export async function confirmarPedidoStripe(
 
   // Verificar la sesión con Stripe API
   const session = await stripe.checkout.sessions.retrieve(sessionId);
-  
-  if (session.payment_status !== "paid") {
+
+  // "no_payment_required": cupón del 100% (sesión completada sin cobro)
+  if (session.payment_status !== "paid" && session.payment_status !== "no_payment_required") {
     return { ok: false };
   }
 

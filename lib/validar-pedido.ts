@@ -38,8 +38,9 @@ export async function validarYCalcular(args: {
   packs: PackEntrada[];
   cupon?: { id: string; descuento?: number } | null;
   tipoPrecio: "b2c" | "b2b";
+  descuentoB2b?: number;
 }): Promise<ResultadoValidacion> {
-  const { lineas, packs, cupon, tipoPrecio } = args;
+  const { lineas, packs, cupon, tipoPrecio, descuentoB2b } = args;
   const supabase = createAdminClient();
 
   // ── Líneas: precio y disponibilidad contra la BD ──
@@ -62,7 +63,14 @@ export async function validarYCalcular(args: {
       const okB2c = Math.abs(l.precio - dbVar.precio_b2c) <= 0.02;
       const okB2b =
         tipoPrecio === "b2b" && !!dbVar.precio_b2b && Math.abs(l.precio - dbVar.precio_b2b) <= 0.02;
-      if (!okB2c && !okB2b) {
+      // Profesionales con descuento personal: la ficha muestra
+      // precio_b2c * (1 - descuento_b2b / 100) redondeado a 2 decimales
+      const precioDescuento =
+        (descuentoB2b ?? 0) > 0
+          ? Math.round(dbVar.precio_b2c * (1 - (descuentoB2b ?? 0) / 100) * 100) / 100
+          : null;
+      const okDesc = precioDescuento !== null && Math.abs(l.precio - precioDescuento) <= 0.02;
+      if (!okB2c && !okB2b && !okDesc) {
         return { ok: false, error: `El precio de "${l.nombre}" ha cambiado. Actualiza la página.` };
       }
     }

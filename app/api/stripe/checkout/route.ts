@@ -27,13 +27,15 @@ export async function POST(req: NextRequest) {
 
     // Perfil B2B aprobado -> tipo de precio profesional (igual que el resto de flujos)
     let tipoPrecio: "b2c" | "b2b" = "b2c";
+    let descuentoB2b = 0;
     if (sessionUser) {
       const { data: perfil } = await supabase
         .from("perfiles_usuario")
-        .select("b2b_aprobado, tipo_cliente")
+        .select("b2b_aprobado, tipo_cliente, descuento_b2b")
         .eq("id", sessionUser.id)
         .single();
       if (perfil?.tipo_cliente === "b2b" && perfil?.b2b_aprobado === true) tipoPrecio = "b2b";
+      descuentoB2b = perfil?.descuento_b2b ?? 0;
     }
 
     // Precios, packs y descuento validados/recalculados contra la BD
@@ -41,7 +43,7 @@ export async function POST(req: NextRequest) {
       pack_id: string; nombre: string; precio: number; cantidad: number;
       imagen_url: string | null; items?: { variacion_id: string }[];
     }[];
-    const calc = await validarYCalcular({ lineas, packs: packsReq, cupon: datosEnvio.cupon ?? null, tipoPrecio });
+    const calc = await validarYCalcular({ lineas, packs: packsReq, cupon: datosEnvio.cupon ?? null, tipoPrecio, descuentoB2b });
     if (!calc.ok) return NextResponse.json({ error: calc.error }, { status: 409 });
 
     const totalProductos = calc.subtotal;
@@ -56,7 +58,7 @@ export async function POST(req: NextRequest) {
     const siteUrl    = process.env.NEXT_PUBLIC_SITE_URL ?? "https://esenciadebelleza.es";
 
     // Guardar pedido
-    const { data: pedido } = await supabase.from("pedidos").insert({
+    const { data: pedido, error: errPedido } = await supabase.from("pedidos").insert({
       usuario_id:      sessionUser?.id ?? null,
       estado:          "pendiente",
       subtotal:        totalProductos,
@@ -78,33 +80,54 @@ export async function POST(req: NextRequest) {
       },
     }).select("id").single();
 
-    if (pedido) {
-      const { error: errLineas } = await supabase.from("pedidos_lineas").insert([
-        ...lineas.map((l: { variacion_id: string; sku: string; nombre: string; nombre_variacion: string; imagen_url: string; precio: number; cantidad: number }) => ({
-          pedido_id: pedido.id, variacion_id: l.variacion_id,
-          sku: l.sku, nombre_producto: l.nombre, nombre_variacion: l.nombre_variacion,
-          imagen_url: l.imagen_url, precio_unitario: l.precio,
-          cantidad: l.cantidad, subtotal: l.precio * l.cantidad,
-        })),
-        // Packs de regalo: una linea por pack completo
-        ...packsReq.map((p) => ({
-          price_data: {
-            currency:     "eur",
-            product_data: {
-              name:   `Pack de regalo — ${p.nombre}`,
-              images: p.imagen_url ? [p.imagen_url] : [],
-            },
-            unit_amount: Math.round(p.precio * 100),
-          },
-          quantity: p.cantidad,
-        })),
-      ]);
-      if (errLineas) {
-        console.error("[stripe-checkout] Error guardando líneas:", errLineas);
-        // Eliminar pedido huérfano
-        await supabase.from("pedidos").delete().eq("id", pedido.id);
-        return NextResponse.json({ error: "No se pudieron guardar los productos. Es posible que el stock se haya agotado." }, { status: 409 });
-      }
+    // NUNCA crear la sesión de Stripe sin pedido persistido: si el INSERT falla,
+    // el cliente podría pagar y no habría ningún pedido que confirmar (ni el
+    // webhook ni la página de confirmación lo encontrarían).
+    if (errPedido || !pedido) {
+      console.error("[stripe-checkout] Error creando pedido:", errPedido);
+      return NextResponse.json({ error: "No se pudo crear el pedido. Inténtalo de nuevo." }, { status: 500 });
+    }
+
+    const { error: errLineas } = await supabase.from("pedidos_lineas").insert([
+      ...lineas.map((l: { variacion_id: string; sku: string; nombre: string; nombre_variacion: string; imagen_url: string; precio: number; cantidad: number }) => ({
+        pedido_id: pedido.id, variacion_id: l.variacion_id,
+        sku: l.sku, nombre_producto: l.nombre, nombre_variacion: l.nombre_variacion,
+        imagen_url: l.imagen_url, precio_unitario: l.precio,
+        cantidad: l.cantidad, subtotal: l.precio * l.cantidad,
+      })),
+      // Packs de regalo: una línea por pack completo con las columnas de
+      // pedidos_lineas (NO el formato price_data de Stripe del bloque line_items)
+      ...packsReq.map((p) => ({
+        pedido_id: pedido.id,
+        variacion_id: p.items?.[0]?.variacion_id ?? null,
+        sku: `pack-${p.pack_id}`,
+        nombre_producto: `Pack de regalo — ${p.nombre}`,
+        nombre_variacion: null,
+        imagen_url: p.imagen_url,
+        precio_unitario: p.precio,
+        cantidad: p.cantidad,
+        subtotal: p.precio * p.cantidad,
+      })),
+    ]);
+    if (errLineas) {
+      console.error("[stripe-checkout] Error guardando líneas:", errLineas);
+      // Eliminar pedido huérfano
+      await supabase.from("pedidos").delete().eq("id", pedido.id);
+      return NextResponse.json({ error: "No se pudieron guardar los productos. Es posible que el stock se haya agotado." }, { status: 409 });
+    }
+
+    // Stripe Checkout no admite importes negativos en line_items: el descuento
+    // del cupón se aplica como discount (cupón one-time por checkout)
+    let discounts: { coupon: string }[] | undefined;
+    if (descuentoCupon > 0) {
+      const cuponStripe = await stripe.coupons.create({
+        name:          `Cupón ${calc.codigoCupon ?? ""}`.trim(),
+        amount_off:    Math.round(descuentoCupon * 100),
+        currency:      "eur",
+        duration:      "once",
+        max_redemptions: 1,
+      });
+      discounts = [{ coupon: cuponStripe.id }];
     }
 
     // Crear sesión Stripe
@@ -135,14 +158,6 @@ export async function POST(req: NextRequest) {
           },
           quantity: p.cantidad,
         })),
-        ...(descuentoCupon > 0 ? [{
-          price_data: {
-            currency:     "eur",
-            product_data: { name: `Cupón ${datosEnvio.cupon.codigo}` },
-            unit_amount:  -Math.round(descuentoCupon * 100),
-          },
-          quantity: 1,
-        }] : []),
         ...(gastoEnvio > 0 ? [{
           price_data: {
             currency: "eur",
@@ -152,6 +167,7 @@ export async function POST(req: NextRequest) {
           quantity: 1,
         }] : []),
       ],
+      ...(discounts ? { discounts } : {}),
       success_url: `${siteUrl}/checkout/confirmacion?session_id={CHECKOUT_SESSION_ID}&resultado=ok`,
       cancel_url:  `${siteUrl}/checkout`,
       metadata: { pedido_id: pedido?.id ?? "", nombre_cliente: `${datosEnvio.nombre} ${datosEnvio.apellidos}`, cupon_id: cuponId ?? "", descuento_cupon: String(descuentoCupon) },

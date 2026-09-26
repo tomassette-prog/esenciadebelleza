@@ -40,7 +40,7 @@ export async function crearOrdenPaypal(
   },
   packs: LineaPack[] = []
 ): Promise<{ orderId: string | null; gastoEnvio: number; error: string | null }> {
-  if (!lineas.length) return { orderId: null, gastoEnvio: 0, error: "El carrito está vacío" };
+  if (!lineas.length && !packs.length) return { orderId: null, gastoEnvio: 0, error: "El carrito está vacío" };
 
   const MAX_UNIDADES = 9;
   for (const l of lineas) {
@@ -50,18 +50,20 @@ export async function crearOrdenPaypal(
   // Deteccion temprana de sesion y tipo de precio (JWT verificado)
   const sessionUser = await getSessionFromCookie();
   let tipoPrecio: "b2c" | "b2b" = "b2c";
+  let descuentoB2b = 0;
   if (sessionUser) {
     const perfilClient = createAdminClient();
     const { data: perfil } = await perfilClient
       .from("perfiles_usuario")
-      .select("b2b_aprobado, tipo_cliente")
+      .select("b2b_aprobado, tipo_cliente, descuento_b2b")
       .eq("id", sessionUser.id)
       .single();
     if (perfil?.tipo_cliente === "b2b" && perfil?.b2b_aprobado === true) tipoPrecio = "b2b";
+    descuentoB2b = perfil?.descuento_b2b ?? 0;
   }
 
   // Precios, packs y descuento validados/recalculados contra la BD
-  const calc = await validarYCalcular({ lineas, packs, cupon: datosEnvio.cupon ?? null, tipoPrecio });
+  const calc = await validarYCalcular({ lineas, packs, cupon: datosEnvio.cupon ?? null, tipoPrecio, descuentoB2b });
   if (!calc.ok) return { orderId: null, gastoEnvio: 0, error: calc.error };
 
   const totalProductos = calc.subtotal;
@@ -157,36 +159,40 @@ export async function crearOrdenPaypal(
       },
     }).select("id").single();
 
-    if (pedido && !pedidoErr) {
-      const { error: errLineasPaypal } = await supabase.from("pedidos_lineas").insert([
-        ...lineas.map((l) => ({
-          pedido_id:        pedido.id,
-          variacion_id:     l.variacion_id,
-          sku:              l.sku,
-          nombre_producto:  l.nombre,
-          nombre_variacion: l.nombre_variacion,
-          cantidad:         l.cantidad,
-          precio_unitario:  l.precio,
-          subtotal:         l.precio * l.cantidad,
-        })),
-        // Packs de regalo: una linea por pack completo
-        ...packs.map((p) => ({
-          pedido_id:        pedido.id,
-          variacion_id:     (p.items?.[0]?.variacion_id) || null,
-          sku:              `PACK-${p.pack_id.slice(0, 8)}`,
-          nombre_producto:  p.nombre,
-          nombre_variacion: "Pack de regalo",
-          imagen_url:       p.imagen_url ?? null,
-          cantidad:         p.cantidad,
-          precio_unitario:  p.precio,
-          subtotal:         p.precio * p.cantidad,
-        })),
-      ]);
-      if (errLineasPaypal) {
-        console.error("[paypal] Error guardando líneas:", errLineasPaypal);
-        await supabase.from("pedidos").delete().eq("id", pedido.id);
-        return { orderId: null, gastoEnvio, error: "No se pudieron guardar los productos. Es posible que el stock se haya agotado." };
-      }
+    if (pedidoErr || !pedido) {
+      console.error("[PayPal] Error guardando pedido:", pedidoErr);
+      // NUNCA enviar al cliente a pagar sin pedido persistido
+      return { orderId: null, gastoEnvio, error: "No se pudo crear el pedido. Inténtalo de nuevo." };
+    }
+
+    const { error: errLineasPaypal } = await supabase.from("pedidos_lineas").insert([
+      ...lineas.map((l) => ({
+        pedido_id:        pedido.id,
+        variacion_id:     l.variacion_id,
+        sku:              l.sku,
+        nombre_producto:  l.nombre,
+        nombre_variacion: l.nombre_variacion,
+        cantidad:         l.cantidad,
+        precio_unitario:  l.precio,
+        subtotal:         l.precio * l.cantidad,
+      })),
+      // Packs de regalo: una linea por pack completo
+      ...packs.map((p) => ({
+        pedido_id:        pedido.id,
+        variacion_id:     (p.items?.[0]?.variacion_id) || null,
+        sku:              `PACK-${p.pack_id.slice(0, 8)}`,
+        nombre_producto:  p.nombre,
+        nombre_variacion: "Pack de regalo",
+        imagen_url:       p.imagen_url ?? null,
+        cantidad:         p.cantidad,
+        precio_unitario:  p.precio,
+        subtotal:         p.precio * p.cantidad,
+      })),
+    ]);
+    if (errLineasPaypal) {
+      console.error("[paypal] Error guardando líneas:", errLineasPaypal);
+      await supabase.from("pedidos").delete().eq("id", pedido.id);
+      return { orderId: null, gastoEnvio, error: "No se pudieron guardar los productos. Es posible que el stock se haya agotado." };
     }
 
     // Devolver el order.id para que el SDK de PayPal lo gestione en el frontend

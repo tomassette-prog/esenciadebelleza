@@ -27,7 +27,9 @@ export async function POST(req: NextRequest) {
     const session = event.data.object as Stripe.Checkout.Session;
     console.log(`[Stripe] Sesión completada: ${session.id} — ${session.amount_total ? (session.amount_total / 100).toFixed(2) : 0} EUR`);
 
-    if (session.payment_status !== "paid") {
+    // Un cupón del 100% completa la sesión sin pago: Stripe marca
+    // "no_payment_required" y el pedido también debe pasar a pagado
+    if (session.payment_status !== "paid" && session.payment_status !== "no_payment_required") {
       console.log(`[Stripe] Sesión ${session.id} no está pagada (status: ${session.payment_status})`);
       return NextResponse.json({ received: true });
     }
