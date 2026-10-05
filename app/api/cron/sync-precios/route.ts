@@ -115,7 +115,7 @@ export async function GET(req: NextRequest) {
     try {
       const modifiedParam = modifiedAfter ? `&modified_after=${modifiedAfter}` : "";
       products = await fetchWoo<WooProduct[]>(
-        `/products?per_page=20&page=${page}&status=publish${modifiedParam}&_fields=id,type,sku,name,slug,status,regular_price,sale_price,price,stock_quantity,stock_status,manage_stock,images,categories,attributes,description,short_description,variations`
+        `/products?per_page=100&page=${page}&status=publish${modifiedParam}&_fields=id,type,sku,name,slug,status,regular_price,sale_price,price,stock_quantity,stock_status,manage_stock,images,categories,attributes,description,short_description,variations`
       );
     } catch (err) {
       console.error(`[cron/sync] Error page ${page}:`, err);
@@ -164,6 +164,8 @@ export async function GET(req: NextRequest) {
         }
       }
 
+      const wpSale = parseFloat(wp.sale_price) || 0;
+      const wpReg = parseFloat(wp.regular_price || wp.price) || 0;
       padreUpserts.push({
         woo_id: wooId,
         nombre: wp.name,
@@ -172,6 +174,7 @@ export async function GET(req: NextRequest) {
         subcategoria,
         imagen_principal_url: imagen,
         activo,
+        oferta: wpSale > 0 && wpSale < wpReg,
         ...(marcaId ? { marca_id: marcaId } : {}),
       });
     }
@@ -189,6 +192,7 @@ export async function GET(req: NextRequest) {
     }
 
     // â”€â”€ Sync de precios, stock y variaciones â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    const varsLote: object[] = [];
     for (const wp of products) {
       const wooId = String(wp.id);
       // Buscar padre: primero por woo_id, luego fallback por slug
@@ -217,7 +221,7 @@ export async function GET(req: NextRequest) {
 
       if (wp.type === "simple") {
         const sku = wp.sku || wp.slug;
-        await supa.from("productos_variaciones").upsert({
+        varsLote.push({
           producto_padre_id: padreId,
           sku,
           nombre_variacion: "Unidad",
@@ -226,8 +230,7 @@ export async function GET(req: NextRequest) {
           precio_comparar: isOferta ? precioRegular : null,
           stock,
           activa,
-        }, { onConflict: "sku" });
-        await supa.from("productos_padre").update({ oferta: isOferta }).eq("id", padreId);
+        });
         totalActualizados++;
 
       } else if (wp.type === "variable" && wp.variations?.length) {
@@ -254,10 +257,7 @@ export async function GET(req: NextRequest) {
               imagen_url: wv.image?.src ?? null,
             };
           });
-          if (varUpserts.length > 0) {
-            await supa.from("productos_variaciones").upsert(varUpserts, { onConflict: "sku" });
-          }
-          await supa.from("productos_padre").update({ oferta: isOferta }).eq("id", padreId);
+          varsLote.push(...varUpserts);
           totalActualizados += varUpserts.length;
         } catch (err) {
           console.error(`[cron/sync] Error variaciones producto ${wooId}:`, err);
@@ -267,12 +267,27 @@ export async function GET(req: NextRequest) {
     }
 
     // â”€â”€ Contar nuevos creados en esta pÃ¡gina â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // Upsert de variaciones por lotes: los upserts individuales por producto
+    // no caben en el presupuesto de 300s de la función (full sync = ~3700 productos)
+    try {
+      const porSku = new Map<string, object>();
+      for (const v of varsLote) porSku.set((v as { sku: string }).sku, v);
+      const loteUnico = [...porSku.values()];
+      for (let i = 0; i < loteUnico.length; i += 100) {
+        await supa.from("productos_variaciones").upsert(loteUnico.slice(i, i + 100), { onConflict: "sku" });
+      }
+    } catch (err) {
+      console.error("[cron/sync] Error upsert variaciones lote:", err);
+      totalErrores++;
+    }
+
     for (const wp of products) {
       const wooId = String(wp.id);
       if (!padresByWooId.has(wooId)) totalCreados++;
     }
 
-    if (products.length < 20) break;
+    console.log(`[cron/sync] pagina ${page}: ${products.length} productos`);
+    if (products.length < 100) break;
     page++;
   }
 
