@@ -6,7 +6,7 @@
     },
     {
       "path": "/api/cron/blog-diario",
-      "schedule": "0 6 * * *"
+      "schedule": "20 11 * * *"
     }
   ],
   "headers": [
