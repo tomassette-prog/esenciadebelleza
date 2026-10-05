@@ -122,7 +122,9 @@ export async function GET(req: NextRequest) {
   while (true) {
     let products: WooProduct[];
     try {
-      const modifiedParam = modifiedAfter ? `&modified_after=${modifiedAfter}` : "";
+      const modifiedParam = modifiedAfter
+        ? `&modified_after=${modifiedAfter.replace(/\.\d{3}Z$/, "Z")}`
+        : "";
       products = await fetchWoo<WooProduct[]>(
         `/products?per_page=100&page=${page}&status=publish${modifiedParam}&_fields=id,type,sku,name,slug,status,regular_price,sale_price,price,stock_quantity,stock_status,manage_stock,images,categories,attributes,description,short_description,variations`
       );
