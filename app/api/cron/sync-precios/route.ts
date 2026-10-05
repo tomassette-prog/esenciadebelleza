@@ -96,12 +96,15 @@ export async function GET(req: NextRequest) {
 
   // â”€â”€ IteraciÃ³n por pÃ¡ginas WooCommerce â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   // Load last sync timestamp for incremental processing
-  // Los domingos hacemos full sync para corregir cualquier desincronización
+  // El detalle se sincroniza por modified_after; ?full=1 (idealmente con ?desde/?hasta)
+  // permite forzar un repaso completo manual
   const { data: lastSyncRow } = await supa.from("config_tienda").select("valor").eq("clave", "ultima_cron_sync").single();
   const lastSync = lastSyncRow?.valor ?? null;
   const now = new Date();
-  const isFullSyncDay = now.getDay() === 0; // domingo = full sync
-  const modifiedAfter = (!isFullSyncDay && lastSync) ? lastSync : null;
+  // Detalle por modified_after (solo productos cambiados); ?full=1 fuerza full.
+  // El barrido de desactivacion usa un escaneo ligero de IDs aparte.
+  const forzarFull = req.nextUrl.searchParams.get("full") === "1";
+  const modifiedAfter = (!forzarFull && lastSync) ? lastSync : null;
   const nowISO = now.toISOString();
 
   // Modo ventana (?desde=&hasta=) para backfills manuales por trozos
@@ -323,6 +326,23 @@ export async function GET(req: NextRequest) {
   const wooIdsActivosEnSupa = allPadres
     .filter(p => p.woo_id)
     .map(p => p.woo_id as string);
+
+  // Escaneo ligero de IDs de Woo para el barrido de desactivacion (sin detalles)
+  if (!esVentana) {
+    for (let p = 1; ; p++) {
+      try {
+        const ids = await fetchWoo<Array<{ id: number }>>(`/products?per_page=100&page=${p}&status=publish&_fields=id`);
+        if (!Array.isArray(ids) || ids.length === 0) break;
+        for (const it of ids) wooIdsVistos.add(String(it.id));
+        if (ids.length < 100) break;
+      } catch (err) {
+        console.error("[cron/sync] Error escaneo de IDs:", err);
+        totalErrores++;
+        break;
+      }
+    }
+    console.log(`[cron/sync] escaneo de IDs: ${wooIdsVistos.size} productos en Woo`);
+  }
 
   // En modo ventana la vista de Woo es parcial: no desactivar nada
   const wooIdsADesactivar = esVentana ? [] : wooIdsActivosEnSupa.filter(id => !wooIdsVistos.has(id));
