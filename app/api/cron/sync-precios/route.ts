@@ -104,7 +104,13 @@ export async function GET(req: NextRequest) {
   const modifiedAfter = (!isFullSyncDay && lastSync) ? lastSync : null;
   const nowISO = now.toISOString();
 
-  let page = 1;
+  // Modo ventana (?desde=&hasta=) para backfills manuales por trozos
+  const searchParams = req.nextUrl.searchParams;
+  const paginaDesde = Number(searchParams.get("desde") ?? "1") || 1;
+  const paginaHasta = Number(searchParams.get("hasta") ?? "0") || Infinity;
+  const esVentana = paginaDesde > 1 || Number.isFinite(paginaHasta);
+
+  let page = paginaDesde;
   const wooIdsVistos = new Set<string>();
   let totalActualizados = 0;
   let totalCreados = 0;
@@ -192,6 +198,24 @@ export async function GET(req: NextRequest) {
     }
 
     // â”€â”€ Sync de precios, stock y variaciones â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // Precargar en paralelo las variaciones de los productos variables del lote:
+    // un fetch secuencial por producto no cabe en el presupuesto de 300s
+    const varsPorProductoWoo = new Map<number, WooVariation[]>();
+    const productosVariables = products.filter((wp) => wp.type === "variable" && wp.variations?.length);
+    for (let i = 0; i < productosVariables.length; i += 10) {
+      await Promise.all(productosVariables.slice(i, i + 10).map(async (wp) => {
+        try {
+          const wcVars = await fetchWoo<WooVariation[]>(
+            `/products/${wp.id}/variations?per_page=100&_fields=id,sku,price,regular_price,sale_price,stock_quantity,stock_status,manage_stock,attributes,image,status`
+          );
+          varsPorProductoWoo.set(wp.id, wcVars);
+        } catch (err) {
+          console.error(`[cron/sync] Error variaciones producto ${wp.id}:`, err);
+          totalErrores++;
+        }
+      }));
+    }
+
     const varsLote: object[] = [];
     for (const wp of products) {
       const wooId = String(wp.id);
@@ -235,9 +259,7 @@ export async function GET(req: NextRequest) {
 
       } else if (wp.type === "variable" && wp.variations?.length) {
         try {
-          const wcVars = await fetchWoo<WooVariation[]>(
-            `/products/${wp.id}/variations?per_page=100&_fields=id,sku,price,regular_price,sale_price,stock_quantity,stock_status,manage_stock,attributes,image,status`
-          );
+          const wcVars = varsPorProductoWoo.get(wp.id) ?? [];
           const varUpserts = wcVars.map(wv => {
             const vReg = parseFloat(wv.regular_price || wv.price) || 0;
             const vSale = parseFloat(wv.sale_price) || 0;
@@ -288,18 +310,22 @@ export async function GET(req: NextRequest) {
 
     console.log(`[cron/sync] pagina ${page}: ${products.length} productos`);
     if (products.length < 100) break;
+    if (page >= paginaHasta) break;
     page++;
   }
 
-  // Save sync timestamp for next incremental run
-  await supa.from("config_tienda").upsert({ clave: "ultima_cron_sync", valor: nowISO }, { onConflict: "clave" });
+  // Save sync timestamp for next incremental run (no en modo ventana: vista parcial)
+  if (!esVentana) {
+    await supa.from("config_tienda").upsert({ clave: "ultima_cron_sync", valor: nowISO }, { onConflict: "clave" });
+  }
 
   // â”€â”€ Desactivar productos que ya no existen en WooCommerce â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const wooIdsActivosEnSupa = allPadres
     .filter(p => p.woo_id)
     .map(p => p.woo_id as string);
 
-  const wooIdsADesactivar = wooIdsActivosEnSupa.filter(id => !wooIdsVistos.has(id));
+  // En modo ventana la vista de Woo es parcial: no desactivar nada
+  const wooIdsADesactivar = esVentana ? [] : wooIdsActivosEnSupa.filter(id => !wooIdsVistos.has(id));
 
   // Salvaguarda: NO desactivar si la API devolvio 0 productos o si se desactivarian mas del 20% del catalogo
   let desactivados = 0;
