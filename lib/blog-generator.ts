@@ -242,8 +242,10 @@ export async function generarPostConGemini(
   productosContexto: string[]
 ): Promise<BlogPostDraft> {
   const apiKey = process.env.GEMINI_API_KEY!;
-  // gemini-flash-latest responde 503 de forma sostenida; los alias estables funcionan
-  const model = "gemini-3.8-flash";
+  // gemini-flash-latest responde 503 de forma sostenida; se prueba primero el modelo
+  // de mayor calidad y se cae al lite (los proyectos sin créditos tienen capacidad
+  // muy recortada para generaciones largas en los modelos no-lite)
+  const modelos = ["gemini-3.8-flash", "gemini-3.5-flash-lite"];
 
   const productosInfo = productosContexto.length > 0
     ? `\n\nProductos de la tienda que puedes mencionar (enlaza con [ENLACE_PRODUCTO: NOMBRE]):\n${productosContexto.map((p) => `- ${p}`).join("\n")}`
@@ -281,9 +283,10 @@ SOLO devuelve el JSON, sin texto adicional.`;
   // Gemini puede responder 429/503 con picos de demanda transitorios: reintentar
   let res: Response | null = null;
   let ultimoError = "";
-  for (let intento = 0; intento < 3; intento++) {
+  for (let intento = 0; intento < 4; intento++) {
+    const modelo = modelos[Math.min(intento, modelos.length - 1)];
     res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/${modelo}:generateContent?key=${apiKey}`,
       {
         method: "POST",
         headers: {
