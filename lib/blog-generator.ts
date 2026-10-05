@@ -283,6 +283,9 @@ SOLO devuelve el JSON, sin texto adicional.`;
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        // La GEMINI_API_KEY está restringida por HTTP referrer: sin esta cabecera
+        // Google bloquea las llamadas de servidor (403 API_KEY_HTTP_REFERRER_BLOCKED)
+        "Referer": "https://esenciadebelleza.es",
       },
       body: JSON.stringify({
         contents: [{ parts: [{ text: prompt }] }],
