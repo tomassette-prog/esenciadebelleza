@@ -125,15 +125,21 @@ export default async function ProductoPage({ params, searchParams }: PageProps) 
 
   // Solo considerar variaciones activas con precio válido
   const varsActivas = p.variaciones.filter((v) => v.activa && v.precio_b2c > 0);
+  // Variaciones además con stock: priorizadas para no bloquear la compra
+  // cuando existen variaciones duplicadas sin stock
+  const varsConStock = varsActivas.filter((v) => v.stock > 0);
 
-  // Variación activa por query param o primera disponible con precio válido
+  // Variación activa por query param o primera disponible con precio válido y stock
   // Último fallback: variación inactiva con precio (para mostrar WhatsApp en productos sin stock)
   const variacionActiva =
     (tono
-      ? varsActivas.find(
+      ? varsConStock.find(
+          (v) => v.nombre_variacion.toLowerCase() === decodeURIComponent(tono).toLowerCase()
+        ) ?? varsActivas.find(
           (v) => v.nombre_variacion.toLowerCase() === decodeURIComponent(tono).toLowerCase()
         )
       : null)
+    ?? varsConStock.sort((a, b) => b.precio_b2c - a.precio_b2c)[0]
     ?? varsActivas.sort((a, b) => b.precio_b2c - a.precio_b2c)[0]
     ?? p.variaciones.find((v) => v.activa)
     ?? p.variaciones.find((v) => v.precio_b2c > 0)
