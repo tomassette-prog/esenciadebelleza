@@ -40,7 +40,7 @@ const SOLO_VACIOS = process.argv.includes("--solo-vacios");
 // gemini-3.8-flash da mejor calidad; los proyectos sin créditos solo dejan
 // generaciones largas al modelo lite (503 en los demás)
 const MODELOS = ["gemini-3.8-flash", "gemini-3.5-flash-lite"];
-const CONCURRENCIA = 8;
+const CONCURRENCIA = 2;
 
 let tokensEntrada = 0;
 let tokensSalida = 0;
@@ -85,7 +85,7 @@ async function generarSeoIA(p: ProductoRow): Promise<{ seo_title: string; seo_de
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { temperature: 0.6, maxOutputTokens: 3072, responseMimeType: "application/json" },
+        generationConfig: { temperature: 0.6, maxOutputTokens: 6144, responseMimeType: "application/json" },
       }),
     });
     const data = await res.json();
@@ -96,7 +96,8 @@ async function generarSeoIA(p: ProductoRow): Promise<{ seo_title: string; seo_de
     if (!res.ok) {
       if (res.status === 429 || res.status === 503) {
         if (res.status === 503) premiumRoto = true;
-        await new Promise((r) => setTimeout(r, 3000 * (intento + 1)));
+        // La cuota gratuita mide por tokens/minuto: esperas largas y pacientes
+        await new Promise((r) => setTimeout(r, 15000 * (intento + 1)));
         continue;
       }
       console.error(`  [${p.nombre.slice(0, 40)}] Gemini ${res.status}: ${JSON.stringify(data).slice(0, 150)}`);
@@ -107,7 +108,10 @@ async function generarSeoIA(p: ProductoRow): Promise<{ seo_title: string; seo_de
     try {
       const json = JSON.parse(text.match(/\{[\s\S]*\}/)?.[0] ?? text);
       if (json.seo_title && json.texto_enriquecido_seo) return json;
-    } catch { /* reintentar */ }
+      console.error(`  [${p.nombre.slice(0, 40)}] respuesta sin campos obligatorios`);
+    } catch {
+      console.error(`  [${p.nombre.slice(0, 40)}] JSON no parseable (${text.length} chars)`);
+    }
   }
   return null;
 }
@@ -137,6 +141,7 @@ async function main() {
 
   async function procesar(p: ProductoRow) {
     const seo = await generarSeoIA(p);
+    await new Promise((r) => setTimeout(r, 1500)); // ritmo sostenible dentro de la cuota por minuto
     if (!seo) { fallos++; return; }
     const { error } = await supa
       .from("productos_padre")
