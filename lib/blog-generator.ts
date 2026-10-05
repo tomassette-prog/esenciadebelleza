@@ -242,7 +242,8 @@ export async function generarPostConGemini(
   productosContexto: string[]
 ): Promise<BlogPostDraft> {
   const apiKey = process.env.GEMINI_API_KEY!;
-  const model = "gemini-flash-latest";
+  // gemini-flash-latest responde 503 de forma sostenida; los alias estables funcionan
+  const model = "gemini-3.8-flash";
 
   const productosInfo = productosContexto.length > 0
     ? `\n\nProductos de la tienda que puedes mencionar (enlaza con [ENLACE_PRODUCTO: NOMBRE]):\n${productosContexto.map((p) => `- ${p}`).join("\n")}`
@@ -277,30 +278,37 @@ FORMATO DE RESPUESTA — JSON estricto:
 
 SOLO devuelve el JSON, sin texto adicional.`;
 
-  const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        // La GEMINI_API_KEY está restringida por HTTP referrer: sin esta cabecera
-        // Google bloquea las llamadas de servidor (403 API_KEY_HTTP_REFERRER_BLOCKED)
-        "Referer": "https://esenciadebelleza.es",
-      },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: {
-          temperature: 0.7,
-          maxOutputTokens: 8192,
-          responseMimeType: "application/json",
+  // Gemini puede responder 429/503 con picos de demanda transitorios: reintentar
+  let res: Response | null = null;
+  let ultimoError = "";
+  for (let intento = 0; intento < 3; intento++) {
+    res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          // Compatibilidad con claves con restricción de referrer (Google las bloquea sin ella)
+          "Referer": "https://esenciadebelleza.es",
         },
-      }),
-    }
-  );
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: {
+            temperature: 0.7,
+            maxOutputTokens: 8192,
+            responseMimeType: "application/json",
+          },
+        }),
+      }
+    );
+    if (res.ok) break;
+    ultimoError = await res.text();
+    if (res.status !== 429 && res.status !== 503) break;
+    await new Promise((r) => setTimeout(r, 3000 * (intento + 1)));
+  }
 
-  if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`Gemini API error ${res.status}: ${err}`);
+  if (!res || !res.ok) {
+    throw new Error(`Gemini API error ${res?.status ?? "sin respuesta"}: ${ultimoError}`);
   }
 
   const data = await res.json();
