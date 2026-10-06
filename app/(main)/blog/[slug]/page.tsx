@@ -2,6 +2,7 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { urlStoragePublica } from "@/lib/storage-url";
 import { Breadcrumb } from "@/components/layout/Breadcrumb";
 import { BotonesCompartir } from "@/components/layout/BotonesCompartir";
 
@@ -38,7 +39,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
       url,
       type: "article",
       siteName: "Esencia de Belleza",
-      images: post.imagen_url ? [{ url: post.imagen_url, alt: post.imagen_alt ?? title }] : [],
+      images: post.imagen_url ? [{ url: urlStoragePublica(post.imagen_url) ?? post.imagen_url, alt: post.imagen_alt ?? title }] : [],
     },
   };
 }
@@ -56,6 +57,8 @@ export default async function PostPage({ params }: PageProps) {
 
   if (!post) notFound();
 
+  post.imagen_url = urlStoragePublica(post.imagen_url);
+
   // Posts relacionados (últimos 3 excluyendo el actual)
   const { data: relacionados } = await supabase
     .from("posts")
@@ -64,6 +67,10 @@ export default async function PostPage({ params }: PageProps) {
     .neq("slug", slug)
     .order("published_at", { ascending: false })
     .limit(3);
+
+  for (const r of relacionados ?? []) {
+    r.imagen_url = urlStoragePublica(r.imagen_url);
+  }
 
   // JSON-LD Article schema
   const articleJsonLd = {

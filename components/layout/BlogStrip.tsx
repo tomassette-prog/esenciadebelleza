@@ -1,6 +1,7 @@
 ﻿"use client";
 
 import { useRef } from "react";
+import { urlStoragePublica } from "@/lib/storage-url";
 import Link from "next/link";
 
 interface PostPreview {
@@ -15,6 +16,10 @@ export function BlogStrip({ posts }: { posts: PostPreview[] }) {
   const scrollRef = useRef<HTMLDivElement>(null);
 
   if (!posts.length) return null;
+
+  for (const p of posts) {
+    p.imagen_url = urlStoragePublica(p.imagen_url);
+  }
 
   const scroll = (dir: "left" | "right") => {
     if (!scrollRef.current) return;

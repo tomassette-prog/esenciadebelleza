@@ -2,8 +2,9 @@
 import Link from "next/link";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Breadcrumb } from "@/components/layout/Breadcrumb";
+import { urlStoragePublica } from "@/lib/storage-url";
 
-export const revalidate = 3600;
+export const revalidate = 300;
 
 export const metadata: Metadata = {
   title: "Blog de Belleza y Peluquería",
@@ -35,6 +36,10 @@ export default async function BlogPage() {
     .select("id, slug, titulo, resumen, imagen_url, published_at, autor")
     .eq("publicado", true)
     .order("published_at", { ascending: false });
+
+  for (const p of posts ?? []) {
+    p.imagen_url = urlStoragePublica(p.imagen_url);
+  }
 
   return (
     <main className="container-main py-12 lg:py-16">
