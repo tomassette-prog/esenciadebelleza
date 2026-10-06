@@ -21,3 +21,7 @@ create index if not exists consentimientos_estado_idx on public.consentimientos 
 -- Sin políticas RLS: solo el service role (servidor) accede.
 alter table public.consentimientos enable row level security;
 revoke all on table public.consentimientos from anon, authenticated;
+
+-- service_role necesita GRANT explícito: RLS no sustituye privilegios de tabla
+-- (en este proyecto los default privileges no cubren service_role, ver 002_grants.sql)
+grant select, insert, update, delete on table public.consentimientos to service_role;
