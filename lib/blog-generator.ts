@@ -192,10 +192,12 @@ export async function generarKeywordsCandidatas(): Promise<KeywordCandidate[]> {
 // ─── 2. Selección de keyword ─────────────────────────────────────────────────
 
 /**
- * Selecciona la keyword del día evitando las ya usadas en posts recientes.
+ * Selecciona la keyword del día evitando las ya usadas en posts recientes
+ * y las ya elegidas en la tanda actual (excluidas).
  */
 export async function seleccionarKeyword(
-  candidates: KeywordCandidate[]
+  candidates: KeywordCandidate[],
+  excluidas: string[] = []
 ): Promise<KeywordCandidate> {
   const supabase = getSupabase();
 
@@ -206,7 +208,7 @@ export async function seleccionarKeyword(
     .gte("created_at", new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString())
     .order("created_at", { ascending: false });
 
-  const usedKeywords = new Set<string>();
+  const usedKeywords = new Set<string>(excluidas.map((k) => k.trim().toLowerCase()));
   recentPosts?.forEach((p) => {
     if (p.keywords) {
       p.keywords.split(",").forEach((kw: string) => usedKeywords.add(kw.trim().toLowerCase()));
@@ -334,6 +336,11 @@ SOLO devuelve el JSON, sin texto adicional.`;
   if (!post.titulo || !post.contenido_html || !post.seo_title) {
     throw new Error("Respuesta de Gemini incompleta: faltan campos obligatorios");
   }
+
+  // La BD limita seo_title (60) y seo_description (160) por CHECK: recortar
+  // por si Gemini se pasa, si no el insert revienta y se pierde el post
+  post.seo_title = post.seo_title.slice(0, 60);
+  post.seo_description = (post.seo_description ?? "").slice(0, 160);
 
   // Limpiar HTML
   post.contenido_html = limpiarHtml(post.contenido_html);
