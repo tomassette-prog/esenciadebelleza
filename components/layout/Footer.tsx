@@ -1,5 +1,7 @@
 import Link from "next/link";
 
+import { FormularioNewsletter } from "@/components/layout/FormularioNewsletter";
+
 const CATEGORIAS = [
   { label: "Peluquería", href: "/productos/peluqueria" },
   { label: "Estética", href: "/productos/estetica" },
@@ -80,6 +82,7 @@ export function Footer() {
             <p className="text-xs text-neutral-400 leading-relaxed">
               No realizamos envíos a Canarias, Ceuta, Melilla, Andorra ni Gibraltar.
             </p>
+            <FormularioNewsletter />
           </div>
 
           {/* Categorías + Info juntos */}

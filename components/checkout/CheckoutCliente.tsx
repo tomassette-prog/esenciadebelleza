@@ -1,5 +1,7 @@
 "use client";
 
+import { registrarConsentimientoCheckout } from "@/actions/newsletter";
+
 import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
@@ -249,7 +251,15 @@ export function CheckoutCliente({
 
         {/* PASO 1 — Dirección de envío */}
         {paso === "direccion" && (
-          <form onSubmit={irAPaso2} className="space-y-4">
+          <form
+            onSubmit={(e) => {
+              const fd = new FormData(e.currentTarget);
+              if (fd.get("aceptaMarketing"))
+                void registrarConsentimientoCheckout(datos.email);
+              irAPaso2(e);
+            }}
+            className="space-y-4"
+          >
             <h2
               className="text-xl font-light text-neutral-900 mb-6"
               style={{ fontFamily: "var(--font-cormorant)" }}
@@ -271,6 +281,22 @@ export function CheckoutCliente({
                 className="w-full border border-neutral-200 px-4 py-3 text-sm focus:outline-none focus:border-neutral-900 transition-colors"
               />
             </div>
+
+            {/* Consentimiento comunicaciones comerciales (RGPD) */}
+            <label className="flex items-start gap-2.5 text-xs text-neutral-500 leading-relaxed cursor-pointer">
+              <input
+                type="checkbox"
+                name="aceptaMarketing"
+                className="mt-0.5 h-3.5 w-3.5 accent-neutral-900"
+              />
+              <span>
+                Acepto recibir ofertas y novedades de Esencia de Belleza por email.
+                Puedo darme de baja en cualquier momento.{" "}
+                <a href="/privacidad" className="underline hover:text-neutral-900">
+                  Política de privacidad
+                </a>
+              </span>
+            </label>
 
             {/* Nombre y apellidos */}
             <div className="grid grid-cols-2 gap-4">
