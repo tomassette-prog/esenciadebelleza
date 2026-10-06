@@ -44,6 +44,9 @@ scrape_log.txt
 # VS Code settings (contain API keys)
 .vscode/
 
+# API keys temporales de scripts (clave Gemini viva)
+scripts/.gemini-key.tmp
+
 # Local AI runtime state
 .atl/
 

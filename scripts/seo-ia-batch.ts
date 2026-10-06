@@ -40,7 +40,7 @@ const SOLO_VACIOS = process.argv.includes("--solo-vacios");
 // gemini-3.8-flash da mejor calidad; los proyectos sin créditos solo dejan
 // generaciones largas al modelo lite (503 en los demás)
 const MODELOS = ["gemini-3.8-flash", "gemini-3.5-flash-lite"];
-const CONCURRENCIA = 2;
+const CONCURRENCIA = 8;
 
 let tokensEntrada = 0;
 let tokensSalida = 0;
