@@ -5,6 +5,13 @@ export type ZonaEnvio = "peninsula" | "valencia" | "baleares" | "ibiza" | "no_di
 // Importe mínimo para envío gratis en península (también usado por el nudge del carrito)
 export const ENVIO_GRATIS_DESDE = 40;
 
+// Packs con envío gratuito promocional (campaña activa)
+export const ENVIO_GRATIS_PACK_SLUGS = ["pack-cebolla-anticaida"];
+
+export function envioGratisPorPack(packs: { slug: string }[]): boolean {
+  return packs.some((p) => ENVIO_GRATIS_PACK_SLUGS.includes(p.slug));
+}
+
 // Suplemento por contrarembolso (el transportista cobra un extra por cobrar en destino)
 export const SUPLEMENTO_CONTRAREEMBOLSO = 3.00; // pedidos >= 40 €
 export const SUPLEMENTO_CONTRAREEMBOLSO_BAJO = 7.50; // pedidos < 40 €
@@ -30,10 +37,11 @@ export function getZonaEnvio(provincia: string, ciudad: string = ""): ZonaEnvio 
   return "peninsula";
 }
 
-export function calcularGastoEnvio(totalProductos: number, provincia: string, ciudad: string = ""): number {
+export function calcularGastoEnvio(totalProductos: number, provincia: string, ciudad: string = "", promoGratis: boolean = false): number {
   const zona = getZonaEnvio(provincia, ciudad);
+  if (zona === "no_disponible") return -1;  // señal de zona no cubierta
+  if (promoGratis) return 0;
   switch (zona) {
-    case "no_disponible": return -1;        // señal de zona no cubierta
     case "ibiza":         return 12;        // Ibiza y Formentera: 12 €
     case "baleares":      return 7;         // Mallorca y Menorca: 7 €
     case "valencia":      return totalProductos >= 35 ? 0 : 5;
