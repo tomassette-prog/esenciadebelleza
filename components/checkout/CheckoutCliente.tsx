@@ -220,7 +220,7 @@ export function CheckoutCliente({
     }
   }
 
-  if (!lineas.length) {
+  if (!lineas.length && !packs.length) {
     return (
       <div className="text-center py-20">
         <p className="text-neutral-500 mb-4">Tu carrito está vacío</p>
@@ -795,6 +795,31 @@ export function CheckoutCliente({
 
                 <span className="text-sm font-medium tabular-nums shrink-0">
                   {(l.precio * l.cantidad).toLocaleString("es-ES", { style: "currency", currency: "EUR" })}
+                </span>
+              </li>
+            ))}
+            {packs.map((p) => (
+              <li key={p.pack_id} className="py-3 flex gap-3">
+                {/* Imagen */}
+                <div className="relative w-14 h-14 bg-white border border-neutral-100 shrink-0">
+                  {p.imagen_url ? (
+                    <Image src={p.imagen_url} alt={p.nombre} fill sizes="56px" className="object-contain p-1" />
+                  ) : (
+                    <div className="w-full h-full bg-neutral-100" />
+                  )}
+                  {/* Badge cantidad */}
+                  <span className="absolute -top-2 -right-2 w-5 h-5 bg-neutral-500 text-white text-[10px] font-medium rounded-full flex items-center justify-center">
+                    {p.cantidad}
+                  </span>
+                </div>
+
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm text-neutral-900 line-clamp-2 leading-snug">{p.nombre}</p>
+                  <p className="text-xs text-neutral-400">Pack de regalo</p>
+                </div>
+
+                <span className="text-sm font-medium tabular-nums shrink-0">
+                  {(p.precio * p.cantidad).toLocaleString("es-ES", { style: "currency", currency: "EUR" })}
                 </span>
               </li>
             ))}
