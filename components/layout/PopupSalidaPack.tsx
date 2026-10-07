@@ -19,6 +19,15 @@ export function PopupSalidaPack() {
     }
 
     function abrir() {
+      // No interrumpir donde el popup estorba: checkout/cuenta y la propia ficha
+      // del pack (su CTA lleva a esa misma página)
+      const ruta = window.location.pathname;
+      if (
+        ruta.startsWith("/checkout") ||
+        ruta.startsWith("/cuenta") ||
+        ruta.startsWith("/login") ||
+        ruta === "/packs/pack-cebolla-anticaida"
+      ) return;
       setAbierto(true);
       try {
         localStorage.setItem(CLAVE_LS, String(Date.now()));
