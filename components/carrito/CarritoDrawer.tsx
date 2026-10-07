@@ -4,6 +4,7 @@ import { useEffect, useRef } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useCarrito } from "@/context/CarritoContext";
+import { ENVIO_GRATIS_DESDE } from "@/lib/envio";
 
 export function CarritoDrawer() {
   const { lineas, packs, abierto, totalPrecio, totalUnidades, quitar, cambiarCantidad, quitarPack, cambiarCantidadPack, cerrarDrawer } =
@@ -234,6 +235,26 @@ export function CarritoDrawer() {
                   {totalPrecio.toLocaleString("es-ES", { style: "currency", currency: "EUR" })}
                 </span>
               </div>
+              {/* Nudge envío gratis */}
+              {totalPrecio >= ENVIO_GRATIS_DESDE ? (
+                <p className="text-xs text-green-600">¡Tu pedido tiene envío gratis! 🎉</p>
+              ) : (
+                <div>
+                  <p className="text-xs text-neutral-600">
+                    Te faltan{" "}
+                    <strong>
+                      {(ENVIO_GRATIS_DESDE - totalPrecio).toLocaleString("es-ES", { style: "currency", currency: "EUR" })}
+                    </strong>{" "}
+                    para el envío gratis
+                  </p>
+                  <div className="mt-1.5 h-1 bg-neutral-100">
+                    <div
+                      className="h-1 bg-[#C4857A] transition-all"
+                      style={{ width: `${Math.min(100, (totalPrecio / ENVIO_GRATIS_DESDE) * 100)}%` }}
+                    />
+                  </div>
+                </div>
+              )}
               <p className="text-xs text-neutral-400">
                 Envío e impuestos calculados en el siguiente paso
               </p>

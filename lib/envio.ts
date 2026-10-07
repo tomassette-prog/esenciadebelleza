@@ -2,6 +2,9 @@
 
 export type ZonaEnvio = "peninsula" | "valencia" | "baleares" | "ibiza" | "no_disponible";
 
+// Importe mínimo para envío gratis en península (también usado por el nudge del carrito)
+export const ENVIO_GRATIS_DESDE = 40;
+
 // Suplemento por contrarembolso (el transportista cobra un extra por cobrar en destino)
 export const SUPLEMENTO_CONTRAREEMBOLSO = 3.00; // pedidos >= 40 €
 export const SUPLEMENTO_CONTRAREEMBOLSO_BAJO = 7.50; // pedidos < 40 €
@@ -34,6 +37,6 @@ export function calcularGastoEnvio(totalProductos: number, provincia: string, ci
     case "ibiza":         return 12;        // Ibiza y Formentera: 12 €
     case "baleares":      return 7;         // Mallorca y Menorca: 7 €
     case "valencia":      return totalProductos >= 35 ? 0 : 5;
-    default:              return totalProductos >= 40 ? 0 : 5; // península
+    default:              return totalProductos >= ENVIO_GRATIS_DESDE ? 0 : 5; // península
   }
 }
