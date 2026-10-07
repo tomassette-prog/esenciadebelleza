@@ -53,6 +53,16 @@ function trackRuta(pathname: string) {
   else if (pathname.startsWith("/productos/") || pathname.startsWith("/packs/")) fbq("track", "ViewContent");
 }
 
+export function trackEventoMeta(evento: string, datos?: Record<string, string>) {
+  try {
+    if (localStorage.getItem(CONSENT_KEY) !== "accepted") return;
+  } catch {
+    return;
+  }
+  const fbq = window.fbq as unknown as ((...args: unknown[]) => void) | undefined;
+  fbq?.("track", evento, datos);
+}
+
 export function MetaPixel() {
   const pathname = usePathname();
 

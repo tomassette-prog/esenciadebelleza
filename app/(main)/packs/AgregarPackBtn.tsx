@@ -1,6 +1,7 @@
 "use client";
 
 import { useCarrito } from "@/context/CarritoContext";
+import { trackEventoMeta } from "@/components/layout/MetaPixel";
 import type { PackRegaloCompleto } from "@/types/producto";
 
 export function AgregarPackBtn({ pack }: { pack: PackRegaloCompleto }) {
@@ -23,6 +24,7 @@ export function AgregarPackBtn({ pack }: { pack: PackRegaloCompleto }) {
       })),
     });
     abrirDrawer();
+    trackEventoMeta("AddToCart", { value: pack.precio_pack.toFixed(2), currency: "EUR" });
   }
 
   return (

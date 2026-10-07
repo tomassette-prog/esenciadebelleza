@@ -7,6 +7,7 @@ import Script from "next/script";
 import { useCarrito } from "@/context/CarritoContext";
 import { confirmarPedidoCeca, confirmarPedidoStripe } from "@/actions/checkout";
 import { capturarPagoPaypal } from "@/actions/paypal";
+import { trackEventoMeta } from "@/components/layout/MetaPixel";
 
 type Estado = "cargando" | "exito" | "error";
 
@@ -17,11 +18,16 @@ interface OrderData {
 
 export default function ConfirmacionInner() {
   const searchParams = useSearchParams();
-  const { vaciar }   = useCarrito();
+  const { vaciar, totalPrecio } = useCarrito();
   const [estado, setEstado] = useState<Estado>("cargando");
   const [orderData, setOrderData] = useState<OrderData | null>(null);
 
   useEffect(() => {
+    const totalCompra = totalPrecio;
+    function compraOk() {
+      trackEventoMeta("Purchase", { value: totalCompra.toFixed(2), currency: "EUR" });
+      vaciar();
+    }
     const numOper   = searchParams.get("num_oper")    ?? "";
     const sessionId = searchParams.get("session_id")  ?? "";
     const resultado = searchParams.get("resultado")   ?? "";
@@ -36,14 +42,14 @@ export default function ConfirmacionInner() {
 
     // ── Flujo Contra reembolso ──────────────────────────────────────────────
     if (metodo === "contrarembolso" && pedidoId) {
-      vaciar();
+      compraOk();
       setOrderData({ orderId: pedidoId, email: "" });
       setEstado("exito");
       return;
     }
     // ── Flujo Bizum ─────────────────────────────────────────────────────────
     if (metodo === "bizum" && pedidoId) {
-      vaciar();
+      compraOk();
       setOrderData({ orderId: pedidoId, email: "" });
       setEstado("exito");
       return;
@@ -52,7 +58,7 @@ export default function ConfirmacionInner() {
     if (sessionId) {
       confirmarPedidoStripe(sessionId).then(({ ok, email, pedidoId }) => {
         if (ok) {
-          vaciar();
+          compraOk();
           if (email && pedidoId) {
             setOrderData({ orderId: pedidoId, email });
           }
@@ -68,7 +74,7 @@ export default function ConfirmacionInner() {
     if (metodo === "paypal" && numOper) {
       capturarPagoPaypal(numOper).then((res) => {
         if (res.ok) {
-          vaciar();
+          compraOk();
           setOrderData({ orderId: numOper, email: "" });
           setEstado("exito");
         } else {
@@ -86,7 +92,7 @@ export default function ConfirmacionInner() {
 
     confirmarPedidoCeca(numOper).then(({ ok, email, pedidoId }) => {
       if (ok) {
-        vaciar();
+        compraOk();
         if (email && pedidoId) {
           setOrderData({ orderId: pedidoId, email });
         }
