@@ -4,12 +4,11 @@ import { useEffect, useRef } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useCarrito } from "@/context/CarritoContext";
-import { ENVIO_GRATIS_DESDE, envioGratisPorPack } from "@/lib/envio";
+import { ENVIO_GRATIS_DESDE } from "@/lib/envio";
 
 export function CarritoDrawer() {
   const { lineas, packs, abierto, totalPrecio, totalUnidades, quitar, cambiarCantidad, quitarPack, cambiarCantidadPack, cerrarDrawer } =
     useCarrito();
-  const envioPack = envioGratisPorPack(packs);
 
   // Cerrar con Escape
   useEffect(() => {
@@ -237,7 +236,7 @@ export function CarritoDrawer() {
                 </span>
               </div>
               {/* Nudge envío gratis */}
-              {envioPack || totalPrecio >= ENVIO_GRATIS_DESDE ? (
+              {totalPrecio >= ENVIO_GRATIS_DESDE ? (
                 <p className="text-xs text-green-600">¡Tu pedido tiene envío gratis! 🎉</p>
               ) : (
                 <div>

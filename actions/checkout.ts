@@ -8,7 +8,7 @@ import { stripe } from "@/lib/stripe";
 import type { LineaCarrito, LineaPack } from "@/context/CarritoContext";
 import { validarYCalcular } from "@/lib/validar-pedido";
 
-import { calcularGastoEnvio, envioGratisPorPack, getSuplementoContrareembolso } from "@/lib/envio";
+import { calcularGastoEnvio, getSuplementoContrareembolso } from "@/lib/envio";
 import { registrarUsoCupon } from "@/actions/cupones";
 import { enviarNotificacionPedido, enviarPendienteBizum, enviarConfirmacionCliente } from "@/lib/email";
 
@@ -114,7 +114,7 @@ export async function iniciarPagoCeca(
 
   const totalProductos = lineas.reduce((acc, l) => acc + l.precio * l.cantidad, 0)
                        + packs.reduce((acc, p) => acc + p.precio * p.cantidad, 0);
-  const gastoEnvio     = calcularGastoEnvio(totalProductos, datosEnvio.provincia, datosEnvio.ciudad, envioGratisPorPack(packs));
+  const gastoEnvio     = calcularGastoEnvio(totalProductos, datosEnvio.provincia, datosEnvio.ciudad);
 
   if (gastoEnvio === -1) {
     return { gatewayUrl: null, campos: null, gastoEnvio: 0, error: "Lo sentimos, no realizamos envíos a esa provincia." };
@@ -560,7 +560,7 @@ export async function iniciarPagoStripe(
 
   const totalProductos = lineas.reduce((acc, l) => acc + l.precio * l.cantidad, 0)
                        + packs.reduce((acc, p) => acc + p.precio * p.cantidad, 0);
-  const gastoEnvio     = calcularGastoEnvio(totalProductos, datosEnvio.provincia, datosEnvio.ciudad, envioGratisPorPack(packs));
+  const gastoEnvio     = calcularGastoEnvio(totalProductos, datosEnvio.provincia, datosEnvio.ciudad);
   if (gastoEnvio === -1) return { url: null, error: "No realizamos envíos a esa provincia." };
 
   // ── Validar cupón de descuento ──
@@ -816,7 +816,7 @@ export async function crearPedidoContrarembolso(
   if (!calc.ok) return { ok: false, error: calc.error };
 
   const totalProductos = calc.subtotal;
-  const gastoEnvioBase = calcularGastoEnvio(totalProductos, datosEnvio.provincia, datosEnvio.ciudad, envioGratisPorPack(packs));
+  const gastoEnvioBase = calcularGastoEnvio(totalProductos, datosEnvio.provincia, datosEnvio.ciudad);
 
   if (gastoEnvioBase === -1) return { ok: false, error: "No realizamos envíos a esa provincia." };
 
@@ -948,7 +948,7 @@ export async function crearPedidoBizum(
   if (!calc.ok) return { ok: false, error: calc.error };
 
   const totalProductos = calc.subtotal;
-  const gastoEnvio = calcularGastoEnvio(totalProductos, datosEnvio.provincia, datosEnvio.ciudad, envioGratisPorPack(packs));
+  const gastoEnvio = calcularGastoEnvio(totalProductos, datosEnvio.provincia, datosEnvio.ciudad);
 
   if (gastoEnvio === -1) return { ok: false, error: "No realizamos envíos a esa provincia." };
 

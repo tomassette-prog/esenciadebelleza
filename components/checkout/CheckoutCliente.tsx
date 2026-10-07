@@ -6,7 +6,7 @@ import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useCarrito } from "@/context/CarritoContext";
-import { calcularGastoEnvio, envioGratisPorPack, getZonaEnvio, getSuplementoContrareembolso } from "@/lib/envio";
+import { calcularGastoEnvio, getZonaEnvio, getSuplementoContrareembolso } from "@/lib/envio";
 import { crearPedidoContrarembolso, crearPedidoBizum } from "@/actions/checkout";
 import { validarCupon } from "@/actions/cupones";
 import { POBLACIONES } from "@/lib/poblaciones";
@@ -52,7 +52,6 @@ export function CheckoutCliente({
   emailInicial?: string;
 }) {
   const { lineas, packs, totalPrecio } = useCarrito();
-  const envioGratisPack = envioGratisPorPack(packs);
   const [paso, setPaso]               = useState<Paso>("direccion");
   const [gastoEnvioConf, setGastoEnvioConf] = useState(0);
   const [cargando, setCargando]       = useState(false);
@@ -113,12 +112,11 @@ export function CheckoutCliente({
   }
 
   const zona        = getZonaEnvio(datos.provincia, datos.ciudad);
-  const gastoEnvio   = zona === "no_disponible" ? 0 : calcularGastoEnvio(totalPrecio, datos.provincia, datos.ciudad, envioGratisPack);
+  const gastoEnvio   = zona === "no_disponible" ? 0 : calcularGastoEnvio(totalPrecio, datos.provincia, datos.ciudad);
   const descuentoCupon = cuponAplicado?.descuento ?? 0;
   const totalFinal   = totalPrecio - descuentoCupon + gastoEnvio;
 
   const infoEnvio = (() => {
-    if (envioGratisPack)  return "Envío gratis con el Pack Cebolla 🧅";
     if (zona === "ibiza")   return "Envío a Ibiza/Formentera: 12,00 €";
     if (zona === "baleares") return "Envío a Baleares: 7,00 €";
     if (zona === "valencia") return totalPrecio >= 35 ? "Envío gratis (pedido ≥ 35 €)" : "Envío: 5,00 € (gratis desde 35 €)";
@@ -139,7 +137,7 @@ export function CheckoutCliente({
     setError(null);
 
     // Solo validar dirección y calcular gasto de envío (sin crear pedido aún)
-    const envioCalc = calcularGastoEnvio(totalPrecio, datos.provincia, datos.ciudad, envioGratisPack);
+    const envioCalc = calcularGastoEnvio(totalPrecio, datos.provincia, datos.ciudad);
     if (envioCalc === -1) {
       setError("No realizamos envíos a esa provincia.");
       setCargando(false);
