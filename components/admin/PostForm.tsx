@@ -342,6 +342,7 @@ export default function PostForm({ post }: Props) {
   // Enlaces detectados
   const [enlaces, setEnlaces] = useState<EnlaceProducto[]>([]);
   const [enlacesAplicados, setEnlacesAplicados] = useState(false);
+  const enlacesSinAplicar = /\[ENLACE_PRODUCTO:/i.test(contenidoHtml);
 
   // Buscador manual por enlace
   const [busquedaManual, setBusquedaManual] = useState<Record<string, string>>({});
@@ -1220,7 +1221,12 @@ export default function PostForm({ post }: Props) {
 
       {/* Submit */}
       <div className="flex items-center gap-4 pt-4 border-t border-neutral-100">
-        <SubmitButton isEdit={isEdit} />
+        <SubmitButton isEdit={isEdit} disabled={enlacesSinAplicar} />
+        {enlacesSinAplicar && (
+          <span className="text-xs text-amber-600">
+            ⚠ Quedan marcadores [ENLACE_PRODUCTO] sin aplicar — pulsa «Aplicar enlaces» o elimínalos del contenido.
+          </span>
+        )}
         <button
           type="button"
           onClick={() => setPreviewOpen(true)}
@@ -1389,12 +1395,12 @@ export default function PostForm({ post }: Props) {
   );
 }
 
-function SubmitButton({ isEdit }: { isEdit: boolean }) {
+function SubmitButton({ isEdit, disabled }: { isEdit: boolean; disabled?: boolean }) {
   const { pending } = useFormStatus();
   return (
     <button
       type="submit"
-      disabled={pending}
+      disabled={pending || disabled}
       className="px-8 py-3 bg-neutral-900 text-white text-xs tracking-widest uppercase hover:bg-neutral-700 disabled:opacity-50 transition-colors"
     >
       {pending ? "Guardando..." : isEdit ? "Guardar cambios" : "Crear post"}

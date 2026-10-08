@@ -40,10 +40,17 @@ export async function crearPost(
   const social_tiktok     = (formData.get("social_tiktok") as string | null)?.trim() || null;
 
   if (!titulo || !contenido_html) return { error: "Título y contenido son obligatorios" };
+  if (contenido_html.includes("[ENLACE_PRODUCTO:")) {
+    return { error: "Quedan enlaces de producto sin aplicar. Pulsa «Aplicar enlaces» (o elimina los marcadores [ENLACE_PRODUCTO]) antes de guardar." };
+  }
 
   const slug = slug_input || slugify(titulo);
 
   const supabase = createAdminClient();
+  const { data: slugExistente } = await supabase.from("posts").select("id").eq("slug", slug).limit(1);
+  if (slugExistente && slugExistente.length > 0) {
+    return { error: `Ya existe un post con el slug "${slug}". Cámbialo en el formulario.` };
+  }
   const { error } = await supabase.from("posts").insert({
     titulo,
     slug,
@@ -63,7 +70,7 @@ export async function crearPost(
     published_at: publicado ? new Date().toISOString() : null,
   });
 
-  if (error) return { error: error.message };
+  if (error) return { error: error.code === "23505" ? `Ya existe un post con el slug "${slug}". Cámbialo en el formulario.` : error.message };
 
   revalidatePath("/admin/blog");
   revalidatePath("/blog");
@@ -95,8 +102,16 @@ export async function actualizarPost(
   const social_tiktok     = (formData.get("social_tiktok") as string | null)?.trim() || null;
 
   if (!titulo || !contenido_html) return { error: "Título y contenido son obligatorios" };
+  if (contenido_html.includes("[ENLACE_PRODUCTO:")) {
+    return { error: "Quedan enlaces de producto sin aplicar. Pulsa «Aplicar enlaces» (o elimina los marcadores [ENLACE_PRODUCTO]) antes de guardar." };
+  }
 
   const supabase = createAdminClient();
+
+  const { data: slugExistente } = await supabase.from("posts").select("id").eq("slug", slug).neq("id", id).limit(1);
+  if (slugExistente && slugExistente.length > 0) {
+    return { error: `Ya existe otro post con el slug "${slug}". Cámbialo en el formulario.` };
+  }
 
   // Recuperar published_at actual para no sobreescribir si ya estaba publicado
   const { data: existing } = await supabase
@@ -129,7 +144,7 @@ export async function actualizarPost(
     published_at,
   }).eq("id", id);
 
-  if (error) return { error: error.message };
+  if (error) return { error: error.code === "23505" ? `Ya existe otro post con el slug "${slug}". Cámbialo en el formulario.` : error.message };
 
   revalidatePath("/admin/blog");
   revalidatePath("/blog");
