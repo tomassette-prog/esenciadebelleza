@@ -193,6 +193,14 @@ async function sincronizarProducto(
     marcaId = marca?.id ?? null;
   }
 
+  // Clasificación manual preservada: categoria/subcategoria solo se asignan al
+  // crear el producto; los updates de WooCommerce no deben pisarlos
+  const { data: existente } = await supabase
+    .from("productos_padre")
+    .select("id")
+    .eq("woo_id", wc_id)
+    .maybeSingle();
+
   // UPSERT producto padre por woo_id (más estable que slug)
   const { data: padre, error: errPadre } = await supabase
     .from("productos_padre")
@@ -201,8 +209,7 @@ async function sincronizarProducto(
         woo_id:              wc_id,
         slug,
         nombre:              String(p.name),
-        categoria,
-        subcategoria,
+        ...(existente ? {} : { categoria, subcategoria }),
         descripcion_general: String(p.description || p.short_description || ""),
         imagen_principal_url:(p.images as { src: string }[])?.[0]?.src ?? null,
         marca_id:            marcaId,

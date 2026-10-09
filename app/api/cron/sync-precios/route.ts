@@ -177,12 +177,14 @@ export async function GET(req: NextRequest) {
 
       const wpSale = parseFloat(wp.sale_price) || 0;
       const wpReg = parseFloat(wp.regular_price || wp.price) || 0;
+      const yaExiste = padresByWooId.has(wooId) || padresBySlug.has(wp.slug);
       padreUpserts.push({
         woo_id: wooId,
         nombre: wp.name,
         slug: wp.slug,
-        categoria,
-        subcategoria,
+        // Clasificación manual preservada: solo se asigna al crear el producto.
+        // Las pasadas de sincronización no deben pisar categoria/subcategoria.
+        ...(yaExiste ? {} : { categoria, subcategoria }),
         imagen_principal_url: imagen,
         activo,
         oferta: wpSale > 0 && wpSale < wpReg,
