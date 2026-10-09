@@ -90,8 +90,8 @@ export default async function PackPage({ params }: { params: Promise<{ slug: str
             <ul className="space-y-3">
               {pack.items.map((item) => {
                 const padre = item.variacion?.producto_padre;
-                // Producto de regalo: solo se vende dentro del pack (precio simbólico, sin ficha pública)
-                const esRegalo = (item.variacion?.precio_b2c ?? 99) <= 1;
+                // Champú Babaria: solo se vende dentro del pack (sin ficha pública)
+                const esRegalo = (item.variacion?.precio_b2c ?? 99) <= 2;
                 return (
                   <li key={item.id} className="flex items-center gap-4 p-3 border border-neutral-100 bg-neutral-50">
                     {item.variacion?.imagen_url && (
@@ -106,7 +106,7 @@ export default async function PackPage({ params }: { params: Promise<{ slug: str
                       </p>
                       <p className="text-xs text-neutral-400">
                         {esRegalo
-                          ? `🎁 De regalo por solo ${item.variacion?.precio_b2c.toFixed(0)} € más · ×${item.cantidad}`
+                          ? `Incluido en el pack por solo ${item.variacion?.precio_b2c.toFixed(0)} € · ×${item.cantidad}`
                           : `${item.variacion?.precio_b2c.toFixed(2)} € · ×${item.cantidad}`}
                         {padre && !esRegalo && (
                           <Link
