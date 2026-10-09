@@ -90,11 +90,6 @@ const DIAGNOSTICOS: Record<Perfil, Diagnostico> = {
     ],
     productos: [
       {
-        nombre: "Pack Cebolla Valquer",
-        detalle: "Champú + mascarilla anticaída con cebolla roja (19,90 €)",
-        url: "/packs/pack-cebolla-anticaida",
-      },
-      {
         nombre: "Ampollas Placenta 12x14ml Hipertin",
         detalle: "Tratamiento intensivo anticaída clásico de peluquería",
         url: "/productos/peluqueria/ampollas-y-serums/ampollas-placenta-12x14ml-hipertin",
