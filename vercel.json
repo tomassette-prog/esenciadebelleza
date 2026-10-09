@@ -3,10 +3,6 @@
     {
       "path": "/api/cron/sync-precios",
       "schedule": "0 3 * * *"
-    },
-    {
-      "path": "/api/cron/blog-diario",
-      "schedule": "0 6 * * *"
     }
   ],
   "headers": [
