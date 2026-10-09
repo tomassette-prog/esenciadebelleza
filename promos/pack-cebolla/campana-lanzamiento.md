@@ -1,5 +1,7 @@
 # 🧅 Pack Cebolla Anticaída — Kit de Lanzamiento
 
+> **VIGENTE (oct 2026):** Pack 17,50 € = mascarilla Valquer 300 ml + champú Babaria cebolla 700 ml por solo 2 € más (no se vende suelto, 20 packs). Los precios 19,90 € / "antes 22 €" / 1 L de abajo son del concepto anterior y están obsoletos.
+
 > Objetivo: llegar al mayor número de potenciales clientes en España con el gancho
 > **"1 L por menos de lo que otros cobran por 250 ml"**.
 
