@@ -1,7 +1,7 @@
 "use client";
 
 import { useCarrito } from "@/context/CarritoContext";
-import { trackEventoMeta } from "@/components/layout/MetaPixel";
+import { trackEventoMeta, trackEventoGA } from "@/components/layout/MetaPixel";
 
 interface Props {
   variacionId: string;
@@ -47,6 +47,7 @@ export function AnadirAlCarritoBtn({
       sku,
     });
     trackEventoMeta("AddToCart", { value: precio.toFixed(2), currency: "EUR" });
+    trackEventoGA("add_to_cart", { currency: "EUR", value: precio, items: [{ item_id: sku, item_name: nombre, price: precio }] });
   }
 
   return (

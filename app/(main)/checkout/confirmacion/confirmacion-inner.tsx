@@ -1,13 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import Script from "next/script";
 import { useCarrito } from "@/context/CarritoContext";
 import { confirmarPedidoCeca, confirmarPedidoStripe } from "@/actions/checkout";
 import { capturarPagoPaypal } from "@/actions/paypal";
-import { trackEventoMeta } from "@/components/layout/MetaPixel";
+import { trackEventoMeta, trackEventoGA } from "@/components/layout/MetaPixel";
 
 type Estado = "cargando" | "exito" | "error";
 
@@ -22,10 +22,15 @@ export default function ConfirmacionInner() {
   const [estado, setEstado] = useState<Estado>("cargando");
   const [orderData, setOrderData] = useState<OrderData | null>(null);
 
+  const compraRegistrada = useRef(false);
+
   useEffect(() => {
     const totalCompra = totalPrecio;
-    function compraOk() {
+    function compraOk(transaccion: string) {
+      if (compraRegistrada.current) return;
+      compraRegistrada.current = true;
       trackEventoMeta("Purchase", { value: totalCompra.toFixed(2), currency: "EUR" });
+      trackEventoGA("purchase", { transaction_id: transaccion, value: totalCompra, currency: "EUR" });
       vaciar();
     }
     const numOper   = searchParams.get("num_oper")    ?? "";
@@ -42,14 +47,14 @@ export default function ConfirmacionInner() {
 
     // ── Flujo Contra reembolso ──────────────────────────────────────────────
     if (metodo === "contrarembolso" && pedidoId) {
-      compraOk();
+      compraOk(pedidoId);
       setOrderData({ orderId: pedidoId, email: "" });
       setEstado("exito");
       return;
     }
     // ── Flujo Bizum ─────────────────────────────────────────────────────────
     if (metodo === "bizum" && pedidoId) {
-      compraOk();
+      compraOk(pedidoId);
       setOrderData({ orderId: pedidoId, email: "" });
       setEstado("exito");
       return;
@@ -58,7 +63,7 @@ export default function ConfirmacionInner() {
     if (sessionId) {
       confirmarPedidoStripe(sessionId).then(({ ok, email, pedidoId }) => {
         if (ok) {
-          compraOk();
+          compraOk(pedidoId || sessionId);
           if (email && pedidoId) {
             setOrderData({ orderId: pedidoId, email });
           }
@@ -74,7 +79,7 @@ export default function ConfirmacionInner() {
     if (metodo === "paypal" && numOper) {
       capturarPagoPaypal(numOper).then((res) => {
         if (res.ok) {
-          compraOk();
+          compraOk(numOper);
           setOrderData({ orderId: numOper, email: "" });
           setEstado("exito");
         } else {
@@ -92,7 +97,7 @@ export default function ConfirmacionInner() {
 
     confirmarPedidoCeca(numOper).then(({ ok, email, pedidoId }) => {
       if (ok) {
-        compraOk();
+        compraOk(numOper);
         if (email && pedidoId) {
           setOrderData({ orderId: pedidoId, email });
         }

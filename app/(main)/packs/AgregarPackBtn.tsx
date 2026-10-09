@@ -1,7 +1,7 @@
 "use client";
 
 import { useCarrito } from "@/context/CarritoContext";
-import { trackEventoMeta } from "@/components/layout/MetaPixel";
+import { trackEventoMeta, trackEventoGA } from "@/components/layout/MetaPixel";
 import type { PackRegaloCompleto } from "@/types/producto";
 
 export function AgregarPackBtn({ pack }: { pack: PackRegaloCompleto }) {
@@ -25,6 +25,7 @@ export function AgregarPackBtn({ pack }: { pack: PackRegaloCompleto }) {
     });
     abrirDrawer();
     trackEventoMeta("AddToCart", { value: pack.precio_pack.toFixed(2), currency: "EUR" });
+    trackEventoGA("add_to_cart", { currency: "EUR", value: pack.precio_pack, items: [{ item_id: pack.slug, item_name: pack.nombre, price: pack.precio_pack }] });
   }
 
   return (

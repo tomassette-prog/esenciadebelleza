@@ -53,6 +53,11 @@ function trackRuta(pathname: string) {
   else if (pathname.startsWith("/productos/") || pathname.startsWith("/packs/")) fbq("track", "ViewContent");
 }
 
+export function trackEventoGA(evento: string, datos?: Record<string, unknown>) {
+  const gtag = (window as unknown as { gtag?: (...args: unknown[]) => void }).gtag;
+  gtag?.("event", evento, datos);
+}
+
 export function trackEventoMeta(evento: string, datos?: Record<string, string>) {
   try {
     if (localStorage.getItem(CONSENT_KEY) !== "accepted") return;
@@ -67,6 +72,9 @@ export function MetaPixel() {
   const pathname = usePathname();
 
   useEffect(() => {
+    if (pathname.startsWith("/checkout") && !pathname.startsWith("/checkout/confirmacion")) {
+      trackEventoGA("begin_checkout", { currency: "EUR" });
+    }
     try {
       if (localStorage.getItem(CONSENT_KEY) !== "accepted") return;
     } catch {
