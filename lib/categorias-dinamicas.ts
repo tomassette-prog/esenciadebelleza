@@ -156,17 +156,99 @@ export async function obtenerTodasLasSubcategorias(): Promise<
   return (data || []) as Array<{ categoria: string; slug: string; updated_at?: string }>;
 }
 
+// Etiquetas legibles para subcategorías cuyo label viene "en crudo" de la
+// importación o que solo existen en productos (sin fila en `subcategorias`)
+const LABELS_CONOCIDAS: Record<string, string> = {
+  "ampollas-y-serums": "Ampollas y Sérums",
+  "serums": "Sérums",
+  "antiencrespamiento": "Antiencrespamiento",
+  "protector-termico": "Protector Térmico",
+  "peluqueria-general": "Pelquería general",
+};
+
+function humanizarSlug(slug: string): string {
+  return slug
+    .split("-")
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(" ");
+}
+
+function labelLegible(slug: string, label: string | null): string {
+  return LABELS_CONOCIDAS[slug] ?? (label && label !== slug ? label : humanizarSlug(slug));
+}
+
+/**
+ * Subcategorías que existen solo en productos (productos_padre.subcategoria).
+ * Es la misma fuente que el admin mezcla en sus desplegables: sin esto, el menú
+ * se quedaba sin subcategorías como "Ampollas y Sérums" o "Pelquería general".
+ */
+export const obtenerSubcategoriasDeProductos = unstable_cache(
+  async (): Promise<Array<{ categoria: string; slug: string }>> => {
+    const vistos = new Map<string, { categoria: string; slug: string }>();
+    try {
+      const supa = createAnonClient();
+      let from = 0;
+      for (;;) {
+        const { data, error } = await supa
+          .from("productos_padre")
+          .select("categoria, subcategoria")
+          .eq("activo", true)
+          .not("subcategoria", "is", null)
+          .range(from, from + 999);
+        if (error) {
+          console.error("Error al obtener subcategorías de productos:", error.message);
+          break;
+        }
+        for (const p of data ?? []) {
+          if (p.categoria && p.subcategoria) {
+            vistos.set(`${p.categoria}:${p.subcategoria}`, {
+              categoria: p.categoria,
+              slug: p.subcategoria,
+            });
+          }
+        }
+        if (!data || data.length < 1000) break;
+        from += 1000;
+      }
+    } catch (err) {
+      console.error("Error crítico al obtener subcategorías de productos:", err);
+    }
+    return [...vistos.values()].sort((a, b) => a.slug.localeCompare(b.slug, "es"));
+  },
+  ["subcategorias-de-productos"],
+  { revalidate: 300 }
+);
+
 /**
  * Construye el array NAV_ITEMS dinámicamente desde la BD
  * Agrupa por categoría y columna
  */
 export async function construirNavItems(): Promise<NavItem[]> {
   const subcats = await obtenerSubcategoriasDinamicas();
+  const deProductos = await obtenerSubcategoriasDeProductos();
+
+  // Lo que solo existe en productos también entra en el menú (columna "General"),
+  // igual que ocurre en los desplegables del admin
+  const enTabla = new Set(subcats.map((s) => `${s.categoria}:${s.slug}`));
+  const extras: Subcategoria[] = deProductos
+    .filter((p) => !enTabla.has(`${p.categoria}:${p.slug}`))
+    .map((p) => ({
+      id: `producto-${p.categoria}-${p.slug}`,
+      categoria: p.categoria,
+      slug: p.slug,
+      label: p.slug,
+      columna: null,
+      orden: 999,
+      seo_title: null,
+      seo_description: null,
+      descripcion_intro: null,
+      activa: true,
+    }));
 
   // Agrupar por categoría
   const byCategory: Record<string, Record<string, Subcategoria[]>> = {};
 
-  for (const sub of subcats) {
+  for (const sub of [...subcats, ...extras]) {
     if (!byCategory[sub.categoria]) {
       byCategory[sub.categoria] = {};
     }
@@ -217,7 +299,7 @@ export async function construirNavItems(): Promise<NavItem[]> {
 
       for (const [colName, subs] of Object.entries(columnasDinamicas)) {
         const links: NavLink[] = subs.map(sub => ({
-          label: sub.label,
+          label: labelLegible(sub.slug, sub.label),
           href: `/productos/${sub.categoria}/${sub.slug}`,
         }));
 
