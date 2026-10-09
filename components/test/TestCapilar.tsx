@@ -90,6 +90,11 @@ const DIAGNOSTICOS: Record<Perfil, Diagnostico> = {
     ],
     productos: [
       {
+        nombre: "Pack Cebolla Anticaída",
+        detalle: "Mascarilla Valquer 300 ml + champú Babaria 700 ml por 17,50 €",
+        url: "/packs/pack-cebolla-anticaida",
+      },
+      {
         nombre: "Ampollas Placenta 12x14ml Hipertin",
         detalle: "Tratamiento intensivo anticaída clásico de peluquería",
         url: "/productos/peluqueria/ampollas-y-serums/ampollas-placenta-12x14ml-hipertin",
