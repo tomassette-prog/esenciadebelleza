@@ -1,6 +1,6 @@
 # Campaña "Champú de Cebolla Anticaída" — Kit completo
 
-> **VIGENTE (oct 2026):** Pack 17,50 € = mascarilla Valquer 300 ml (15,50 €) + champú Babaria cebolla 700 ml por solo 2 € más. El champú no se vende suelto; stock 20 packs. Los precios 19,90 € / "antes 22 €" / 1 L de abajo son del concepto anterior y están obsoletos.
+> **RETIRADO (oct 2026):** Pack eliminado de la tienda — el champú Babaria solo puede venderlo el fabricante. Estado antes de retirarse: Pack 17,50 € = mascarilla Valquer 300 ml (15,50 €) + champú Babaria cebolla 700 ml por solo 2 € más. El champú no se vende suelto; stock 20 packs. Los precios 19,90 € / "antes 22 €" / 1 L de abajo son del concepto anterior y están obsoletos.
 
 > Deep search España (30/09/2026): demanda altísima + competencia batible + ventaja de precio 4x.
 > Dato clave del mercado: Nuggela & Sulé (líder, 5.329 valoraciones) = 15,49 EUR / 250 ml = 6,20 EUR/100ml.
