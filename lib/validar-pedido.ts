@@ -26,6 +26,18 @@ export type ResultadoValidacion =
   | { ok: false; error: string };
 
 /**
+ * Fórmula única del descuento de cupón: porcentaje sobre el subtotal o importe
+ * fijo, redondeado a céntimos y con tope en el subtotal.
+ */
+export function calcularDescuentoCupon(
+  cupon: { tipo: "porcentaje" | "fijo"; valor: number },
+  subtotal: number
+): number {
+  const bruto = cupon.tipo === "porcentaje" ? (subtotal * cupon.valor) / 100 : cupon.valor;
+  return Math.min(Math.round(bruto * 100) / 100, subtotal);
+}
+
+/**
  * Valida precios contra la base de datos (productos y packs de regalo) y
  * recalcula el descuento del cupón SIEMPRE desde `cupones.tipo/valor` sobre el
  * subtotal calculado en el servidor.
@@ -69,7 +81,10 @@ export async function validarYCalcular(args: {
         (descuentoB2b ?? 0) > 0
           ? Math.round(dbVar.precio_b2c * (1 - (descuentoB2b ?? 0) / 100) * 100) / 100
           : null;
-      const okDesc = precioDescuento !== null && Math.abs(l.precio - precioDescuento) <= 0.02;
+      const okDesc =
+        tipoPrecio === "b2b" &&
+        precioDescuento !== null &&
+        Math.abs(l.precio - precioDescuento) <= 0.02;
       if (!okB2c && !okB2b && !okDesc) {
         return { ok: false, error: `El precio de "${l.nombre}" ha cambiado. Actualiza la página.` };
       }
@@ -121,8 +136,7 @@ export async function validarYCalcular(args: {
       subtotal >= (c.importe_minimo ?? 0);
 
     if (vigente && c) {
-      const bruto = c.tipo === "porcentaje" ? (subtotal * c.valor) / 100 : c.valor;
-      descuento = Math.min(Math.round(bruto * 100) / 100, subtotal);
+      descuento = calcularDescuentoCupon(c, subtotal);
       cuponId = c.id;
       codigoCupon = c.codigo;
     }

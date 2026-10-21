@@ -6,7 +6,7 @@ import { getSessionFromCookie } from "@/lib/supabase/session-helper";
 import { generarNumOper, generarCamposCeca } from "@/lib/cecabank";
 import { stripe } from "@/lib/stripe";
 import type { LineaCarrito, LineaPack } from "@/context/CarritoContext";
-import { validarYCalcular } from "@/lib/validar-pedido";
+import { calcularDescuentoCupon, validarYCalcular } from "@/lib/validar-pedido";
 
 import { calcularGastoEnvio, getSuplementoContrareembolso } from "@/lib/envio";
 import { registrarUsoCupon } from "@/actions/cupones";
@@ -126,14 +126,15 @@ export async function iniciarPagoCeca(
   if (datosEnvio.cupon?.id && datosEnvio.cupon?.descuento > 0) {
     const { data: cupon } = await supabase
       .from("cupones")
-      .select("id, activo, usos_maximos, usos_actuales, fecha_expiracion, importe_minimo")
+      .select("id, tipo, valor, activo, usos_maximos, usos_actuales, fecha_expiracion, importe_minimo")
       .eq("id", datosEnvio.cupon.id)
       .single();
     if (cupon && cupon.activo
       && (!cupon.fecha_expiracion || new Date(cupon.fecha_expiracion) >= new Date())
       && (cupon.usos_maximos === null || cupon.usos_actuales < cupon.usos_maximos)
       && totalProductos >= cupon.importe_minimo) {
-      descuentoCupon = datosEnvio.cupon.descuento;
+      // El importe se recalcula aquí: nunca se acepta el que mande el navegador
+      descuentoCupon = calcularDescuentoCupon(cupon, totalProductos);
       cuponId = cupon.id;
     }
   }
@@ -298,14 +299,15 @@ export async function iniciarPagoWooCommerce(
   if (datosEnvio.cupon?.id && datosEnvio.cupon?.descuento > 0) {
     const { data: cupon } = await supabase
       .from("cupones")
-      .select("id, activo, usos_maximos, usos_actuales, fecha_expiracion, importe_minimo")
+      .select("id, tipo, valor, activo, usos_maximos, usos_actuales, fecha_expiracion, importe_minimo")
       .eq("id", datosEnvio.cupon.id)
       .single();
     if (cupon && cupon.activo
       && (!cupon.fecha_expiracion || new Date(cupon.fecha_expiracion) >= new Date())
       && (cupon.usos_maximos === null || cupon.usos_actuales < cupon.usos_maximos)
       && totalProductos >= cupon.importe_minimo) {
-      descuentoCupon = datosEnvio.cupon.descuento;
+      // El importe se recalcula aquí: nunca se acepta el que mande el navegador
+      descuentoCupon = calcularDescuentoCupon(cupon, totalProductos);
       cuponId = cupon.id;
     }
   }
@@ -569,14 +571,15 @@ export async function iniciarPagoStripe(
   if (datosEnvio.cupon?.id && datosEnvio.cupon?.descuento > 0) {
     const { data: cupon } = await supabase
       .from("cupones")
-      .select("id, activo, usos_maximos, usos_actuales, fecha_expiracion, importe_minimo")
+      .select("id, tipo, valor, activo, usos_maximos, usos_actuales, fecha_expiracion, importe_minimo")
       .eq("id", datosEnvio.cupon.id)
       .single();
     if (cupon && cupon.activo
       && (!cupon.fecha_expiracion || new Date(cupon.fecha_expiracion) >= new Date())
       && (cupon.usos_maximos === null || cupon.usos_actuales < cupon.usos_maximos)
       && totalProductos >= cupon.importe_minimo) {
-      descuentoCupon = datosEnvio.cupon.descuento;
+      // El importe se recalcula aquí: nunca se acepta el que mande el navegador
+      descuentoCupon = calcularDescuentoCupon(cupon, totalProductos);
       cuponId = cupon.id;
     }
   }
@@ -802,17 +805,21 @@ export async function crearPedidoContrarembolso(
   const sessionUser = await getSessionFromCookie();
 
   let tipoPrecio: "b2c" | "b2b" = "b2c";
+  let descuentoB2b = 0;
   if (sessionUser) {
     const { data: perfil } = await supabase
       .from("perfiles_usuario")
-      .select("b2b_aprobado, tipo_cliente")
+      .select("b2b_aprobado, tipo_cliente, descuento_b2b")
       .eq("id", sessionUser?.id)
       .single();
-    if (perfil?.tipo_cliente === "b2b" && perfil?.b2b_aprobado === true) tipoPrecio = "b2b";
+    if (perfil?.tipo_cliente === "b2b" && perfil?.b2b_aprobado === true) {
+      tipoPrecio = "b2b";
+      descuentoB2b = perfil?.descuento_b2b ?? 0;
+    }
   }
 
   // Precios, packs y descuento validados/recalculados contra la BD
-  const calc = await validarYCalcular({ lineas, packs, cupon: datosEnvio.cupon ?? null, tipoPrecio });
+  const calc = await validarYCalcular({ lineas, packs, cupon: datosEnvio.cupon ?? null, tipoPrecio, descuentoB2b });
   if (!calc.ok) return { ok: false, error: calc.error };
 
   const totalProductos = calc.subtotal;
@@ -934,17 +941,21 @@ export async function crearPedidoBizum(
   const sessionUser = await getSessionFromCookie();
 
   let tipoPrecio: "b2c" | "b2b" = "b2c";
+  let descuentoB2b = 0;
   if (sessionUser) {
     const { data: perfil } = await supabase
       .from("perfiles_usuario")
-      .select("b2b_aprobado, tipo_cliente")
+      .select("b2b_aprobado, tipo_cliente, descuento_b2b")
       .eq("id", sessionUser?.id)
       .single();
-    if (perfil?.tipo_cliente === "b2b" && perfil?.b2b_aprobado === true) tipoPrecio = "b2b";
+    if (perfil?.tipo_cliente === "b2b" && perfil?.b2b_aprobado === true) {
+      tipoPrecio = "b2b";
+      descuentoB2b = perfil?.descuento_b2b ?? 0;
+    }
   }
 
   // Precios, packs y descuento validados/recalculados contra la BD
-  const calc = await validarYCalcular({ lineas, packs, cupon: datosEnvio.cupon ?? null, tipoPrecio });
+  const calc = await validarYCalcular({ lineas, packs, cupon: datosEnvio.cupon ?? null, tipoPrecio, descuentoB2b });
   if (!calc.ok) return { ok: false, error: calc.error };
 
   const totalProductos = calc.subtotal;

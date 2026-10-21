@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { verificarAdmin } from "@/lib/admin-auth";
+import { calcularDescuentoCupon } from "@/lib/validar-pedido";
 
 // ── Tipos ─────────────────────────────────────────────────────────────────────
 export interface Cupon {
@@ -19,6 +20,12 @@ export interface Cupon {
   created_at: string;
 }
 
+function validarValorCupon(tipo: "porcentaje" | "fijo", valor: number): string | null {
+  if (!Number.isFinite(valor) || valor <= 0) return "El valor del descuento debe ser mayor que 0";
+  if (tipo === "porcentaje" && valor > 100) return "El porcentaje no puede superar el 100%";
+  return null;
+}
+
 // ── Crear cupón ───────────────────────────────────────────────────────────────
 export async function crearCupon(
   datos: {
@@ -33,6 +40,9 @@ export async function crearCupon(
 ): Promise<{ error?: string; cuponId?: string }> {
   const admin = await verificarAdmin();
   if (!admin) return { error: "No autorizado" };
+
+  const errValor = validarValorCupon(datos.tipo, datos.valor);
+  if (errValor) return { error: errValor };
 
   const supabase = createAdminClient();
 
@@ -76,6 +86,14 @@ export async function actualizarCupon(
   if (!admin) return { error: "No autorizado" };
 
   const supabase = createAdminClient();
+
+  if (datos.tipo !== undefined || datos.valor !== undefined) {
+    const { data: actual } = await supabase.from("cupones").select("tipo, valor").eq("id", id).single();
+    if (!actual) return { error: "Cupón no encontrado" };
+    const errValor = validarValorCupon(datos.tipo ?? actual.tipo, datos.valor ?? actual.valor);
+    if (errValor) return { error: errValor };
+  }
+
   const { error } = await supabase
     .from("cupones")
     .update(datos)
@@ -147,13 +165,8 @@ export async function validarCupon(
     };
   }
 
-  // Calcular descuento
-  let descuento: number;
-  if (cupon.tipo === "porcentaje") {
-    descuento = subtotal * (cupon.valor / 100);
-  } else {
-    descuento = Math.min(cupon.valor, subtotal); // No puede ser mayor que el subtotal
-  }
+  // Misma fórmula que se usará al cobrar (redondeo y tope en el subtotal)
+  const descuento = calcularDescuentoCupon(cupon, subtotal);
 
   return {
     valido: true,
@@ -163,7 +176,7 @@ export async function validarCupon(
       descripcion: cupon.descripcion,
       tipo: cupon.tipo,
       valor: cupon.valor,
-      descuento: Math.round(descuento * 100) / 100,
+      descuento,
     },
   };
 }

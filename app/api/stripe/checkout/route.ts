@@ -34,8 +34,11 @@ export async function POST(req: NextRequest) {
         .select("b2b_aprobado, tipo_cliente, descuento_b2b")
         .eq("id", sessionUser.id)
         .single();
-      if (perfil?.tipo_cliente === "b2b" && perfil?.b2b_aprobado === true) tipoPrecio = "b2b";
-      descuentoB2b = perfil?.descuento_b2b ?? 0;
+      // Solo el descuento personal de un profesional APROBADO (igual que la ficha)
+      if (perfil?.tipo_cliente === "b2b" && perfil?.b2b_aprobado === true) {
+        tipoPrecio = "b2b";
+        descuentoB2b = perfil?.descuento_b2b ?? 0;
+      }
     }
 
     // Precios, packs y descuento validados/recalculados contra la BD

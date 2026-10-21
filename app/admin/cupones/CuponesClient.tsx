@@ -132,7 +132,7 @@ export default function CuponesClient({ cuponesInitial }: Props) {
             </div>
             <div>
               <label className="block text-xs tracking-wider uppercase text-neutral-600 mb-1">Valor *</label>
-              <input type="number" min="0" step="0.01" value={valor} onChange={(e) => setValor(e.target.value)} placeholder={tipo === "porcentaje" ? "10" : "5.00"} className="w-full border border-neutral-200 px-3 py-2.5 text-sm focus:outline-none focus:border-neutral-900" />
+              <input type="number" min="0" max={tipo === "porcentaje" ? 100 : undefined} step="0.01" value={valor} onChange={(e) => setValor(e.target.value)} placeholder={tipo === "porcentaje" ? "10" : "5.00"} className="w-full border border-neutral-200 px-3 py-2.5 text-sm focus:outline-none focus:border-neutral-900" />
             </div>
             <div>
               <label className="block text-xs tracking-wider uppercase text-neutral-600 mb-1">Usos máximos</label>
