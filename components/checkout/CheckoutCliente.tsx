@@ -1,6 +1,7 @@
 "use client";
 
 import { registrarConsentimientoCheckout } from "@/actions/newsletter";
+import { registrarIntentoCompra } from "@/actions/conversion";
 
 import { useState } from "react";
 import Image from "next/image";
@@ -256,6 +257,7 @@ export function CheckoutCliente({
               const fd = new FormData(e.currentTarget);
               if (fd.get("aceptaMarketing"))
                 void registrarConsentimientoCheckout(datos.email);
+              void registrarIntentoCompra(datos.email, lineas);
               irAPaso2(e);
             }}
             className="space-y-4"

@@ -1,5 +1,6 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { eanDeMeta, type WooMeta } from "@/lib/woo-ean";
+import { despacharAvisosReposicion } from "@/lib/avisos-reposicion";
 import { NextRequest, NextResponse } from "next/server";
 import * as crypto from "crypto";
 import { resolverCategoriaSimple, validarCategoriaPorNombre } from "@/lib/woo-cat-resolver";
@@ -69,6 +70,9 @@ export async function POST(req: NextRequest) {
       case "product.created":
       case "product.updated": {
         await sincronizarProducto(supabase, payload, topic === "product.created");
+        // Avisos de reposición: el stock que acaba de llegar puede interesar
+        // a clientes que pidieron aviso (despacho acotado al lote de 50)
+        await despacharAvisosReposicion(supabase as never);
         break;
       }
 

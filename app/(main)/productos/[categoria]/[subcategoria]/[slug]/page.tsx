@@ -16,6 +16,7 @@ import {
 } from "@/lib/seo";
 import { getResenas, getResenaAggregate } from "@/actions/resenas";
 import { AnadirAlCarritoBtn } from "@/components/producto/AnadirAlCarritoBtn";
+import { AvisoReposicionBtn } from "@/components/producto/AvisoReposicionBtn";
 import { FormularioResena } from "@/components/producto/FormularioResena";
 import { ListaResenas } from "@/components/producto/ListaResenas";
 import { Breadcrumb } from "@/components/layout/Breadcrumb";
@@ -347,6 +348,7 @@ export default async function ProductoPage({ params, searchParams }: PageProps) 
                 sku={variacionActiva.sku}
               />
             ) : variacionActiva && variacionActiva.precio_b2c > 0 && variacionActiva.stock <= 0 ? (
+              <>
               <a
                 href={`https://wa.me/34604825305?text=${encodeURIComponent(`Hola, me gustaría solicitar información sobre ${p.nombre}. ¿Cuándo estará disponible?`)}`}
                 target="_blank"
@@ -358,6 +360,8 @@ export default async function ProductoPage({ params, searchParams }: PageProps) 
                 </svg>
                 Solicitar información por WhatsApp
               </a>
+              <AvisoReposicionBtn productoId={p.id} variacionId={variacionActiva.id} />
+              </>
             ) : variacionActiva && variacionActiva.precio_b2c <= 0 ? (
               <a
                 href={`https://wa.me/34604825305?text=${encodeURIComponent(`Hola, me gustaría consultar el precio de ${p.nombre}`)}`}
