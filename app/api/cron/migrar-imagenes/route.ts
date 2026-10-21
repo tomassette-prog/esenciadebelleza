@@ -1,6 +1,7 @@
 ﻿import { NextRequest, NextResponse } from "next/server";
-import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { createClient } from "@supabase/supabase-js";
 import {
+  ORIGEN_IMAGENES,
   copiarImagen,
   necesitaCopia,
   rutaImagenPadre,
@@ -13,7 +14,7 @@ export const maxDuration = 300;
 const CRON_SECRET = process.env.CRON_SECRET;
 const LOTE_MAXIMO = 120; // copias por ejecución del cron
 const LOTE_MAXIMO_MANUAL = 500;
-const VENTANA = 400; // filas recientes inspeccionadas por tabla
+const VENTANA = 500; // filas inspeccionadas por consulta
 const DELAY_MS = 200; // ms entre descargas para no saturar el proveedor
 const CONCURRENCIA = 4;
 
@@ -37,8 +38,9 @@ async function ejecutarConcurrente(trabajos: Trabajo[]): Promise<{ copiadas: num
 
 /**
  * Keeps the local image mirror fresh after the daily WooCommerce sync:
- * copies images of recently updated rows that have no local copy yet or whose
- * supplier image changed. Never modifies imagen_principal_url / imagen_url.
+ * copies images that have no local copy yet (backfill, self-draining) and
+ * images of recently updated rows whose supplier image changed. Never
+ * modifies imagen_principal_url / imagen_url.
  *
  * Auth: Vercel cron sends `Authorization: Bearer CRON_SECRET`. A manual run
  * can send `x-mirror-token` matching config_tienda.imagen_mirror_token; when
@@ -69,18 +71,49 @@ export async function GET(req: NextRequest) {
   const loteSolicitado = Number(req.nextUrl.searchParams.get("lote") ?? "") || LOTE_MAXIMO;
   const lote = Math.min(Math.max(Math.trunc(loteSolicitado), 1), LOTE_MAXIMO_MANUAL);
 
-  const trabajos: Trabajo[] = [];
+  const colsPadre = "id, slug, imagen_principal_url, imagen_local_url, imagen_origen_url";
+  const colsVar = "id, nombre_variacion, imagen_url, imagen_local_url, imagen_origen_url, productos_padre(slug)";
 
-  // La importación diaria toca los productos modificados: su ventana
-  // reciente es justo donde pueden entrar imágenes nuevas o cambiadas.
-  const { data: padres } = await supabase
+  // Backfill: filas sin copia (la consulta se vacía sola a medida que se copian)
+  const { data: sinCopiaPadres } = await supabase
     .from("productos_padre")
-    .select("id, slug, imagen_principal_url, imagen_local_url, imagen_origen_url")
+    .select(colsPadre)
+    .is("imagen_local_url", null)
+    .like("imagen_principal_url", `%${ORIGEN_IMAGENES}%`)
+    .order("id", { ascending: true })
+    .limit(VENTANA);
+
+  const { data: sinCopiaVars } = await supabase
+    .from("productos_variaciones")
+    .select(colsVar)
+    .is("imagen_local_url", null)
+    .like("imagen_url", `%${ORIGEN_IMAGENES}%`)
+    .order("id", { ascending: true })
+    .limit(VENTANA);
+
+  // Frescura: la importación diaria toca los productos modificados; ahí
+  // pueden entrar imágenes nuevas o cuyo origen cambió.
+  const { data: recientesPadres } = await supabase
+    .from("productos_padre")
+    .select(colsPadre)
     .not("imagen_principal_url", "is", null)
     .order("updated_at", { ascending: false })
     .limit(VENTANA);
 
-  for (const p of padres ?? []) {
+  const { data: recientesVars } = await supabase
+    .from("productos_variaciones")
+    .select(colsVar)
+    .not("imagen_url", "is", null)
+    .order("updated_at", { ascending: false })
+    .limit(VENTANA);
+
+  const padresUnicos = new Map<string, any>();
+  for (const p of [...(sinCopiaPadres ?? []), ...(recientesPadres ?? [])]) padresUnicos.set(p.id, p);
+  const varsUnicas = new Map<string, any>();
+  for (const v of [...(sinCopiaVars ?? []), ...(recientesVars ?? [])]) varsUnicas.set(v.id, v);
+
+  const trabajos: Trabajo[] = [];
+  for (const p of padresUnicos.values()) {
     if (trabajos.length >= lote) break;
     if (!necesitaCopia({
       imagen_local_url: p.imagen_local_url,
@@ -93,15 +126,7 @@ export async function GET(req: NextRequest) {
       rutaImagenPadre(p.slug, p.imagen_principal_url!)
     ));
   }
-
-  const { data: vars } = await supabase
-    .from("productos_variaciones")
-    .select("id, nombre_variacion, imagen_url, imagen_local_url, imagen_origen_url, productos_padre(slug)")
-    .not("imagen_url", "is", null)
-    .order("updated_at", { ascending: false })
-    .limit(VENTANA);
-
-  for (const v of vars ?? []) {
+  for (const v of varsUnicas.values()) {
     if (trabajos.length >= lote) break;
     if (!necesitaCopia({
       imagen_local_url: v.imagen_local_url,
@@ -121,7 +146,10 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({
     copiadas,
     fallidas,
-    inspeccionados: { padres: padres?.length ?? 0, variaciones: vars?.length ?? 0 },
+    inspeccionados: {
+      padres: padresUnicos.size,
+      variaciones: varsUnicas.size,
+    },
     loteCompleto: trabajos.length >= lote,
   });
 }
