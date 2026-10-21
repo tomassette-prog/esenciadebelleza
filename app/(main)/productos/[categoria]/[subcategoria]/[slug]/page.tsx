@@ -1,5 +1,6 @@
 ﻿import type { Metadata } from "next";
-import { notFound } from "next/navigation";
+import { notFound, permanentRedirect } from "next/navigation";
+import { destinoRetirado } from "@/lib/redirects-retirados";
 import Image from "next/image";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -79,6 +80,9 @@ export async function generateMetadata({ params, searchParams }: PageProps): Pro
 export default async function ProductoPage({ params, searchParams }: PageProps) {
   const { slug, categoria, subcategoria } = await params;
   const { tono } = await searchParams;
+
+  const destino = destinoRetirado(slug);
+  if (destino) permanentRedirect(destino);
 
   const supabase = await createClient();
   const supabaseAdmin = createAdminClient();

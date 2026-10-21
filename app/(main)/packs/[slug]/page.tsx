@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, permanentRedirect } from "next/navigation";
 import { getPackBySlug } from "@/actions/packs";
+import { destinoRetirado } from "@/lib/redirects-retirados";
 import { Breadcrumb } from "@/components/layout/Breadcrumb";
 import { AgregarPackBtn } from "../AgregarPackBtn";
 
@@ -21,6 +22,8 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
 
 export default async function PackPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
+  const destino = destinoRetirado(slug);
+  if (destino) permanentRedirect(destino);
   const pack = await getPackBySlug(slug);
   if (!pack) notFound();
 
