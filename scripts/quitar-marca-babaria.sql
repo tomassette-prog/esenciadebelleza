@@ -22,13 +22,29 @@ WHERE LOWER(TRIM(m.nombre)) LIKE '%babaria%'
 ORDER BY p.nombre;
 
 -- 3. Productos sin marca asignada pero con "babaria" en nombre/slug
---    (revisar a mano: pueden ser Babaria con el atributo de marca perdido)
+--    (caso real oct 2026: el champú Babaria del pack Cebolla, creado como
+--    producto de regalo sin marca; estaba publicado con ficha propia)
 SELECT id, nombre, slug, activo, marca_id
 FROM productos_padre
 WHERE (LOWER(nombre) LIKE '%babaria%' OR LOWER(slug) LIKE '%babaria%')
   AND (marca_id IS NULL
        OR marca_id NOT IN (SELECT id FROM marcas WHERE LOWER(TRIM(nombre)) LIKE '%babaria%'))
 ORDER BY nombre;
+
+-- 3b. Se crea la marca Babaria como retirada y se les asigna, para que el
+--     trigger de la migración 034 los mantenga ocultos ante cualquier sync
+INSERT INTO marcas (nombre, slug, activa)
+VALUES ('Babaria', 'babaria', false)
+ON CONFLICT (slug) DO UPDATE SET activa = false;
+
+UPDATE productos_padre p
+SET marca_id = m.id,
+    activo = false
+FROM marcas m
+WHERE m.slug = 'babaria'
+  AND (LOWER(p.nombre) LIKE '%babaria%' OR LOWER(p.slug) LIKE '%babaria%')
+  AND (p.marca_id IS NULL
+       OR p.marca_id NOT IN (SELECT id FROM marcas WHERE LOWER(TRIM(nombre)) LIKE '%babaria%'));
 
 -- 4. Ocultar marca, productos y variaciones
 UPDATE marcas
