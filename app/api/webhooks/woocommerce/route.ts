@@ -178,19 +178,29 @@ async function sincronizarProducto(
   );
   const { categoria, subcategoria } = validarCategoriaPorNombre(String(p.name), catBase, String(p.description || p.short_description || ""));
 
-  // Buscar o crear marca
+  // Buscar o crear marca. No se hace upsert: pisaría `activa` y reactivaría
+  // marcas retiradas de la web (ver migración 034).
   let marcaId: string | null = null;
   const marcaAttr = (p.attributes as { name: string; options: string[] }[] | undefined)
     ?.find((a) => a.name.toLowerCase().includes("marca"));
   if (marcaAttr?.options?.[0]) {
     const nombreMarca = marcaAttr.options[0];
     const slugMarca   = nombreMarca.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
-    const { data: marca } = await supabase
+    const { data: marcaExistente } = await supabase
       .from("marcas")
-      .upsert({ nombre: nombreMarca, slug: slugMarca, activa: true }, { onConflict: "slug" })
       .select("id")
-      .single();
-    marcaId = marca?.id ?? null;
+      .eq("slug", slugMarca)
+      .maybeSingle();
+    if (marcaExistente) {
+      marcaId = marcaExistente.id;
+    } else {
+      const { data: marca } = await supabase
+        .from("marcas")
+        .insert({ nombre: nombreMarca, slug: slugMarca, activa: true })
+        .select("id")
+        .maybeSingle();
+      marcaId = marca?.id ?? null;
+    }
   }
 
   // Clasificación manual preservada: categoria/subcategoria solo se asignan al
@@ -212,7 +222,9 @@ async function sincronizarProducto(
         ...(existente ? {} : { categoria, subcategoria }),
         descripcion_general: String(p.description || p.short_description || ""),
         imagen_principal_url:(p.images as { src: string }[])?.[0]?.src ?? null,
-        marca_id:            marcaId,
+        // Clasificación manual preservada: si el payload no trae marca,
+        // no se pisa la ya asignada (igual que en cron/sync-precios)
+        ...(marcaId ? { marca_id: marcaId } : {}),
         activo:              p.status === "publish",
       },
       { onConflict: "woo_id" }

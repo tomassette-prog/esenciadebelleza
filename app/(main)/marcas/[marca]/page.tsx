@@ -24,6 +24,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     .from("marcas")
     .select("nombre")
     .eq("slug", marcaSlug)
+    .eq("activa", true)
     .single();
 
   if (!marca) return {};
@@ -64,6 +65,7 @@ export default async function MarcaPage({ params }: PageProps) {
     .from("marcas")
     .select("id, nombre, slug, logo_url")
     .eq("slug", marcaSlug)
+    .eq("activa", true)
     .maybeSingle();
 
   // Si hay error de Supabase, mostrar info de debug en lugar de 404
