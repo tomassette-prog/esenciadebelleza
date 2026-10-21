@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { sinTildes } from "@/lib/texto";
 import { ProductoCard } from "@/components/producto/ProductoCard";
 import { Breadcrumb } from "@/components/layout/Breadcrumb";
 import type { ProductoCatalogo } from "@/types/producto";
@@ -92,7 +93,7 @@ export default async function BuscarPage({ searchParams }: PageProps) {
       .eq("activo", true);
     // AND: cada palabra debe aparecer en el nombre
     for (const w of words) {
-      exactBase = exactBase.ilike("nombre", `%${w}%`) as typeof exactBase;
+      exactBase = exactBase.ilike("nombre_norm", `%${sinTildes(w)}%`) as typeof exactBase;
     }
     if (cat) exactBase = exactBase.eq("categoria", cat);
     if (subcat) exactBase = exactBase.eq("subcategoria", subcat);
@@ -113,7 +114,7 @@ export default async function BuscarPage({ searchParams }: PageProps) {
         .select(PRODUCT_SELECT)
         .eq("activo", true);
 
-      const orClause = words.map((w) => `nombre.ilike.%${w}%`).join(",");
+      const orClause = words.map((w) => `nombre_norm.ilike.%${sinTildes(w)}%`).join(",");
       suggestBase = suggestBase.or(orClause) as typeof suggestBase;
       if (cat) suggestBase = suggestBase.eq("categoria", cat);
       if (subcat) suggestBase = suggestBase.eq("subcategoria", subcat);
@@ -132,7 +133,7 @@ export default async function BuscarPage({ searchParams }: PageProps) {
       .select("categoria, subcategoria")
       .eq("activo", true);
     for (const w of words) {
-      catQuery = catQuery.ilike("nombre", `%${w}%`) as typeof catQuery;
+      catQuery = catQuery.ilike("nombre_norm", `%${sinTildes(w)}%`) as typeof catQuery;
     }
     const { data: catData } = await catQuery;
 
@@ -155,7 +156,7 @@ export default async function BuscarPage({ searchParams }: PageProps) {
       .eq("activo", true)
       .not("marca_id", "is", null);
     for (const w of words) {
-      marcaQuery = marcaQuery.ilike("nombre", `%${w}%`) as typeof marcaQuery;
+      marcaQuery = marcaQuery.ilike("nombre_norm", `%${sinTildes(w)}%`) as typeof marcaQuery;
     }
     if (cat) marcaQuery = marcaQuery.eq("categoria", cat);
     if (subcat) marcaQuery = marcaQuery.eq("subcategoria", subcat);
