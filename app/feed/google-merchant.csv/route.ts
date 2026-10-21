@@ -174,7 +174,7 @@ export async function GET() {
   ];
 
   for (const p of padres) {
-    const vars = (p.variaciones ?? []).filter((v) => v.activa);
+    const vars = (p.variaciones ?? []).filter((v) => v.activa && v.precio_b2c > 0);
     const imagen = p.imagen_local_url ?? p.imagen_principal_url;
     if (vars.length === 0 || !imagen) continue;
 

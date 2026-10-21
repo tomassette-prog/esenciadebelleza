@@ -1,10 +1,11 @@
 ﻿import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { resolverCategoriaSimple, validarCategoriaPorNombre } from "@/lib/woo-cat-resolver";
+import { eanDeMeta } from "@/lib/woo-ean";
+import { estaAutorizado } from "@/lib/cron-auth";
 
 export const maxDuration = 300; // 300s en Pro / capped a 60s en Hobby
 
-const CRON_SECRET = process.env.CRON_SECRET;
 
 function adminClient() {
   return createClient(
@@ -35,6 +36,7 @@ interface WooProduct {
   attributes: { name: string; options: string[] }[];
   description: string; short_description: string;
   variations: number[];
+  meta_data?: { key: string; value: unknown }[];
 }
 
 interface WooVariation {
@@ -44,11 +46,11 @@ interface WooVariation {
   attributes: { name: string; option: string }[];
   image: { src: string } | null;
   status: string;
+  meta_data?: { key: string; value: unknown }[];
 }
 
 export async function GET(req: NextRequest) {
-  const auth = req.headers.get("authorization");
-  if (!CRON_SECRET || auth !== `Bearer ${CRON_SECRET}`) {
+  if (!(await estaAutorizado(req, adminClient()))) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -126,7 +128,7 @@ export async function GET(req: NextRequest) {
         ? `&modified_after=${modifiedAfter.replace(/\.\d{3}Z$/, "Z")}`
         : "";
       products = await fetchWoo<WooProduct[]>(
-        `/products?per_page=100&page=${page}&status=publish${modifiedParam}&_fields=id,type,sku,name,slug,status,regular_price,sale_price,price,stock_quantity,stock_status,manage_stock,images,categories,attributes,description,short_description,variations`
+        `/products?per_page=100&page=${page}&status=publish${modifiedParam}&_fields=id,type,sku,name,slug,status,regular_price,sale_price,price,stock_quantity,stock_status,manage_stock,images,categories,attributes,description,short_description,variations,meta_data`
       );
     } catch (err) {
       console.error(`[cron/sync] Error page ${page}:`, err);
@@ -213,7 +215,7 @@ export async function GET(req: NextRequest) {
       await Promise.all(productosVariables.slice(i, i + 10).map(async (wp) => {
         try {
           const wcVars = await fetchWoo<WooVariation[]>(
-            `/products/${wp.id}/variations?per_page=100&_fields=id,sku,price,regular_price,sale_price,stock_quantity,stock_status,manage_stock,attributes,image,status`
+            `/products/${wp.id}/variations?per_page=100&_fields=id,sku,price,regular_price,sale_price,stock_quantity,stock_status,manage_stock,attributes,image,status,meta_data`
           );
           varsPorProductoWoo.set(wp.id, wcVars);
         } catch (err) {
@@ -249,6 +251,7 @@ export async function GET(req: NextRequest) {
       const isInStock = wp.stock_status === "instock";
       const stock = wp.manage_stock ? (wp.stock_quantity ?? 0) : (isInStock ? 9999 : 0);
       const activa = isInStock;
+      const eanPadre = eanDeMeta(wp.meta_data);
 
       if (wp.type === "simple") {
         const sku = wp.sku || wp.slug;
@@ -261,6 +264,7 @@ export async function GET(req: NextRequest) {
           precio_comparar: isOferta ? precioRegular : null,
           stock,
           activa,
+          ...(eanPadre ? { ean_code: eanPadre } : {}),
         });
         totalActualizados++;
 
@@ -273,6 +277,7 @@ export async function GET(req: NextRequest) {
             const vOferta = vSale > 0 && vSale < vReg;
             const vB2c = vOferta ? vSale : vReg;
             const sku = wv.sku || `${wp.slug}-${wv.id}`;
+            const ean = eanDeMeta(wv.meta_data) ?? eanPadre;
             const nombreVariacion = wv.attributes.map(a => a.option).join(" Â· ") || "Unidad";
             return {
               producto_padre_id: padreId,
@@ -284,6 +289,7 @@ export async function GET(req: NextRequest) {
               stock: wv.manage_stock ? (wv.stock_quantity ?? 0) : (wv.stock_status === "instock" ? 9999 : 0),
               activa: wv.stock_status === "instock",
               imagen_url: wv.image?.src ?? null,
+              ...(ean ? { ean_code: ean } : {}),
             };
           });
           varsLote.push(...varUpserts);

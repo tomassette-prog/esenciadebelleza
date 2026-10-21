@@ -1,4 +1,5 @@
 import { createAdminClient } from "@/lib/supabase/admin";
+import { eanDeMeta, type WooMeta } from "@/lib/woo-ean";
 import { NextRequest, NextResponse } from "next/server";
 import * as crypto from "crypto";
 import { resolverCategoriaSimple, validarCategoriaPorNombre } from "@/lib/woo-cat-resolver";
@@ -237,6 +238,7 @@ async function sincronizarProducto(
     return;
   }
 
+  const eanPadre = eanDeMeta(p.meta_data as WooMeta[] | undefined);
   const tipo = String(p.type);
 
   if (tipo === "simple") {
@@ -253,6 +255,7 @@ async function sincronizarProducto(
         imagen_url:        (p.images as { src: string }[])?.[0]?.src ?? null,
         stock:             p.manage_stock === false ? (p.stock_status === "instock" ? 9999 : 0) : Number(p.stock_quantity ?? 0),
         activa:            p.stock_status === "instock",
+        ...(eanPadre ? { ean_code: eanPadre } : {}),
       },
       { onConflict: "sku" }
     );
@@ -281,6 +284,9 @@ async function sincronizarProducto(
             imagen_url:        v.image?.src ?? (p.images as { src: string }[])?.[0]?.src ?? null,
             stock:             v.manage_stock === false ? (v.stock_status === "instock" ? 9999 : 0) : Number(v.stock_quantity ?? 0),
             activa:            v.stock_status === "instock",
+            ...(eanDeMeta((v as unknown as { meta_data?: WooMeta[] }).meta_data) ?? eanPadre
+              ? { ean_code: eanDeMeta((v as unknown as { meta_data?: WooMeta[] }).meta_data) ?? eanPadre }
+              : {}),
           },
           { onConflict: "sku" }
         );
