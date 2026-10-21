@@ -909,10 +909,10 @@ export async function crearPedidoContrarembolso(
     ciudad: datosEnvio.ciudad, lineas: lineasEmail,
   };
 
-  await Promise.all([
-    enviarNotificacionPedido(emailData),
-    enviarConfirmacionCliente(emailData),
-  ]);
+  // En serie: el SMTP de DonDominio rechaza conexiones concurrentes y el fallo
+  // se tragaba sin dejar rastro (no llegaba la notificación al admin)
+  await enviarNotificacionPedido(emailData);
+  await enviarConfirmacionCliente(emailData);
 
   return { ok: true, pedidoId: pedido.id };
 }
@@ -1041,10 +1041,9 @@ export async function crearPedidoBizum(
     ciudad: datosEnvio.ciudad, lineas: lineasEmail,
   };
 
-  await Promise.all([
-    enviarNotificacionPedido(emailData),
-    enviarPendienteBizum(emailData),
-  ]);
+  // En serie: mismo motivo que en contra reembolso
+  await enviarNotificacionPedido(emailData);
+  await enviarPendienteBizum(emailData);
 
   return { ok: true, pedidoId: pedido.id };
 }

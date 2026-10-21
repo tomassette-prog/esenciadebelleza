@@ -92,12 +92,13 @@ export async function enviarNotificacionPedido(p: PedidoNotificacion) {
 
   try {
     const transporter = createTransport();
-    await transporter.sendMail({
+    const info = await transporter.sendMail({
       from:    `"Esencia de Belleza" <${FROM_EMAIL}>`,
       to:      ADMIN_EMAILS,
       subject: `🛍️ Nuevo pedido — ${p.nombre} ${p.apellidos} · ${p.total.toFixed(2)} €`,
       html,
     });
+    console.log(`[Email] Notificación de pedido ${p.pedidoId} enviada (${info.messageId})`);
   } catch (err) {
     console.error("[Email] Error enviando notificación de pedido:", err);
   }
@@ -164,12 +165,13 @@ export async function enviarPendienteBizum(p: PedidoNotificacion) {
 
   try {
     const transporter = createTransport();
-    await transporter.sendMail({
+    const info = await transporter.sendMail({
       from:    `"Esencia de Belleza" <${FROM_EMAIL}>`,
       to:      p.email,
       subject: `⏳ Pedido #${p.pedidoId.slice(0, 8).toUpperCase()} pendiente de pago por Bizum — Esencia de Belleza`,
       html,
     });
+    console.log(`[Email] Aviso Bizum enviado a ${p.email} (${info.messageId})`);
   } catch (err) {
     console.error("[Email] Error enviando aviso pendiente Bizum:", err);
   }
@@ -229,12 +231,13 @@ export async function enviarConfirmacionCliente(p: PedidoNotificacion) {
 
   try {
     const transporter = createTransport();
-    await transporter.sendMail({
+    const info = await transporter.sendMail({
       from:    `"Esencia de Belleza" <${FROM_EMAIL}>`,
       to:      p.email,
       subject: `✅ ¡Gracias por tu pedido! #${p.pedidoId.slice(0, 8).toUpperCase()} — Esencia de Belleza`,
       html,
     });
+    console.log(`[Email] Confirmación enviada a ${p.email} (${info.messageId})`);
   } catch (err) {
     console.error("[Email] Error enviando confirmación al cliente:", err);
   }

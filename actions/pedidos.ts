@@ -280,7 +280,9 @@ export async function lanzarPedidoWoo(
       woo_enviado_at: new Date().toISOString(),
     }).eq("id", id);
 
-    // Enviar email con el número de WooCommerce
+    // Avisar al admin con el número de WooCommerce. El cliente ya recibió su
+    // confirmación al crear el pedido, así que no se le reenvía; la referencia
+    // WB es interna del proveedor.
     const lineasEmail = (pedido.pedidos_lineas as Array<{
       nombre_producto: string; nombre_variacion?: string;
       cantidad: number; precio_unitario: number;
@@ -306,7 +308,6 @@ export async function lanzarPedidoWoo(
       lineas:     lineasEmail,
     };
     await enviarNotificacionPedido(emailWoo);
-    await enviarConfirmacionCliente(emailWoo);
 
     revalidatePath("/admin/pedidos");
     revalidatePath(`/admin/pedidos/${id}`);
