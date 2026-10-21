@@ -21,7 +21,7 @@ export async function GET(req: NextRequest) {
 
   const auth = Buffer.from(`${process.env.WOO_CONSUMER_KEY}:${process.env.WOO_CONSUMER_SECRET}`).toString("base64");
   const res = await fetch(
-    `${process.env.WOO_URL}/wp-json/wc/v3/products?per_page=50&status=publish&_fields=id,sku,name,meta_data`,
+    `${process.env.WOO_URL}/wp-json/wc/v3/products?per_page=50&status=publish&_fields=id,sku,name,meta_data,images`,
     { headers: { Authorization: `Basic ${auth}` }, cache: "no-store" }
   );
   if (!res.ok) {
@@ -30,6 +30,7 @@ export async function GET(req: NextRequest) {
   const products = (await res.json()) as Array<{
     id: number; sku: string; name: string;
     meta_data?: Array<{ key: string; value: unknown }>;
+    images?: Array<{ src: string }>;
   }>;
 
   const patronGtin = /ean|gtin|barcode|isbn|mpn|codigo|barras/i;
@@ -48,6 +49,7 @@ export async function GET(req: NextRequest) {
     productos_escaneados: products.length,
     productos_con_clave_gtin: conGtin.length,
     ejemplos: conGtin.slice(0, 5),
+    imagenes_por_producto: products.map((p) => ({ name: p.name.slice(0, 30), imagenes: (p.images ?? []).length })),
     todas_las_claves: [...claves].sort(),
   });
 }
