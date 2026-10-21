@@ -86,14 +86,34 @@ export default async function BuscarPage({ searchParams }: PageProps) {
   if (words.length > 0) {
     const supabase = createAdminClient();
 
-    // ── 1. EXACTOS (AND): todas las palabras deben aparecer en el nombre ──
+    // Cada palabra debe aparecer en el nombre del producto O en el de su
+    // marca ("wella" encuentra todos los productos Wella). Se resuelven las
+    // marcas que coinciden por palabra para filtrar solo columnas raíz.
+    const marcaIdsPorPalabra: string[][] = [];
+    for (const w of words) {
+      const { data } = await supabase
+        .from("marcas")
+        .select("id")
+        .eq("activa", true)
+        .ilike("nombre_norm", `%${sinTildes(w)}%`);
+      marcaIdsPorPalabra.push((data ?? []).map((m) => (m as { id: string }).id));
+    }
+    const condsPalabra = (i: number): string[] => {
+      // PostgREST interpreta comas y paréntesis como sintaxis dentro de .or()
+      const patron = `%${sinTildes(words[i]).replace(/[(),]/g, "")}%`;
+      const conds = [`nombre_norm.ilike.${patron}`];
+      const ids = marcaIdsPorPalabra[i] ?? [];
+      if (ids.length) conds.push(`marca_id.in.(${ids.join(",")})`);
+      return conds;
+    };
+
+    // ── 1. EXACTOS (AND): cada palabra en el producto o en su marca ──
     let exactBase = supabase
       .from("productos_padre")
       .select(PRODUCT_SELECT, { count: "exact" })
       .eq("activo", true);
-    // AND: cada palabra debe aparecer en el nombre
-    for (const w of words) {
-      exactBase = exactBase.ilike("nombre_norm", `%${sinTildes(w)}%`) as typeof exactBase;
+    for (let i = 0; i < words.length; i++) {
+      exactBase = exactBase.or(condsPalabra(i).join(",")) as typeof exactBase;
     }
     if (cat) exactBase = exactBase.eq("categoria", cat);
     if (subcat) exactBase = exactBase.eq("subcategoria", subcat);
@@ -114,7 +134,7 @@ export default async function BuscarPage({ searchParams }: PageProps) {
         .select(PRODUCT_SELECT)
         .eq("activo", true);
 
-      const orClause = words.map((w) => `nombre_norm.ilike.%${sinTildes(w)}%`).join(",");
+      const orClause = words.flatMap((_, i) => condsPalabra(i)).join(",");
       suggestBase = suggestBase.or(orClause) as typeof suggestBase;
       if (cat) suggestBase = suggestBase.eq("categoria", cat);
       if (subcat) suggestBase = suggestBase.eq("subcategoria", subcat);
@@ -132,8 +152,8 @@ export default async function BuscarPage({ searchParams }: PageProps) {
       .from("productos_padre")
       .select("categoria, subcategoria")
       .eq("activo", true);
-    for (const w of words) {
-      catQuery = catQuery.ilike("nombre_norm", `%${sinTildes(w)}%`) as typeof catQuery;
+    for (let i = 0; i < words.length; i++) {
+      catQuery = catQuery.or(condsPalabra(i).join(",")) as typeof catQuery;
     }
     const { data: catData } = await catQuery;
 
@@ -155,17 +175,19 @@ export default async function BuscarPage({ searchParams }: PageProps) {
       .select("marca_id, marcas(nombre)")
       .eq("activo", true)
       .not("marca_id", "is", null);
-    for (const w of words) {
-      marcaQuery = marcaQuery.ilike("nombre_norm", `%${sinTildes(w)}%`) as typeof marcaQuery;
+    for (let i = 0; i < words.length; i++) {
+      marcaQuery = marcaQuery.or(condsPalabra(i).join(",")) as typeof marcaQuery;
     }
     if (cat) marcaQuery = marcaQuery.eq("categoria", cat);
     if (subcat) marcaQuery = marcaQuery.eq("subcategoria", subcat);
     const { data: marcaData } = await marcaQuery;
 
     const marcaCountMap = new Map<string, { nombre: string; count: number }>();
-    for (const p of (marcaData ?? []) as { marca_id: string; marcas: { nombre: string }[] | null }[]) {
-      if (!p.marca_id || !p.marcas?.[0]) continue;
-      const nombreMarca = p.marcas[0].nombre;
+    for (const p of (marcaData ?? []) as { marca_id: string; marcas: { nombre: string } | { nombre: string }[] | null }[]) {
+      // El embed muchos-a-uno de PostgREST devuelve un objeto, no un array
+      const marcaRel = Array.isArray(p.marcas) ? p.marcas[0] : p.marcas;
+      if (!p.marca_id || !marcaRel) continue;
+      const nombreMarca = marcaRel.nombre;
       const existing = marcaCountMap.get(p.marca_id);
       if (existing) {
         existing.count++;
