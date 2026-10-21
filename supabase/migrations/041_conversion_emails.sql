@@ -41,3 +41,10 @@ CREATE INDEX IF NOT EXISTS carritos_abandonados_pendientes
 
 ALTER TABLE avisos_reposicion     ENABLE ROW LEVEL SECURITY;
 ALTER TABLE carritos_abandonados  ENABLE ROW LEVEL SECURITY;
+
+-- Este proyecto concede privilegios por tabla de forma explícita (ver
+-- migración 002): sin estos GRANT, PostgREST responde
+-- "permission denied for table ..." y el servicio no puede leer ni escribir.
+GRANT SELECT, INSERT, UPDATE, DELETE ON avisos_reposicion    TO service_role;
+GRANT SELECT, INSERT, UPDATE, DELETE ON carritos_abandonados TO service_role;
+GRANT SELECT, INSERT, UPDATE, DELETE ON resenas              TO service_role;
