@@ -20,5 +20,16 @@ export async function GET(req: NextRequest) {
   if (!(await estaAutorizado(req, supabase))) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  return NextResponse.json(await ejecutarTrabajoConversion());
+
+  // Diagnóstico: errores crudos de PostgREST sobre las tablas nuevas
+  const diagAvisos = await supabase.from("avisos_reposicion").select("id").limit(1);
+  const diagCarritos = await supabase.from("carritos_abandonados").select("id, items, created_at").limit(1);
+
+  return NextResponse.json({
+    ...(await ejecutarTrabajoConversion()),
+    diag: {
+      avisos: { error: diagAvisos.error?.message ?? null, filas: diagAvisos.data?.length ?? 0 },
+      carritos: { error: diagCarritos.error?.message ?? null, filas: diagCarritos.data?.length ?? 0 },
+    },
+  });
 }
