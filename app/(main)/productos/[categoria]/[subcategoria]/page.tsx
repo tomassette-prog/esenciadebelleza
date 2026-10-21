@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { obtenerSubcategoriaDetalles } from "@/lib/categorias-dinamicas";
 import { ProductoCard } from "@/components/producto/ProductoCard";
-import { buildCategoriaMetadata, slugifyCategoria } from "@/lib/seo";
+import { buildCategoriaMetadata, slugifyCategoria, sinSufijoSitio } from "@/lib/seo";
 import { Breadcrumb } from "@/components/layout/Breadcrumb";
 import type { Metadata } from "next";
 import type { ProductoCatalogo } from "@/types/producto";
@@ -21,7 +21,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const subcatDinamica = await obtenerSubcategoriaDetalles(categoria, subcategoria).catch(() => null);
   
   if (subcatDinamica?.seo_title || subcatDinamica?.seo_description) {
-    const title = (subcatDinamica.seo_title || `${subcatDinamica.label} | Esencia de Belleza`).slice(0, 60);
+    const title = sinSufijoSitio(subcatDinamica.seo_title || `${subcatDinamica.label} | Esencia de Belleza`).slice(0, 60);
     const description = (subcatDinamica.seo_description || `Descubre ${subcatDinamica.label} en Esencia de Belleza`).slice(0, 155);
     
     return {
@@ -112,8 +112,8 @@ export default async function SubcategoriaPage({ params, searchParams }: PagePro
     .range(from, from + PAGE_SIZE - 1);
 
   if (marca) query = query.eq("marca_id", marca);
-  if (orden === "precio-asc") query = query.order("nombre");
-  else query = query.order("nombre");
+  if (orden === "precio-asc") query = query.order("hay_stock", { ascending: false }).order("nombre");
+  else query = query.order("hay_stock", { ascending: false }).order("nombre");
 
   // Marcas disponibles en esta subcategoría (para el filtro superior)
   const { data: marcasData } = await supabase

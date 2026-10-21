@@ -95,8 +95,8 @@ export default async function CategoriaPage({ params, searchParams }: PageProps)
     .eq("categoria", categoriaNombre)
     .range(from, from + PAGE_SIZE - 1);
 
-  if (orden === "precio-asc") query = query.order("nombre");
-  else query = query.order("nombre");
+  if (orden === "precio-asc") query = query.order("hay_stock", { ascending: false }).order("nombre");
+  else query = query.order("hay_stock", { ascending: false }).order("nombre");
 
   const { data, count } = await query;
 

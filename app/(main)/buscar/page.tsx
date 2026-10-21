@@ -118,7 +118,7 @@ export default async function BuscarPage({ searchParams }: PageProps) {
     if (cat) exactBase = exactBase.eq("categoria", cat);
     if (subcat) exactBase = exactBase.eq("subcategoria", subcat);
     if (marca) exactBase = exactBase.eq("marca_id", marca);
-    exactBase = exactBase.order("nombre").range(from, from + PAGE_SIZE - 1);
+    exactBase = exactBase.order("hay_stock", { ascending: false }).order("nombre").range(from, from + PAGE_SIZE - 1);
 
     const { data: exactData, count: exactCount } = await exactBase;
     total = exactCount ?? 0;
@@ -139,7 +139,7 @@ export default async function BuscarPage({ searchParams }: PageProps) {
       if (cat) suggestBase = suggestBase.eq("categoria", cat);
       if (subcat) suggestBase = suggestBase.eq("subcategoria", subcat);
       if (marca) suggestBase = suggestBase.eq("marca_id", marca);
-      suggestBase = suggestBase.order("nombre").range(0, SUGGESTIONS_LIMIT + exactIds.size - 1);
+      suggestBase = suggestBase.order("hay_stock", { ascending: false }).order("nombre").range(0, SUGGESTIONS_LIMIT + exactIds.size - 1);
 
       const { data: suggestData } = await suggestBase;
       suggestProductos = mapProductos(suggestData ?? [])

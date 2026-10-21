@@ -7,7 +7,7 @@ import type { Metadata } from "next";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Mis Facturas | Esencia de Belleza",
+  title: "Mis Facturas",
   robots: { index: false, follow: false },
 };
 

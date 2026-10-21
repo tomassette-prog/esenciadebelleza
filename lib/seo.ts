@@ -5,6 +5,15 @@ import type { ProductoCompleto, ProductoVariacion, ResenaAggregate } from "@/typ
 const SITE_NAME = "Esencia de Belleza";
 const BASE_URL = "https://esenciadebelleza.es";
 
+/**
+ * Stored seo_title values and some inline titles already end with the site
+ * suffix, and the layout title template appends it again. Strip it so the
+ * suffix appears exactly once.
+ */
+export function sinSufijoSitio(titulo: string): string {
+  return titulo.replace(/\s*\|\s*Esencia de Belleza\s*$/, "");
+}
+
 export function buildProductoMetadata(
   producto: ProductoCompleto,
   variacionSeleccionada?: ProductoVariacion | null
@@ -12,7 +21,7 @@ export function buildProductoMetadata(
   const canonicalUrl = `${BASE_URL}/productos/${slugifyCategoria(producto.categoria)}/${slugifyCategoria(producto.subcategoria ?? "general")}/${producto.slug}`;
 
   // Si hay variación en la URL, el título muta para long-tail
-  let title = producto.seo_title ?? `${producto.nombre}`;
+  let title = sinSufijoSitio(producto.seo_title ?? `${producto.nombre}`);
   let description =
     producto.seo_description ??
     `Compra ${producto.nombre} en ${SITE_NAME}. Envío rápido y precios competitivos.`;

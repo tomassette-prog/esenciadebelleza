@@ -9,7 +9,7 @@ export function BotonesCarritoHeader() {
     <button
       onClick={abrirDrawer}
       className="relative p-2 text-neutral-500 hover:text-neutral-900 transition-colors"
-      aria-label={`Carrito${totalUnidades > 0 ? ` (${totalUnidades} artículos)` : ""}`}
+      aria-label={`Carrito${totalUnidades > 0 ? ` (${totalUnidades} ${totalUnidades === 1 ? "artículo" : "artículos"})` : ""}`}
     >
       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path

@@ -3,7 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Breadcrumb } from "@/components/layout/Breadcrumb";
-import { buildBreadcrumbJsonLdItems, buildBreadcrumbJsonLd, slugifyCategoria, formatPrice } from "@/lib/seo";
+import { buildBreadcrumbJsonLdItems, buildBreadcrumbJsonLd, slugifyCategoria, formatPrice, sinSufijoSitio } from "@/lib/seo";
 import { MarcaProductosClient } from "@/components/marcas/MarcaProductosClient";
 
 export const revalidate = 0;          // sin caché — siempre SSR
@@ -29,7 +29,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
   if (!marca) return {};
 
-  const title = `${marca.nombre} | Productos Profesionales | Esencia de Belleza`;
+  const title = sinSufijoSitio(`${marca.nombre} | Productos Profesionales`);
   const description = `Compra productos profesionales de ${marca.nombre} en Esencia de Belleza. Envío rápido en España. Precios para particulares y profesionales.`;
 
   return {
@@ -90,6 +90,7 @@ export default async function MarcaPage({ params }: PageProps) {
     .eq("marca_id", marca.id)
     .eq("activo", true)
     .eq("productos_variaciones.activa", true)
+    .order("hay_stock", { ascending: false })
     .order("nombre");
 
   const breadcrumbJsonLd = buildBreadcrumbJsonLdItems([

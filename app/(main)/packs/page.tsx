@@ -37,6 +37,7 @@ export default async function PacksPage() {
       `)
       .eq("activo", true)
       .eq("es_pack", true)
+      .order("hay_stock", { ascending: false })
       .order("nombre"),
   ]);
 

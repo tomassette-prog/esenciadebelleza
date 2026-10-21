@@ -72,6 +72,7 @@ export default async function ProductosPage() {
     .eq("activo", true)
     .eq("destacado", true)
     .eq("variaciones.activa", true)
+    .order("hay_stock", { ascending: false })
     .limit(12);
 
   const destacados: ProductoCatalogo[] = (destacadosRaw ?? []).map((p) => {

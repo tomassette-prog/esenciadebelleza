@@ -66,6 +66,7 @@ export default async function OfertasPage({
     .eq("activo", true)
     .eq("oferta", true)
     .eq("variaciones.activa", true)
+    .order("hay_stock", { ascending: false })
     .order("nombre")
     .range(0, 999);
 

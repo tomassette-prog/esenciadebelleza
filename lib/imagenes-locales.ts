@@ -39,7 +39,7 @@ export function mimeDesdeUrl(urlStr: string): string {
 }
 
 export async function descargarImagen(urlStr: string): Promise<Buffer> {
-  const res = await fetch(urlStr, {
+  const res = await fetch(encodeURI(urlStr), {
     headers: { "User-Agent": "Mozilla/5.0 EsenciaDeBelleza/1.0" },
     redirect: "follow",
   });

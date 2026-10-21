@@ -2,6 +2,7 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { sinSufijoSitio } from "@/lib/seo";
 import { urlStoragePublica } from "@/lib/storage-url";
 import { Breadcrumb } from "@/components/layout/Breadcrumb";
 import { BotonesCompartir } from "@/components/layout/BotonesCompartir";
@@ -24,7 +25,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
   if (!post) return { title: "Artículo no encontrado" };
 
-  const title       = post.seo_title ?? `${post.titulo} | Esencia de Belleza`;
+  const title       = sinSufijoSitio(post.seo_title ?? `${post.titulo} | Esencia de Belleza`);
   const description = post.seo_description ?? "";
   const url         = `https://esenciadebelleza.es/blog/${post.slug}`;
 

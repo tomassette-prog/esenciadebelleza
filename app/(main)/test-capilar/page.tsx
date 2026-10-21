@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import TestCapilar from "@/components/test/TestCapilar";
 
 export const metadata: Metadata = {
-  title: "Test Anticaída en 60 segundos — ¿Por qué se te cae el pelo? | Esencia de Belleza",
+  title: "Test Anticaída en 60 segundos — ¿Por qué se te cae el pelo?",
   description:
     "Descubre en 60 segundos por qué se te cae el pelo este otoño y qué hacer: test gratuito con diagnóstico personalizado y tu plan anticaída. Asesoramiento experto de peluquería profesional.",
   openGraph: {
