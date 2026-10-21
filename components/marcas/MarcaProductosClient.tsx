@@ -11,6 +11,7 @@ interface Producto {
   categoria: string;
   subcategoria: string | null;
   imagen_principal_url: string | null;
+  imagen_local_url: string | null;
   seo_description: string | null;
   productos_variaciones: { precio_b2c: number }[];
 }
@@ -140,10 +141,10 @@ export function MarcaProductosClient({ productos, marcaNombre }: MarcaProductosC
                 >
                   {/* Imagen */}
                   <div className="aspect-square overflow-hidden bg-neutral-50">
-                    {p.imagen_principal_url ? (
+                    {(p.imagen_local_url ?? p.imagen_principal_url) ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img
-                        src={p.imagen_principal_url}
+                        src={p.imagen_local_url ?? p.imagen_principal_url ?? undefined}
                         alt={p.nombre}
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                       />

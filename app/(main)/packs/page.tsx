@@ -32,7 +32,7 @@ export default async function PacksPage() {
     supabase
       .from("productos_padre")
       .select(`
-        id, nombre, slug, categoria, subcategoria, imagen_principal_url,
+        id, nombre, slug, categoria, subcategoria, imagen_principal_url, imagen_local_url,
         variaciones:productos_variaciones(precio_b2c, activa)
       `)
       .eq("activo", true)
@@ -43,7 +43,7 @@ export default async function PacksPage() {
   const productosPack: ProductoPack[] = (productosPackRaw ?? []).map((p) => {
     const vars = (p.variaciones ?? []).filter((v: { activa: boolean }) => v.activa);
     const precio = vars.length > 0 ? Math.min(...vars.map((v: { precio_b2c: number }) => v.precio_b2c)) : 0;
-    return { id: p.id, nombre: p.nombre, slug: p.slug, categoria: p.categoria, subcategoria: p.subcategoria, imagen_principal_url: p.imagen_principal_url, precio_desde: precio };
+    return { id: p.id, nombre: p.nombre, slug: p.slug, categoria: p.categoria, subcategoria: p.subcategoria, imagen_principal_url: p.imagen_local_url ?? p.imagen_principal_url, precio_desde: precio };
   });
 
   const totalItems = packsCustom.length + productosPack.length;

@@ -26,6 +26,7 @@ interface PadreFeed {
   categoria: string;
   subcategoria: string | null;
   imagen_principal_url: string | null;
+  imagen_local_url: string | null;
   marca: { nombre: string } | null;
   variaciones: VariacionFeed[] | null;
 }
@@ -152,7 +153,7 @@ export async function GET() {
       .from("productos_padre")
       .select(
         `id, nombre, slug, descripcion_general, seo_description, categoria, subcategoria,
-         imagen_principal_url, marca:marcas(nombre),
+         imagen_principal_url, imagen_local_url, marca:marcas(nombre),
          variaciones:productos_variaciones(id, sku, nombre_variacion, ean_code, precio_b2c, precio_comparar, stock, activa)`
       )
       .eq("activo", true)
@@ -174,7 +175,8 @@ export async function GET() {
 
   for (const p of padres) {
     const vars = (p.variaciones ?? []).filter((v) => v.activa);
-    if (vars.length === 0 || !p.imagen_principal_url) continue;
+    const imagen = p.imagen_local_url ?? p.imagen_principal_url;
+    if (vars.length === 0 || !imagen) continue;
 
     const ordenadas = [...vars].sort((a, b) => a.precio_b2c - b.precio_b2c);
     const ref = ordenadas.find((v) => v.stock > 0) ?? ordenadas[0];
@@ -191,7 +193,7 @@ export async function GET() {
         esc(titulo),
         esc(`${titulo.split(" — ")[0]}. ${descripcion}`.slice(0, 4800)),
         esc(`${SITE}/productos/${p.categoria}/${p.subcategoria}/${p.slug}`),
-        esc(p.imagen_principal_url),
+        esc(imagen),
         enStock ? "in stock" : "out of stock",
         esc(enOferta ? `${ref.precio_comparar!.toFixed(2)} EUR` : `${ref.precio_b2c.toFixed(2)} EUR`),
         esc(enOferta ? `${ref.precio_b2c.toFixed(2)} EUR` : ""),

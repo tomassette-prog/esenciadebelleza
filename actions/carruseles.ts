@@ -137,7 +137,7 @@ export async function buscarProductosParaCarrusel(
 
   let query = supabase
     .from("productos_padre")
-    .select("id, nombre, imagen_principal_url, marca:marcas(nombre)")
+    .select("id, nombre, imagen_principal_url, imagen_local_url, marca:marcas(nombre)")
     .eq("activo", true)
     .order("nombre")
     .limit(30);
@@ -150,7 +150,7 @@ export async function buscarProductosParaCarrusel(
     // Sin búsqueda: mostrar los que ya están en el carrusel primero
     query = supabase
       .from("productos_padre")
-      .select("id, nombre, imagen_principal_url, marca:marcas(nombre)")
+      .select("id, nombre, imagen_principal_url, imagen_local_url, marca:marcas(nombre)")
       .eq("activo", true)
       .in("id", idsEnCarrusel.size > 0 ? [...idsEnCarrusel] : ["00000000-0000-0000-0000-000000000000"])
       .order("nombre")
@@ -162,7 +162,7 @@ export async function buscarProductosParaCarrusel(
     id: p.id,
     nombre: p.nombre,
     marca: (Array.isArray(p.marca) ? p.marca[0] : p.marca as { nombre: string } | null)?.nombre ?? null,
-    imagen_principal_url: p.imagen_principal_url,
+    imagen_principal_url: p.imagen_local_url ?? p.imagen_principal_url,
     enCarrusel: idsEnCarrusel.has(p.id),
   }));
 }

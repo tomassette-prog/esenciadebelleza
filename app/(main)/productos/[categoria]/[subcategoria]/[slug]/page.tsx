@@ -95,6 +95,13 @@ export default async function ProductoPage({ params, searchParams }: PageProps) 
 
   if (error || !producto) notFound();
 
+  // Preferir la copia local de imágenes; la importación diaria sigue
+  // conservando la URL del proveedor en la columna de origen
+  producto.imagen_principal_url = producto.imagen_local_url ?? producto.imagen_principal_url;
+  for (const v of (producto.variaciones ?? []) as Array<{ imagen_url: string | null; imagen_local_url?: string | null }>) {
+    v.imagen_url = v.imagen_local_url ?? v.imagen_url;
+  }
+
   // Leer usuario — intenta SSR client, fallback a cookie directa
   let user: { id: string; email: string } | null = null;
   try {

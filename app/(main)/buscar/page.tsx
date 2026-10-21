@@ -30,7 +30,7 @@ type MarcaCount = { marca: string; nombre: string; count: number };
 function mapProductos(data: unknown[]): ProductoCatalogo[] {
   return (data as Array<{
     id: string; nombre: string; slug: string; categoria: string; subcategoria: string | null;
-    imagen_principal_url: string | null; destacado: boolean; nuevo: boolean; oferta: boolean | null;
+    imagen_principal_url: string | null; imagen_local_url: string | null; destacado: boolean; nuevo: boolean; oferta: boolean | null;
     marca: { nombre: string } | null;
     variaciones: Array<{ precio_b2c: number; precio_comparar: number | null; activa: boolean; stock: number }>;
   }>).map((p) => {
@@ -47,7 +47,7 @@ function mapProductos(data: unknown[]): ProductoCatalogo[] {
       slug: p.slug,
       categoria: p.categoria,
       subcategoria: p.subcategoria,
-      imagen_principal_url: p.imagen_principal_url,
+      imagen_principal_url: p.imagen_local_url ?? p.imagen_principal_url,
       destacado: p.destacado,
       nuevo: p.nuevo,
       marca_nombre: p.marca?.nombre ?? null,
@@ -62,7 +62,7 @@ function mapProductos(data: unknown[]): ProductoCatalogo[] {
 /** Columnas comunes para las queries de producto */
 const PRODUCT_SELECT = `
   id, nombre, slug, categoria, subcategoria, oferta,
-  imagen_principal_url, destacado, nuevo,
+  imagen_principal_url, imagen_local_url, destacado, nuevo,
   marca:marcas(nombre),
   variaciones:productos_variaciones(precio_b2c, precio_comparar, activa, stock)
 `;

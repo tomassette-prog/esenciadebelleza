@@ -12,6 +12,7 @@ export interface ProductoPadre {
   seo_description: string | null;
   texto_enriquecido_seo: string | null;
   imagen_principal_url: string | null;
+  imagen_local_url?: string | null;
   activo: boolean;
   destacado: boolean;
   nuevo: boolean;
@@ -35,6 +36,7 @@ export interface ProductoVariacion {
   stock_minimo: number;
   ubicacion_almacen: string | null;
   imagen_url: string | null;
+  imagen_local_url?: string | null;
   activa: boolean;
   created_at: string;
   updated_at: string;

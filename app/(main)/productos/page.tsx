@@ -39,7 +39,7 @@ export default async function ProductosPage() {
   // Imagen representativa por categoría
   const { data: imagenesRaw } = await supabase
     .from("productos_padre")
-    .select("categoria, imagen_principal_url")
+    .select("categoria, imagen_principal_url, imagen_local_url")
     .eq("activo", true)
     .not("imagen_principal_url", "is", null)
     .order("categoria");
@@ -47,7 +47,7 @@ export default async function ProductosPage() {
   const imagenPorCat = new Map<string, string>();
   for (const p of imagenesRaw ?? []) {
     if (!imagenPorCat.has(p.categoria) && p.imagen_principal_url) {
-      imagenPorCat.set(p.categoria, p.imagen_principal_url);
+      imagenPorCat.set(p.categoria, p.imagen_local_url ?? p.imagen_principal_url);
     }
   }
 
@@ -65,7 +65,7 @@ export default async function ProductosPage() {
     .from("productos_padre")
     .select(
       `id, nombre, slug, categoria, subcategoria, oferta,
-       imagen_principal_url, destacado, nuevo,
+       imagen_principal_url, imagen_local_url, destacado, nuevo,
        marca:marcas(nombre),
        variaciones:productos_variaciones(precio_b2c, precio_comparar, activa, stock)`
     )
@@ -85,7 +85,7 @@ export default async function ProductosPage() {
       slug: p.slug,
       categoria: p.categoria,
       subcategoria: p.subcategoria,
-      imagen_principal_url: p.imagen_principal_url,
+      imagen_principal_url: p.imagen_local_url ?? p.imagen_principal_url,
       destacado: p.destacado,
       nuevo: p.nuevo,
       marca_nombre: (p.marca as unknown as { nombre: string } | null)?.nombre ?? null,

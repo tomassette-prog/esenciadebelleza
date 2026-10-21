@@ -101,7 +101,7 @@ export default async function SubcategoriaPage({ params, searchParams }: PagePro
     .from("productos_padre")
     .select(`
       id, nombre, slug, categoria, subcategoria, oferta,
-      imagen_principal_url, destacado, nuevo,
+      imagen_principal_url, imagen_local_url, destacado, nuevo,
       marca:marcas(nombre),
       variaciones:productos_variaciones(precio_b2c, precio_comparar, activa, stock)
     `, { count: "exact" })
@@ -148,7 +148,7 @@ export default async function SubcategoriaPage({ params, searchParams }: PagePro
       slug: p.slug,
       categoria: p.categoria,
       subcategoria: p.subcategoria,
-      imagen_principal_url: p.imagen_principal_url,
+      imagen_principal_url: p.imagen_local_url ?? p.imagen_principal_url,
       destacado: p.destacado,
       nuevo: p.nuevo,
       marca_nombre: (p.marca as unknown as { nombre: string } | null)?.nombre ?? null,

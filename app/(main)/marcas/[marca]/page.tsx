@@ -84,7 +84,7 @@ export default async function MarcaPage({ params }: PageProps) {
   const { data: productos } = await supabase
     .from("productos_padre")
     .select(`
-      id, nombre, slug, categoria, subcategoria, imagen_principal_url, seo_description,
+      id, nombre, slug, categoria, subcategoria, imagen_principal_url, imagen_local_url, seo_description,
       productos_variaciones!inner ( precio_b2c, activa )
     `)
     .eq("marca_id", marca.id)

@@ -36,7 +36,7 @@ function toProductoCatalogo(p: any): ProductoCatalogo {
     slug: p.slug,
     categoria: p.categoria,
     subcategoria: p.subcategoria,
-    imagen_principal_url: p.imagen_principal_url,
+    imagen_principal_url: p.imagen_local_url ?? p.imagen_principal_url,
     destacado: p.destacado,
     nuevo: p.nuevo,
     marca_nombre: p.marca?.nombre ?? null,
@@ -59,7 +59,7 @@ export default async function OfertasPage({
     .from("productos_padre")
     .select(
       `id, nombre, slug, categoria, subcategoria,
-       imagen_principal_url, destacado, nuevo,
+       imagen_principal_url, imagen_local_url, destacado, nuevo,
        marca:marcas(nombre),
        variaciones:productos_variaciones!inner(precio_b2c, precio_comparar, activa, stock)`
     )
