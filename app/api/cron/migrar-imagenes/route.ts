@@ -8,6 +8,7 @@ import {
   rutaImagenVariacion,
   sleep,
 } from "@/lib/imagenes-locales";
+import { ejecutarTrabajoConversion } from "@/lib/trabajo-conversion";
 
 export const maxDuration = 300;
 
@@ -143,6 +144,10 @@ export async function GET(req: NextRequest) {
 
   const { copiadas, fallidas } = await ejecutarConcurrente(trabajos);
 
+  // El trabajo de emails de conversión se ejecuta aquí para no superar el
+  // límite de crons del plan (el endpoint manual sigue disponible)
+  const conversion = await ejecutarTrabajoConversion();
+
   return NextResponse.json({
     copiadas,
     fallidas,
@@ -151,5 +156,6 @@ export async function GET(req: NextRequest) {
       variaciones: varsUnicas.size,
     },
     loteCompleto: trabajos.length >= lote,
+    conversion,
   });
 }

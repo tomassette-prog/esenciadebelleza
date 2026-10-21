@@ -7,10 +7,6 @@
     {
       "path": "/api/cron/migrar-imagenes",
       "schedule": "30 3 * * *"
-    },
-    {
-      "path": "/api/cron/emails-conversion",
-      "schedule": "0 * * * *"
     }
   ],
   "headers": [
