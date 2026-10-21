@@ -1,5 +1,5 @@
-import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+﻿import { NextRequest, NextResponse } from "next/server";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import {
   copiarImagen,
   necesitaCopia,
@@ -11,30 +11,65 @@ import {
 export const maxDuration = 300;
 
 const CRON_SECRET = process.env.CRON_SECRET;
-const LOTE_MAXIMO = 120; // copias por ejecución: el resto queda para la siguiente
+const LOTE_MAXIMO = 120; // copias por ejecución del cron
+const LOTE_MAXIMO_MANUAL = 500;
 const VENTANA = 400; // filas recientes inspeccionadas por tabla
-const DELAY_MS = 150; // ms entre descargas para no saturar el proveedor
+const DELAY_MS = 200; // ms entre descargas para no saturar el proveedor
+const CONCURRENCIA = 4;
+
+type Trabajo = () => Promise<"copiada" | "error">;
+
+async function ejecutarConcurrente(trabajos: Trabajo[]): Promise<{ copiadas: number; fallidas: number }> {
+  let i = 0;
+  let copiadas = 0;
+  let fallidas = 0;
+  const obreros = Array.from({ length: Math.min(CONCURRENCIA, trabajos.length) }, async () => {
+    while (i < trabajos.length) {
+      const trabajo = trabajos[i++];
+      const estado = await trabajo();
+      if (estado === "copiada") copiadas++; else fallidas++;
+      await sleep(DELAY_MS);
+    }
+  });
+  await Promise.all(obreros);
+  return { copiadas, fallidas };
+}
 
 /**
  * Keeps the local image mirror fresh after the daily WooCommerce sync:
  * copies images of recently updated rows that have no local copy yet or whose
  * supplier image changed. Never modifies imagen_principal_url / imagen_url.
+ *
+ * Auth: Vercel cron sends `Authorization: Bearer CRON_SECRET`. A manual run
+ * can send `x-mirror-token` matching config_tienda.imagen_mirror_token; when
+ * that row does not exist the manual path is disabled.
  */
 export async function GET(req: NextRequest) {
-  const auth = req.headers.get("authorization");
-  if (!CRON_SECRET || auth !== "Bearer " + CRON_SECRET) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
     { auth: { autoRefreshToken: false, persistSession: false } }
   );
 
-  let restantes = LOTE_MAXIMO;
-  let copiadas = 0;
-  let fallidas = 0;
+  const auth = req.headers.get("authorization");
+  const tokenManual = req.headers.get("x-mirror-token");
+  let autorizado = !!CRON_SECRET && auth === "Bearer " + CRON_SECRET;
+  if (!autorizado && tokenManual) {
+    const { data } = await supabase
+      .from("config_tienda")
+      .select("valor")
+      .eq("clave", "imagen_mirror_token")
+      .maybeSingle();
+    autorizado = !!data?.valor && data.valor === tokenManual;
+  }
+  if (!autorizado) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const loteSolicitado = Number(req.nextUrl.searchParams.get("lote") ?? "") || LOTE_MAXIMO;
+  const lote = Math.min(Math.max(Math.trunc(loteSolicitado), 1), LOTE_MAXIMO_MANUAL);
+
+  const trabajos: Trabajo[] = [];
 
   // La importación diaria toca los productos modificados: su ventana
   // reciente es justo donde pueden entrar imágenes nuevas o cambiadas.
@@ -46,20 +81,17 @@ export async function GET(req: NextRequest) {
     .limit(VENTANA);
 
   for (const p of padres ?? []) {
-    if (restantes <= 0) break;
+    if (trabajos.length >= lote) break;
     if (!necesitaCopia({
       imagen_local_url: p.imagen_local_url,
       imagen_origen_url: p.imagen_origen_url,
       origenActual: p.imagen_principal_url,
     })) continue;
-    restantes--;
-    const estado = await copiarImagen(
+    trabajos.push(() => copiarImagen(
       supabase, "productos_padre",
       { id: p.id, origenActual: p.imagen_principal_url },
       rutaImagenPadre(p.slug, p.imagen_principal_url!)
-    );
-    if (estado === "copiada") copiadas++; else fallidas++;
-    await sleep(DELAY_MS);
+    ));
   }
 
   const { data: vars } = await supabase
@@ -70,22 +102,26 @@ export async function GET(req: NextRequest) {
     .limit(VENTANA);
 
   for (const v of vars ?? []) {
-    if (restantes <= 0) break;
+    if (trabajos.length >= lote) break;
     if (!necesitaCopia({
       imagen_local_url: v.imagen_local_url,
       imagen_origen_url: v.imagen_origen_url,
       origenActual: v.imagen_url,
     })) continue;
-    restantes--;
     const padre = Array.isArray(v.productos_padre) ? v.productos_padre[0] : v.productos_padre;
-    const estado = await copiarImagen(
+    trabajos.push(() => copiarImagen(
       supabase, "productos_variaciones",
       { id: v.id, origenActual: v.imagen_url },
       rutaImagenVariacion(padre?.slug ?? `prod-${v.id}`, v.nombre_variacion ?? "", v.imagen_url!)
-    );
-    if (estado === "copiada") copiadas++; else fallidas++;
-    await sleep(DELAY_MS);
+    ));
   }
 
-  return NextResponse.json({ copiadas, fallidas, pendientesParaLaProximaEjecucion: restantes === 0 });
+  const { copiadas, fallidas } = await ejecutarConcurrente(trabajos);
+
+  return NextResponse.json({
+    copiadas,
+    fallidas,
+    inspeccionados: { padres: padres?.length ?? 0, variaciones: vars?.length ?? 0 },
+    loteCompleto: trabajos.length >= lote,
+  });
 }
