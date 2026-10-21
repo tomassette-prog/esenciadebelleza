@@ -21,7 +21,7 @@ export async function GET(req: NextRequest) {
 
   const auth = Buffer.from(`${process.env.WOO_CONSUMER_KEY}:${process.env.WOO_CONSUMER_SECRET}`).toString("base64");
   const res = await fetch(
-    `${process.env.WOO_URL}/wp-json/wc/v3/products?per_page=3&status=publish&_fields=id,sku,name,meta_data`,
+    `${process.env.WOO_URL}/wp-json/wc/v3/products?per_page=50&status=publish&_fields=id,sku,name,meta_data`,
     { headers: { Authorization: `Basic ${auth}` }, cache: "no-store" }
   );
   if (!res.ok) {
@@ -32,12 +32,22 @@ export async function GET(req: NextRequest) {
     meta_data?: Array<{ key: string; value: unknown }>;
   }>;
 
-  return NextResponse.json(
-    products.map((p) => ({
-      id: p.id,
-      sku: p.sku,
-      name: p.name,
-      meta: (p.meta_data ?? []).map((m) => ({ key: m.key, value: String(m.value ?? "").slice(0, 60) })),
-    }))
-  );
+  const patronGtin = /ean|gtin|barcode|isbn|mpn|codigo|barras/i;
+  const claves = new Set<string>();
+  const conGtin: Array<{ id: number; name: string; pares: Record<string, string> }> = [];
+  for (const p of products) {
+    const pares: Record<string, string> = {};
+    for (const m of p.meta_data ?? []) {
+      claves.add(m.key);
+      if (patronGtin.test(m.key)) pares[m.key] = String(m.value ?? "").slice(0, 40);
+    }
+    if (Object.keys(pares).length) conGtin.push({ id: p.id, name: p.name, pares });
+  }
+
+  return NextResponse.json({
+    productos_escaneados: products.length,
+    productos_con_clave_gtin: conGtin.length,
+    ejemplos: conGtin.slice(0, 5),
+    todas_las_claves: [...claves].sort(),
+  });
 }
