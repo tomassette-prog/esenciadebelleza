@@ -45,3 +45,36 @@ Los tres flujos corren en el cron diario de las 03:30 (más avisos de reposició
 - Aviso de reposición (cuando el proveedor repone stock).
 
 **Qué**: tras los próximos pedidos reales, comprobar que los emails llegan bien, que el enlace de reseña funciona sin login y que la recuperación de carrito restaura el carrito. Los productos sin reseñas hoy se irán cubriendo solos.
+
+---
+
+## 4. Merchant Center: cerrar los errores de datos del feed — prioridad ALTA
+
+Auditoría 2026-11-13 (cuenta 5816732573): 3.495 productos, 49 no aprobados (+41 esa semana por la caída de Vercel del 13-nov, HTTP 402 por facturación).
+
+**Qué (pieza 1 — los 6 productos sin `[availability]`)**: son productos **sin variaciones activas en Supabase**. El tooling ya existe: el panel admin (`MerchantDiagnostico`) los lista como "🔴 Sin variaciones activas (availability)" y el botón **"Corregir todo"** de `MerchantCenterUploadSimple` los activa en Supabase. Ejecutar el diagnóstico y aplicar la corrección.
+
+**Qué (pieza 2 — los 38 "Página de producto no disponible")**: herida directa de la caída del día 13. La web está arriba; Google los re-aprueba solo al re-rastrear. **No tocar nada**: solo verificar en 48-72h (revisar pestaña "Requiere atención") que el número baja de 38 a 0.
+
+**Por qué**: cada producto no aprobado desaparece de los listados gratuitos de Shopping. Los 38 se curan solos; los 6 no (es un fallo de datos real).
+
+**Cómo comprobar que funciona**: "Requiere atención" → 0 productos con "Falta el atributo [availability]" y la curva de "No aprobado" volviendo a ~8.
+
+---
+
+## 5. Merchant Center: mejoras de visibilidad — prioridad MEDIA
+
+Propuestas por Google con datos de la competencia (auditoría 2026-11-13):
+
+1. **Política de devoluciones** (decisión de negocio — Isabel): el "gasto de devolución" figura como **"Incompleto"**. La competencia directa (mmboutiquedelpeluquero.es, flap-articulosdepeluqueria.es, depeluqueriaproductos.com) ofrece **14 días + envío de devolución 0 €**; Google recomienda igualarlo para aumentar tráfico. Si se decide, actualizar la política en la web Y en "Envíos y devoluciones" de Merchant Center.
+2. **179 productos de champú y acondicionador con descripciones incompletas**: completarlas desde el admin (mejor descripción = más visibilidad en búsquedas). Candidato natural para automatizar con verificación humana.
+3. **Vincular PayPal** en Merchant Center (señal de confianza para compradores).
+4. *Opcional*: vincular Google Ads solo si se decide invertir en anuncios (hoy no está vinculada ninguna cuenta — no es un error).
+
+**Dato de partida**: 199 clics en 28 días (-19,8 % vs periodo anterior, en parte por la caída). Vigilar la recuperación en la misma revisión de 48-72h del punto 4.
+
+---
+
+## 6. Redirección 301 de `www` al dominio sin `www` — prioridad BAJA
+
+El 13-11 se arregló el DNS (`www` apuntaba al hosting antiguo de DonDominio) y ahora `www.esenciadebelleza.es` sirve la web **directamente** en vez de redirigir. El canonical ya consolida en `https://esenciadebelleza.es` (sin impacto SEO inmediato), pero lo limpio es una redirección 301 `www → apex` (middleware de Next o `vercel.json`) para que exista una única URL canónica real.
